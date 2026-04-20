@@ -26,6 +26,10 @@ create table public.artworks (
   title text not null,
   description text,
   image_url text not null,
+  image_top_url text,
+  image_bottom_url text,
+  image_left_url text,
+  image_right_url text,
   tags text[] default '{}',
   created_at timestamptz default now(),
   updated_at timestamptz default now()
@@ -46,7 +50,6 @@ create table public.follows (
 create index idx_artworks_user_id on public.artworks(user_id);
 create index idx_artworks_tags on public.artworks using gin(tags);
 create index idx_follows_following_id on public.follows(following_id);
--- profiles.username index is auto-created by the unique constraint
 
 -- =========================
 -- 3. RLS (Row Level Security)
@@ -56,14 +59,12 @@ alter table public.profiles enable row level security;
 alter table public.artworks enable row level security;
 alter table public.follows enable row level security;
 
--- profiles: anyone can read, owner can update
 create policy "profiles_select" on public.profiles
   for select using (true);
 
 create policy "profiles_update" on public.profiles
   for update using (auth.uid() = id);
 
--- artworks: anyone can read, owner can insert/update/delete
 create policy "artworks_select" on public.artworks
   for select using (true);
 
@@ -76,7 +77,6 @@ create policy "artworks_update" on public.artworks
 create policy "artworks_delete" on public.artworks
   for delete using (auth.uid() = user_id);
 
--- follows: anyone can read, follower can insert/delete
 create policy "follows_select" on public.follows
   for select using (true);
 

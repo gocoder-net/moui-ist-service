@@ -31,20 +31,14 @@ export type Database = {
           field?: string | null;
           sns_links?: Json;
           avatar_url?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Update: {
-          id?: string;
-          username?: string;
           user_type?: "creator" | "aspiring" | "audience";
           name?: string | null;
           bio?: string | null;
           field?: string | null;
           sns_links?: Json;
           avatar_url?: string | null;
-          created_at?: string;
-          updated_at?: string;
         };
         Relationships: [];
       };
@@ -55,6 +49,10 @@ export type Database = {
           title: string;
           description: string | null;
           image_url: string;
+          image_top_url: string | null;
+          image_bottom_url: string | null;
+          image_left_url: string | null;
+          image_right_url: string | null;
           tags: string[];
           created_at: string;
           updated_at: string;
@@ -65,25 +63,26 @@ export type Database = {
           title: string;
           description?: string | null;
           image_url: string;
+          image_top_url?: string | null;
+          image_bottom_url?: string | null;
+          image_left_url?: string | null;
+          image_right_url?: string | null;
           tags?: string[];
-          created_at?: string;
-          updated_at?: string;
         };
         Update: {
-          id?: string;
-          user_id?: string;
           title?: string;
           description?: string | null;
           image_url?: string;
+          image_top_url?: string | null;
+          image_bottom_url?: string | null;
+          image_left_url?: string | null;
+          image_right_url?: string | null;
           tags?: string[];
-          created_at?: string;
-          updated_at?: string;
         };
         Relationships: [
           {
             foreignKeyName: "artworks_user_id_fkey";
             columns: ["user_id"];
-            isOneToOne: false;
             referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
@@ -98,26 +97,103 @@ export type Database = {
         Insert: {
           follower_id: string;
           following_id: string;
-          created_at?: string;
         };
         Update: {
           follower_id?: string;
           following_id?: string;
-          created_at?: string;
+        };
+        Relationships: [];
+      };
+      exhibitions: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          description: string | null;
+          foreword: string | null;
+          room_type: "small" | "medium" | "large" | "wide";
+          wall_color_north: string;
+          wall_color_south: string;
+          wall_color_east: string;
+          wall_color_west: string;
+          floor_color: string;
+          is_published: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          title: string;
+          description?: string | null;
+          foreword?: string | null;
+          room_type?: "small" | "medium" | "large" | "wide";
+          wall_color_north?: string;
+          wall_color_south?: string;
+          wall_color_east?: string;
+          wall_color_west?: string;
+          floor_color?: string;
+          is_published?: boolean;
+        };
+        Update: {
+          title?: string;
+          description?: string | null;
+          foreword?: string | null;
+          room_type?: "small" | "medium" | "large" | "wide";
+          wall_color_north?: string;
+          wall_color_south?: string;
+          wall_color_east?: string;
+          wall_color_west?: string;
+          floor_color?: string;
+          is_published?: boolean;
         };
         Relationships: [
           {
-            foreignKeyName: "follows_follower_id_fkey";
-            columns: ["follower_id"];
-            isOneToOne: false;
+            foreignKeyName: "exhibitions_user_id_fkey";
+            columns: ["user_id"];
             referencedRelation: "profiles";
             referencedColumns: ["id"];
           },
+        ];
+      };
+      exhibition_artworks: {
+        Row: {
+          id: string;
+          exhibition_id: string;
+          artwork_id: string;
+          wall: "north" | "south" | "east" | "west";
+          position_x: number;
+          position_y: number;
+          width_cm: number;
+          height_cm: number;
+          created_at: string;
+        };
+        Insert: {
+          exhibition_id: string;
+          artwork_id: string;
+          wall: "north" | "south" | "east" | "west";
+          position_x?: number;
+          position_y?: number;
+          width_cm?: number;
+          height_cm?: number;
+        };
+        Update: {
+          wall?: "north" | "south" | "east" | "west";
+          position_x?: number;
+          position_y?: number;
+          width_cm?: number;
+          height_cm?: number;
+        };
+        Relationships: [
           {
-            foreignKeyName: "follows_following_id_fkey";
-            columns: ["following_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
+            foreignKeyName: "exhibition_artworks_exhibition_id_fkey";
+            columns: ["exhibition_id"];
+            referencedRelation: "exhibitions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "exhibition_artworks_artwork_id_fkey";
+            columns: ["artwork_id"];
+            referencedRelation: "artworks";
             referencedColumns: ["id"];
           },
         ];

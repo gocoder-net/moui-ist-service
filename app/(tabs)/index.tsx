@@ -7,6 +7,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import Animated, {
   useSharedValue,
@@ -133,13 +134,16 @@ function PlayfulDiamond({ size = 14 }: { size?: number }) {
 
 /* ── 퀵 액션 카드 ── */
 function QuickCard({
-  icon, title, desc, delay: d,
+  icon, title, desc, delay: d, onPress,
 }: {
-  icon: string; title: string; desc: string; delay: number;
+  icon: string; title: string; desc: string; delay: number; onPress?: () => void;
 }) {
   return (
     <Animated.View entering={FadeInDown.delay(d).duration(400).springify()}>
-      <Pressable style={({ pressed }) => [styles.quickCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}>
+      <Pressable
+        style={({ pressed }) => [styles.quickCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
+        onPress={onPress}
+      >
         <Text style={styles.quickIcon}>{icon}</Text>
         <View style={{ flex: 1 }}>
           <Text style={styles.quickTitle}>{title}</Text>
@@ -154,6 +158,7 @@ function QuickCard({
 /* ── 메인 화면 ── */
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { user, profile, signOut } = useAuth();
 
   const userTypeLabels = { creator: '작가', aspiring: '지망생', audience: '감상자' } as const;
@@ -225,8 +230,8 @@ export default function HomeScreen() {
         </View>
 
         <View style={styles.quickGrid}>
-          <QuickCard icon="🖼️" title="작품 업로드" desc="나의 작품을 공유해보세요" delay={500} />
-          <QuickCard icon="🔍" title="작품 탐색" desc="다양한 작품을 감상하세요" delay={580} />
+          <QuickCard icon="🏛️" title="전시관 만들기" desc="나만의 가상 전시 공간을 만드세요" delay={500} onPress={() => router.push('/exhibition/create')} />
+          <QuickCard icon="🖼️" title="전시관 둘러보기" desc="다양한 온라인 전시를 감상하세요" delay={580} />
           <QuickCard icon="👥" title="작가 팔로우" desc="좋아하는 작가를 팔로우하세요" delay={660} />
           <QuickCard icon="💬" title="커뮤니티" desc="창작자들과 소통하세요" delay={740} />
         </View>
