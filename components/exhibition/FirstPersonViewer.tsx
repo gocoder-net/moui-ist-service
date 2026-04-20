@@ -157,25 +157,10 @@ export default function FirstPersonViewer({ roomType, wallColors, placements, on
     const nextWall = direction === 'left' ? leftWall : rightWall;
     const slideDir = direction === 'left' ? sw : -sw;
 
-    // 걷는 흔들림
-    stepBob.value = withSequence(
-      withTiming(-4, { duration: 100 }),
-      withTiming(3, { duration: 100 }),
-      withTiming(-2, { duration: 80 }),
-      withTiming(0, { duration: 80 }),
-    );
-
-    // 슬라이드 아웃
-    slideX.value = withTiming(slideDir * 0.3, { duration: 250, easing: Easing.in(Easing.cubic) }, () => {
-      // 벽 전환
-      runOnJS(setFacingWall)(nextWall);
-      runOnJS(setSelectedPlacement)(null);
-      // 반대편에서 슬라이드 인
-      slideX.value = -slideDir * 0.3;
-      slideX.value = withSpring(0, { damping: 20, stiffness: 150 }, () => {
-        runOnJS(setIsTransitioning)(false);
-      });
-    });
+    // 즉시 전환 (흔들림 없이)
+    runOnJS(setFacingWall)(nextWall);
+    runOnJS(setSelectedPlacement)(null);
+    runOnJS(setIsTransitioning)(false);
   };
 
   const isDark = ['#333333', '#1B2A4A', '#4A1B2A', '#1B3A2A'].includes(wallColors[facingWall]);
@@ -405,11 +390,11 @@ const styles = StyleSheet.create({
   },
 
   // 벽면 영역
-  wallArea: { flex: 1 },
-  wallRow: { flex: 1, flexDirection: 'row' },
+  wallArea: { flex: 1, justifyContent: 'center' },
+  wallRow: { flexDirection: 'row', alignItems: 'center' },
 
   sideWall: {
-    width: 50, overflow: 'hidden', justifyContent: 'center',
+    width: 36, overflow: 'hidden', justifyContent: 'center',
   },
   sideWallLeft: {
     transform: [{ perspective: 400 }, { rotateY: '35deg' }],
@@ -424,9 +409,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.4)',
     justifyContent: 'center', alignItems: 'center',
   },
-  sideArrow: { fontSize: 28, color: 'rgba(255,255,255,0.5)', fontWeight: '200' },
+  sideArrow: { fontSize: 16, color: 'rgba(255,255,255,0.4)', fontWeight: '300' },
 
-  frontWallScroll: { flex: 1 },
+  frontWallScroll: { flex: 1, alignSelf: 'center' },
 
   // 바닥
   floor: {
@@ -463,7 +448,7 @@ const styles = StyleSheet.create({
 
   moveRow: { flexDirection: 'row', alignItems: 'center', gap: 24, marginTop: 2 },
   moveBtn: { alignItems: 'center', gap: 2 },
-  moveBtnIcon: { fontSize: 28, color: C.gold, fontWeight: '200', lineHeight: 30 },
+  moveBtnIcon: { fontSize: 18, color: C.gold, fontWeight: '300', lineHeight: 20 },
   moveBtnLabel: { fontSize: 9, color: C.muted },
   positionDot: {
     width: 8, height: 8, borderRadius: 4, backgroundColor: C.gold, opacity: 0.5,
