@@ -94,6 +94,12 @@ Brand.border    = '#E8E5DF'    // 구분선
 
 ### 배포 / 인프라
 - **앱 빌드**: EAS Build (Expo Application Services) 무료 티어
+  - **Android 패키지**: `com.mouiist.app`
+  - **EAS 프로젝트 ID**: `9430ac1c-24e0-4a4f-ad67-27b2a84b6a97`
+  - **APK 빌드 명령어**: `eas build --platform android --profile preview`
+  - **무료 티어 제한**: 월 30회 빌드
+  - **Android Keystore**: EAS에서 자동 생성 및 관리
+  - **iOS 빌드**: Apple Developer Program ($99/년) 가입 후 가능
 - **웹 호스팅**: Vercel (GitHub main 브랜치 push 시 자동 배포)
   - 배포 URL: https://moui-ist-service.vercel.app
   - 설정 파일: `vercel.json` (빌드 명령어, 출력 디렉토리 지정)
@@ -107,7 +113,7 @@ Brand.border    = '#E8E5DF'    // 구분선
 | GitHub | ✅ 사용 중 | 계정: `gocoder-net` |
 | Supabase | ✅ 프로젝트 연동 완료 | Organization: moui-ist (Free) / Project: moui-ist |
 | Vercel | ✅ 자동 배포 연결 완료 | Hobby 플랜, GitHub 연동 |
-| Expo | ✅ 가입 완료 | gocoder.net@gmail.com (Google 로그인) |
+| Expo | ✅ 가입 완료, CLI 로그인 완료 | gocoder.net@gmail.com (Google 로그인 → CLI용 비밀번호 별도 설정) |
 
 ### Supabase 프로젝트 상세
 - **Organization**: moui-ist (Free)
@@ -134,6 +140,26 @@ Brand.border    = '#E8E5DF'    // 구분선
   }
   ```
 - **자동 배포**: GitHub `main` 브랜치에 push하면 자동으로 빌드 & 배포
+
+### EAS Build 상세
+- **EAS 프로젝트 ID**: `9430ac1c-24e0-4a4f-ad67-27b2a84b6a97`
+- **Android 패키지명**: `com.mouiist.app`
+- **빌드 프로필** (`eas.json`):
+  ```json
+  {
+    "build": {
+      "preview": {
+        "android": { "buildType": "apk" },
+        "distribution": "internal"
+      },
+      "production": {}
+    }
+  }
+  ```
+- **APK 빌드 명령어**: `eas build --platform android --profile preview`
+- **빌드 결과 확인**: `eas build:list` 또는 https://expo.dev 대시보드
+- **무료 티어**: 월 30회 빌드
+- **iOS**: Apple Developer Program ($99/년) 가입 필요, 이후 `eas build --platform ios`
 
 ### GitHub 레포 상세
 - **Repository**: `gocoder-net/moui-ist-service` (Private)
@@ -196,7 +222,8 @@ moui-ist-service/
 ├── assets/                      # 이미지, 아이콘
 ├── .env                         # 환경 변수 (Git 제외)
 ├── vercel.json                  # Vercel 배포 설정
-├── app.json                     # Expo 앱 설정
+├── eas.json                     # EAS Build 설정 (APK 빌드 프로필)
+├── app.json                     # Expo 앱 설정 (EAS 프로젝트 ID, Android 패키지 포함)
 ├── package.json                 # 의존성
 └── tsconfig.json                # TypeScript 설정
 ```
@@ -216,16 +243,31 @@ moui-ist-service/
 10. 회사 프로젝트 Git 계정 분리 완료
 11. **Vercel 연결 및 자동 배포 설정 완료** (`vercel.json` 생성, GitHub 연동)
 12. **Supabase 연동 완료** (`@supabase/supabase-js` 설치, `lib/supabase.ts` 클라이언트 초기화, 연결 테스트 성공)
-13. **홈 화면 디자인 완료** (MOUI-IST 브랜드 라이트 테마, 반응형 레이아웃)
-    - 메인 타이틀: "모의스트" (한글)
-    - 서브: "창작을 모의하는 커뮤니티"
-    - CTA: "작가로 시작하기" / "감상자로 둘러보기"
+13. **홈 화면 디자인 완료** (심플 소셜형 랜딩 + 애니메이션 배경)
+    - 디자인 방향: 심플 소셜형 (Threads/Instagram 스타일), **아티스트 그룹 홈페이지 스타일 아님**
+    - 메인 타이틀: "모의스트" (한글, 중앙)
+    - 상단: "MOUI-IST" 영문 로고 (작게, 레터스페이싱)
+    - 서브카피: "작가와 감상자가 만나는 창작 커뮤니티"
+    - CTA: "시작하기" 블랙 버튼 + 골드 화살표(→)
+    - 골드 다이아몬드 장식, 골드 디바이더 라인
+    - 로그인 링크: "이미 계정이 있나요? 로그인"
+    - 태그라인: "Conspiring Creativity Since 2026"
+    - **애니메이션 배경**: `react-native-reanimated` 사용, 18개 FloatingShape 컴포넌트
+      - 도형 종류: circle, diamond, ring, line
+      - 골드 컬러 계열, opacity 0.08~0.45
+      - 떠다니는 애니메이션 (translateX/Y, rotate, scale)
+    - 반응형: `useWindowDimensions()` + `isWide = width > 500`
 14. **Vercel 배포 확인** (https://moui-ist-service.vercel.app 정상 동작)
+15. **EAS Build 설정 완료** (`eas.json` 생성, Expo CLI 로그인, 프로젝트 연결)
+16. **Android APK 빌드 성공** (EAS Build → APK 다운로드 링크 생성)
+17. **app.json 업데이트** (EAS 프로젝트 ID, Android 패키지 `com.mouiist.app` 추가)
 
 ### 🔄 현재 단계
 **DB 스키마 설계 직전**
 - Supabase 연동은 완료, 아직 테이블은 없음
-- 홈 화면 디자인은 1차 완료 (추후 디테일 보완 가능)
+- 홈 화면 디자인 완료 (심플 소셜형 + 애니메이션 배경)
+- Android APK 빌드 성공 (EAS Build)
+- 다음 빌드 필요 시: `eas build --platform android --profile preview`
 
 ### ⏭️ 다음 단계 (순서)
 
@@ -329,6 +371,27 @@ exhibitions
 - **반응형 이슈**: 로컬(모바일 뷰)과 배포(데스크탑 뷰)에서 레이아웃이 다르게 보일 수 있음
   - `Dimensions.get('window')` 대신 `useWindowDimensions()` 훅 사용하면 화면 크기 변경에 자동 대응
 
+### [2026-04-20] zsh에서 Git 경로 괄호 문제
+- **증상**: `git add app/(tabs)/index.tsx` → `no matches found` 에러
+- **원인**: zsh에서 괄호 `()`가 glob 패턴으로 해석됨
+- **해결**: 따옴표로 감싸기 — `git add "app/(tabs)/index.tsx"`
+
+### [2026-04-20] EAS Build 첫 설정
+- **Expo 로그인**: Google로 가입한 계정은 CLI에서 비밀번호 로그인이 필요 → expo.dev에서 비밀번호 별도 설정
+- **프로젝트 연결**: `eas build` 최초 실행 시 EAS 프로젝트 자동 생성 (Y 선택)
+- **Android 패키지**: `com.mouiist.app` (최초 빌드 시 입력, 이후 `app.json`에 저장됨)
+- **Keystore**: EAS가 자동 생성 및 관리 (Y 선택)
+- **빌드 시간**: 약 10~15분 소요
+- **결과**: APK 다운로드 링크 제공 (Android만, iOS는 Apple Developer Program 필요)
+
+### [2026-04-20] 홈 화면 디자인 반복 학습
+- **핵심 교훈**: 이 앱은 **커뮤니티 앱**이지 아티스트 그룹 홈페이지가 아님
+  - ❌ 갤러리/전시 스타일 (Pinterest, 아트갤러리)
+  - ❌ 무게감 있는 아티스트 그룹 느낌
+  - ✅ 심플 소셜형 (Threads, Instagram 첫 화면 느낌)
+  - ✅ 깔끔하되 와우 포인트(엣지) 있는 디자인
+- **최종 방향**: 미니멀 랜딩 + 골드 애니메이션 배경으로 프리미엄 느낌
+
 ## 📦 설치된 주요 패키지
 
 | 패키지 | 버전 | 용도 |
@@ -339,6 +402,8 @@ exhibitions
 | react-native-web | ~0.21.0 | 웹 지원 |
 | expo-router | ~6.0.23 | 파일 기반 라우팅 |
 | @supabase/supabase-js | 최신 | Supabase 클라이언트 |
+| react-native-reanimated | ~3.x | 고성능 애니메이션 (홈 화면 FloatingShape) |
+| expo-linear-gradient | ~14.x | 그라데이션 UI |
 | typescript | ~5.9.2 | 타입 시스템 |
 
 ## 코딩 규칙
@@ -394,6 +459,8 @@ exhibitions
 
 ### Git 커밋 히스토리
 ```
+1575ab9 chore: add app.json with EAS config
+f5f4b10 feat: redesign home screen with animated floating shapes
 8ff18c3 fix: improve home screen layout and responsiveness
 a0f23ec feat: add MOUI-IST branded home screen and Supabase integration
 226882d chore: add Vercel deployment config
