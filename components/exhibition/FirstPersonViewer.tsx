@@ -84,10 +84,14 @@ function WallSurface({
 
       {/* 작품들 */}
       {wallPlacements.map(p => {
-        const w = cmToPx(p.width_cm, wallLenCm, wallWidthPx);
-        const h = cmToPx(p.height_cm, wallHCm, wallHeightPx);
-        const left = cmToPx(p.position_x, wallLenCm, wallWidthPx) - w / 2;
-        const top = wallHeightPx - cmToPx(p.position_y, wallHCm, wallHeightPx) - h / 2;
+        const pw = p.width_cm || 60;
+        const ph = p.height_cm || 40;
+        const px = p.position_x || wallLenCm / 2;
+        const py = p.position_y || 150;
+        const w = cmToPx(pw, wallLenCm, wallWidthPx);
+        const h = cmToPx(ph, wallHCm, wallHeightPx);
+        const left = cmToPx(px, wallLenCm, wallWidthPx) - w / 2;
+        const top = wallHeightPx - cmToPx(py, wallHCm, wallHeightPx) - h / 2;
 
         if (isSide) {
           // 사이드에서는 작은 힌트만
