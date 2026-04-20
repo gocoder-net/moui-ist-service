@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { StyleSheet, View, Text, Pressable, ScrollView, PanResponder } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Image } from 'expo-image';
 import {
   type Wall, type RoomType, type PlacedArtwork,
   getWallLength, getWallHeight, cmToPx, pxToCm, WALL_LABELS,
@@ -322,8 +323,8 @@ function DraggableArtwork({
         opacity: isDragging ? 0.85 : 1,
       }}
     >
-      <Animated.Image source={{ uri: art.uri }}
-        style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+      <Image source={{ uri: art.uri }}
+        style={{ width: '100%', height: '100%' }} contentFit="cover" />
       {isDragging && (
         <View style={styles.dragLabel}>
           <Text style={styles.dragLabelText}>

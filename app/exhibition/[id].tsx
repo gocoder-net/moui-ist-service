@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import Animated, { FadeIn, FadeInUp, FadeInDown } from 'react-native-reanimated';
+import { Image } from 'expo-image';
 import Room3DView from '@/components/exhibition/Room3DView';
 import FirstPersonViewer from '@/components/exhibition/FirstPersonViewer';
 import { ROOM_TEMPLATES, WALL_LABELS as WALL_LABELS_SHARED } from '@/components/exhibition/room-geometry';
@@ -120,7 +121,7 @@ function MapView({
           top: wall === 'north' ? -10 : undefined,
           bottom: wall === 'south' ? -10 : undefined, height: 18,
         }]}>
-        <Animated.Image source={{ uri: p.artwork.image_url }} style={styles.mapThumbImg} />
+        <Image source={{ uri: p.artwork.image_url }} style={styles.mapThumbImg} contentFit="cover" />
       </Pressable>
     );
   });
@@ -135,7 +136,7 @@ function MapView({
           left: wall === 'west' ? -10 : undefined,
           right: wall === 'east' ? -10 : undefined, width: 18,
         }]}>
-        <Animated.Image source={{ uri: p.artwork.image_url }} style={styles.mapThumbImg} />
+        <Image source={{ uri: p.artwork.image_url }} style={styles.mapThumbImg} contentFit="cover" />
       </Pressable>
     );
   });
@@ -196,8 +197,9 @@ function ArtworkView({ placement, wallColor, onClose }: {
 
         {/* 프레임 */}
         <View style={[styles.artFrame, { borderColor: frameColor, width: imgW + 20, height: imgH + 20 }]}>
-          <Animated.Image key={currentImg} entering={FadeIn.duration(250)}
-            source={{ uri: currentImg }} style={{ width: imgW, height: imgH }} resizeMode="cover" />
+          <Image key={currentImg}
+            source={{ uri: currentImg }} style={{ width: imgW, height: imgH }}
+            contentFit="cover" transition={250} />
         </View>
 
         {/* 플레이트 */}
@@ -384,7 +386,7 @@ export default function ExhibitionViewer() {
           <Animated.View key={p.id} entering={FadeIn.delay(200 + i * 60).duration(300)}>
             <Pressable style={styles.listItem}
               onPress={() => { setSelectedPlacement(p); setMode('artwork'); }}>
-              <Animated.Image source={{ uri: p.artwork.image_url }} style={styles.listThumb} />
+              <Image source={{ uri: p.artwork.image_url }} style={styles.listThumb} contentFit="cover" />
               <View style={{ flex: 1 }}>
                 <Text style={styles.listItemTitle}>{p.artwork.title}</Text>
                 <Text style={styles.listItemMeta}>

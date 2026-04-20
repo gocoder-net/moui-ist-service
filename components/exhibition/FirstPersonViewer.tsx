@@ -6,6 +6,7 @@ import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withSpring,
   withSequence, Easing, FadeIn, runOnJS,
 } from 'react-native-reanimated';
+import { Image } from 'expo-image';
 import {
   type Wall, type RoomType,
   ROOM_TEMPLATES, WALL_LABELS, getWallLength, getWallHeight, cmToPx,
@@ -116,8 +117,8 @@ function WallSurface({
               shadowColor: '#000', shadowOffset: { width: 2, height: 4 },
               shadowOpacity: isDark ? 0.5 : 0.2, shadowRadius: 6,
             }}>
-            <Animated.Image source={{ uri: p.artwork.image_url }}
-              style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+            <Image source={{ uri: p.artwork.image_url }}
+              style={{ width: '100%', height: '100%' }} contentFit="cover" />
           </Pressable>
         );
       })}
@@ -194,9 +195,10 @@ export default function FirstPersonViewer({ roomType, wallColors, placements, on
           <View style={[styles.closeupFrame, {
             borderColor: frameColor, width: imgW + 16, height: imgH + 16,
           }]}>
-            <Animated.Image key={currentImg} entering={FadeIn.duration(250)}
+            <Image key={currentImg}
               source={{ uri: currentImg }}
-              style={{ width: imgW, height: imgH }} resizeMode="cover" />
+              style={{ width: imgW, height: imgH }} contentFit="cover"
+              transition={250} />
           </View>
 
           {/* 플레이트 */}

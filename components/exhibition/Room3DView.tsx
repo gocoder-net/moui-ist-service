@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { StyleSheet, View, Text, Pressable } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
+import { Image } from 'expo-image';
 import {
   type Wall, type RoomType, type PlacedArtwork,
   ROOM_TEMPLATES, WALL_LABELS, cmToPx,
@@ -59,8 +60,8 @@ export default function Room3DView({
             borderRadius: 1, overflow: 'hidden',
           }}
         >
-          <Animated.Image source={{ uri: art.uri }}
-            style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+          <Image source={{ uri: art.uri }}
+            style={{ width: '100%', height: '100%' }} contentFit="cover" />
         </Pressable>
       );
     });

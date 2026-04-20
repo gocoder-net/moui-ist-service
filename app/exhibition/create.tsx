@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { Image } from 'expo-image';
 
 import {
   type Wall, type RoomType, type PlacedArtwork,
@@ -47,6 +48,7 @@ export default function CreateExhibitionScreen() {
   const [loading, setLoading] = useState(false);
 
   const mapWidth = Math.min(screenWidth - 48, 360);
+  const editorWidth = screenWidth - 48;
   const room = ROOM_TEMPLATES[roomType];
 
   // 벽면 에디터에서 터치 → 이미지 피커 → 배치
@@ -57,15 +59,40 @@ export default function CreateExhibitionScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      const imgW = asset.width || 1;
+      const imgH = asset.height || 1;
+      const aspect = imgW / imgH;
+
+      // 벽 높이의 ~40%를 기준 높이로 잡고, 비율에 맞게 계산
+      const wallH = room.height;
+      const baseHeight = Math.round(wallH * 0.4);
+      let artH: number;
+      let artW: number;
+
+      if (aspect >= 1) {
+        // 가로가 긴 이미지: 너비 기준
+        artW = Math.round(baseHeight * aspect);
+        artH = baseHeight;
+      } else {
+        // 세로가 긴 이미지: 높이 기준
+        artH = baseHeight;
+        artW = Math.round(baseHeight * aspect);
+      }
+
+      // 너무 크거나 작지 않게 클램프
+      artW = Math.max(20, Math.min(artW, 300));
+      artH = Math.max(20, Math.min(artH, 300));
+
       const newArt: PlacedArtwork = {
         localId: Date.now().toString(),
-        uri: result.assets[0].uri,
+        uri: asset.uri,
         title: `작품 ${artworks.length + 1}`,
         wall,
         positionX: safeX,
         positionY: safeY,
-        widthCm: 60,
-        heightCm: 40,
+        widthCm: artW,
+        heightCm: artH,
       };
       setArtworks(prev => [...prev, newArt]);
       setSelectedArtworkId(newArt.localId);
@@ -297,7 +324,7 @@ export default function CreateExhibitionScreen() {
             <Text style={styles.sub}>
               {wallEditorOpen
                 ? `${WALL_LABELS[wallEditorOpen]}에 작품을 배치하세요`
-                : '3D 전시관을 돌려보고 벽면을 선택하세요'}
+                : '벽면을 선택해서 작품을 배치하세요'}
             </Text>
 
             {wallEditorOpen === null ? (
@@ -308,6 +335,45 @@ export default function CreateExhibitionScreen() {
                   selectedWall={selectedWall}
                   onWallSelect={(w) => { setSelectedWall(w); setWallEditorOpen(w); }}
                 />
+
+                {/* 전체 작품 목록 (동서남북별) */}
+                {artworks.length > 0 && (
+                  <View style={{ marginTop: 24 }}>
+                    <Text style={styles.label}>배치된 작품 ({artworks.length})</Text>
+                    {(['north', 'south', 'east', 'west'] as Wall[]).map(w => {
+                      const wallArts = artworks.filter(a => a.wall === w);
+                      if (wallArts.length === 0) return null;
+                      return (
+                        <View key={w} style={{ marginBottom: 16 }}>
+                          <Pressable style={styles.wallSectionHeader}
+                            onPress={() => { setSelectedWall(w); setWallEditorOpen(w); }}>
+                            <Text style={styles.wallSectionTitle}>{WALL_LABELS[w]}</Text>
+                            <Text style={styles.wallSectionCount}>{wallArts.length}점</Text>
+                            <Text style={styles.wallSectionArrow}>→</Text>
+                          </Pressable>
+                          {wallArts.map(art => (
+                            <View key={art.localId} style={styles.artItemCompact}>
+                              <Image source={{ uri: art.uri }} style={styles.artThumbSmall} contentFit="cover" />
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.artTitleCompact} numberOfLines={1}>{art.title}</Text>
+                                <Text style={styles.artMeta}>{art.widthCm}×{art.heightCm}cm</Text>
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* 공개 버튼 */}
+                <Pressable onPress={handleCreate} disabled={loading} style={{ marginTop: 28 }}>
+                  <View style={[styles.createBtn, loading && { opacity: 0.5 }]}>
+                    {loading && <ActivityIndicator color={C.white} size="small" />}
+                    <Text style={styles.createBtnText}>{loading ? '생성 중...' : '전시관 공개하기'}</Text>
+                    {!loading && <Text style={styles.createBtnArrow}>→</Text>}
+                  </View>
+                </Pressable>
               </>
             ) : (
               <>
@@ -323,151 +389,174 @@ export default function CreateExhibitionScreen() {
                   onMoveArtwork={moveArtwork}
                   onResizeArtwork={resizeArtwork}
                   onClose={() => setWallEditorOpen(null)}
-                  containerWidth={mapWidth}
+                  containerWidth={editorWidth}
                 />
+
+                {/* 이 벽에 걸린 작품만 표시 */}
+                {(() => {
+                  const wallArts = artworks.filter(a => a.wall === wallEditorOpen);
+                  return wallArts.length > 0 && (
+                    <Text style={[styles.label, { marginTop: 24 }]}>
+                      {WALL_LABELS[wallEditorOpen]} 작품 ({wallArts.length})
+                    </Text>
+                  );
+                })()}
+
+                {artworks.filter(a => a.wall === wallEditorOpen).map(art => {
+                  const isSelected = art.localId === selectedArtworkId;
+                  return (
+                    <Pressable key={art.localId}
+                      style={[styles.artItem, isSelected && styles.artItemSel]}
+                      onPress={() => setSelectedArtworkId(art.localId)}>
+                      <Image source={{ uri: art.uri }} style={styles.artThumb} contentFit="cover" />
+                      <View style={{ flex: 1 }}>
+                        <TextInput style={styles.artTitleInput} value={art.title}
+                          onChangeText={(t) => setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, title: t } : a))}
+                          placeholder="작품 제목" placeholderTextColor={C.mutedLight} />
+                        <Text style={styles.artMeta}>
+                          왼쪽 {(art.positionX / 100).toFixed(1)}m · 높이 {(art.positionY / 100).toFixed(1)}m · {art.widthCm}×{art.heightCm}cm
+                        </Text>
+
+                        {isSelected && (
+                          <View style={styles.sizeSection}>
+                            {/* ── 작품 정보 ── */}
+                            <Text style={[styles.label, { marginTop: 4, marginBottom: 2 }]}>작품 정보</Text>
+
+                            <View style={styles.fieldRow}>
+                              <Text style={styles.fieldLabel}>제작 연도</Text>
+                              <TextInput style={styles.fieldInput}
+                                placeholder="예: 2024" placeholderTextColor={C.mutedLight}
+                                keyboardType="number-pad" maxLength={4}
+                                value={art.year ? String(art.year) : ''}
+                                onChangeText={(t) => setArtworks(prev => prev.map(a =>
+                                  a.localId === art.localId ? { ...a, year: t ? parseInt(t) || undefined : undefined } : a))}
+                              />
+                            </View>
+
+                            <View style={styles.fieldRow}>
+                              <Text style={styles.fieldLabel}>재료/기법</Text>
+                              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+                                <View style={{ flexDirection: 'row', gap: 6 }}>
+                                  {MEDIUM_OPTIONS.map(m => (
+                                    <Pressable key={m}
+                                      style={[styles.mediumChip, art.medium === m && styles.mediumChipSel]}
+                                      onPress={() => setArtworks(prev => prev.map(a =>
+                                        a.localId === art.localId ? { ...a, medium: art.medium === m ? undefined : m } : a))}>
+                                      <Text style={[styles.mediumChipText, art.medium === m && styles.mediumChipTextSel]}>{m}</Text>
+                                    </Pressable>
+                                  ))}
+                                </View>
+                              </ScrollView>
+                            </View>
+
+                            <View style={styles.fieldRow}>
+                              <Text style={styles.fieldLabel}>에디션 (판화 등)</Text>
+                              <TextInput style={styles.fieldInput}
+                                placeholder="예: 1/10, AP" placeholderTextColor={C.mutedLight}
+                                value={art.edition || ''}
+                                onChangeText={(t) => setArtworks(prev => prev.map(a =>
+                                  a.localId === art.localId ? { ...a, edition: t || undefined } : a))}
+                              />
+                            </View>
+
+                            <View style={styles.fieldRow}>
+                              <Text style={styles.fieldLabel}>작품 설명</Text>
+                              <TextInput style={[styles.fieldInput, { minHeight: 50, textAlignVertical: 'top' }]}
+                                placeholder="작품에 대한 설명" placeholderTextColor={C.mutedLight}
+                                multiline value={art.description || ''}
+                                onChangeText={(t) => setArtworks(prev => prev.map(a =>
+                                  a.localId === art.localId ? { ...a, description: t || undefined } : a))}
+                              />
+                            </View>
+
+                            {/* ── 전시 크기 (벽면 배치) ── */}
+                            <Text style={[styles.label, { marginTop: 14, marginBottom: 2 }]}>전시 크기 · 위치</Text>
+
+                            {[
+                              { label: '가로', key: 'widthCm' as const, min: 10, max: 300 },
+                              { label: '세로', key: 'heightCm' as const, min: 10, max: 300 },
+                            ].map(({ label, key, min, max }) => (
+                              <View key={key} style={styles.sizeRow}>
+                                <Text style={styles.sizeLabel}>{label}</Text>
+                                <Pressable style={styles.sizeBtn} onPress={() =>
+                                  setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, [key]: Math.max(min, a[key] - 10) } : a))}>
+                                  <Text style={styles.sizeBtnText}>−</Text>
+                                </Pressable>
+                                <Text style={styles.sizeValue}>{art[key]}cm</Text>
+                                <Pressable style={styles.sizeBtn} onPress={() =>
+                                  setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, [key]: Math.min(max, a[key] + 10) } : a))}>
+                                  <Text style={styles.sizeBtnText}>+</Text>
+                                </Pressable>
+                              </View>
+                            ))}
+                            <View style={styles.sizeRow}>
+                              <Text style={styles.sizeLabel}>높이</Text>
+                              <Pressable style={styles.sizeBtn} onPress={() =>
+                                setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, positionY: Math.max(30, a.positionY - 10) } : a))}>
+                                <Text style={styles.sizeBtnText}>−</Text>
+                              </Pressable>
+                              <Text style={styles.sizeValue}>바닥 {art.positionY}cm</Text>
+                              <Pressable style={styles.sizeBtn} onPress={() =>
+                                setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, positionY: Math.min(280, a.positionY + 10) } : a))}>
+                                <Text style={styles.sizeBtnText}>+</Text>
+                              </Pressable>
+                            </View>
+
+                            {/* ── 다중 각도 ── */}
+                            <Text style={[styles.label, { marginTop: 14, marginBottom: 6 }]}>다른 각도 사진 (선택)</Text>
+                            <View style={styles.angleRow}>
+                              {(['top', 'bottom', 'left', 'right'] as const).map(angle => {
+                                const key = `${angle}Uri` as keyof PlacedArtwork;
+                                const has = !!art[key];
+                                const labels = { top: '위', bottom: '아래', left: '좌', right: '우' };
+                                return (
+                                  <Pressable key={angle} style={[styles.angleBox, has && styles.angleBoxFilled]}
+                                    onPress={() => pickAngleImage(angle)}>
+                                    {has ? <Image source={{ uri: art[key] as string }} style={styles.angleImg} contentFit="cover" />
+                                      : <Text style={styles.anglePlus}>+</Text>}
+                                    <Text style={styles.angleLabel}>{labels[angle]}</Text>
+                                  </Pressable>
+                                );
+                              })}
+                            </View>
+                          </View>
+                        )}
+                      </View>
+                      <Pressable onPress={() => removeArtwork(art.localId)} hitSlop={8}>
+                        <Text style={styles.removeText}>✕</Text>
+                      </Pressable>
+                    </Pressable>
+                  );
+                })}
+
+                {/* 다른 벽 꾸미기 버튼 */}
+                <View style={styles.wallNavRow}>
+                  {(['north', 'south', 'east', 'west'] as Wall[]).map(w => {
+                    const count = artworks.filter(a => a.wall === w).length;
+                    const isActive = w === wallEditorOpen;
+                    return (
+                      <Pressable key={w}
+                        style={[styles.wallNavBtn, isActive && styles.wallNavBtnActive]}
+                        onPress={() => { setWallEditorOpen(w); setSelectedArtworkId(null); }}>
+                        <Text style={[styles.wallNavLabel, isActive && styles.wallNavLabelActive]}>
+                          {WALL_LABELS[w]}
+                        </Text>
+                        {count > 0 && (
+                          <Text style={[styles.wallNavCount, isActive && styles.wallNavCountActive]}>
+                            {count}
+                          </Text>
+                        )}
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Pressable style={styles.overviewBtn}
+                  onPress={() => { setWallEditorOpen(null); setSelectedArtworkId(null); }}>
+                  <Text style={styles.overviewBtnText}>전체 보기</Text>
+                </Pressable>
               </>
             )}
-
-            {/* 배치된 작품 목록 */}
-            {artworks.length > 0 && (
-              <Text style={[styles.label, { marginTop: 24 }]}>배치된 작품 ({artworks.length})</Text>
-            )}
-
-            {artworks.map(art => {
-              const isSelected = art.localId === selectedArtworkId;
-              return (
-                <Pressable key={art.localId}
-                  style={[styles.artItem, isSelected && styles.artItemSel]}
-                  onPress={() => setSelectedArtworkId(art.localId)}>
-                  <Animated.Image source={{ uri: art.uri }} style={styles.artThumb} />
-                  <View style={{ flex: 1 }}>
-                    <TextInput style={styles.artTitleInput} value={art.title}
-                      onChangeText={(t) => setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, title: t } : a))}
-                      placeholder="작품 제목" placeholderTextColor={C.mutedLight} />
-                    <Text style={styles.artMeta}>
-                      {WALL_LABELS[art.wall]} · 왼쪽 {(art.positionX / 100).toFixed(1)}m · 높이 {(art.positionY / 100).toFixed(1)}m · {art.widthCm}×{art.heightCm}cm
-                    </Text>
-
-                    {isSelected && (
-                      <View style={styles.sizeSection}>
-                        {/* ── 작품 정보 ── */}
-                        <Text style={[styles.label, { marginTop: 4, marginBottom: 2 }]}>작품 정보</Text>
-
-                        <View style={styles.fieldRow}>
-                          <Text style={styles.fieldLabel}>제작 연도</Text>
-                          <TextInput style={styles.fieldInput}
-                            placeholder="예: 2024" placeholderTextColor={C.mutedLight}
-                            keyboardType="number-pad" maxLength={4}
-                            value={art.year ? String(art.year) : ''}
-                            onChangeText={(t) => setArtworks(prev => prev.map(a =>
-                              a.localId === art.localId ? { ...a, year: t ? parseInt(t) || undefined : undefined } : a))}
-                          />
-                        </View>
-
-                        <View style={styles.fieldRow}>
-                          <Text style={styles.fieldLabel}>재료/기법</Text>
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
-                            <View style={{ flexDirection: 'row', gap: 6 }}>
-                              {MEDIUM_OPTIONS.map(m => (
-                                <Pressable key={m}
-                                  style={[styles.mediumChip, art.medium === m && styles.mediumChipSel]}
-                                  onPress={() => setArtworks(prev => prev.map(a =>
-                                    a.localId === art.localId ? { ...a, medium: art.medium === m ? undefined : m } : a))}>
-                                  <Text style={[styles.mediumChipText, art.medium === m && styles.mediumChipTextSel]}>{m}</Text>
-                                </Pressable>
-                              ))}
-                            </View>
-                          </ScrollView>
-                        </View>
-
-                        <View style={styles.fieldRow}>
-                          <Text style={styles.fieldLabel}>에디션 (판화 등)</Text>
-                          <TextInput style={styles.fieldInput}
-                            placeholder="예: 1/10, AP" placeholderTextColor={C.mutedLight}
-                            value={art.edition || ''}
-                            onChangeText={(t) => setArtworks(prev => prev.map(a =>
-                              a.localId === art.localId ? { ...a, edition: t || undefined } : a))}
-                          />
-                        </View>
-
-                        <View style={styles.fieldRow}>
-                          <Text style={styles.fieldLabel}>작품 설명</Text>
-                          <TextInput style={[styles.fieldInput, { minHeight: 50, textAlignVertical: 'top' }]}
-                            placeholder="작품에 대한 설명" placeholderTextColor={C.mutedLight}
-                            multiline value={art.description || ''}
-                            onChangeText={(t) => setArtworks(prev => prev.map(a =>
-                              a.localId === art.localId ? { ...a, description: t || undefined } : a))}
-                          />
-                        </View>
-
-                        {/* ── 전시 크기 (벽면 배치) ── */}
-                        <Text style={[styles.label, { marginTop: 14, marginBottom: 2 }]}>전시 크기 · 위치</Text>
-
-                        {[
-                          { label: '가로', key: 'widthCm' as const, min: 10, max: 300 },
-                          { label: '세로', key: 'heightCm' as const, min: 10, max: 300 },
-                        ].map(({ label, key, min, max }) => (
-                          <View key={key} style={styles.sizeRow}>
-                            <Text style={styles.sizeLabel}>{label}</Text>
-                            <Pressable style={styles.sizeBtn} onPress={() =>
-                              setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, [key]: Math.max(min, a[key] - 10) } : a))}>
-                              <Text style={styles.sizeBtnText}>−</Text>
-                            </Pressable>
-                            <Text style={styles.sizeValue}>{art[key]}cm</Text>
-                            <Pressable style={styles.sizeBtn} onPress={() =>
-                              setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, [key]: Math.min(max, a[key] + 10) } : a))}>
-                              <Text style={styles.sizeBtnText}>+</Text>
-                            </Pressable>
-                          </View>
-                        ))}
-                        <View style={styles.sizeRow}>
-                          <Text style={styles.sizeLabel}>높이</Text>
-                          <Pressable style={styles.sizeBtn} onPress={() =>
-                            setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, positionY: Math.max(30, a.positionY - 10) } : a))}>
-                            <Text style={styles.sizeBtnText}>−</Text>
-                          </Pressable>
-                          <Text style={styles.sizeValue}>바닥 {art.positionY}cm</Text>
-                          <Pressable style={styles.sizeBtn} onPress={() =>
-                            setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, positionY: Math.min(280, a.positionY + 10) } : a))}>
-                            <Text style={styles.sizeBtnText}>+</Text>
-                          </Pressable>
-                        </View>
-
-                        {/* ── 다중 각도 ── */}
-                        <Text style={[styles.label, { marginTop: 14, marginBottom: 6 }]}>다른 각도 사진 (선택)</Text>
-                        <View style={styles.angleRow}>
-                          {(['top', 'bottom', 'left', 'right'] as const).map(angle => {
-                            const key = `${angle}Uri` as keyof PlacedArtwork;
-                            const has = !!art[key];
-                            const labels = { top: '위', bottom: '아래', left: '좌', right: '우' };
-                            return (
-                              <Pressable key={angle} style={[styles.angleBox, has && styles.angleBoxFilled]}
-                                onPress={() => pickAngleImage(angle)}>
-                                {has ? <Animated.Image source={{ uri: art[key] as string }} style={styles.angleImg} />
-                                  : <Text style={styles.anglePlus}>+</Text>}
-                                <Text style={styles.angleLabel}>{labels[angle]}</Text>
-                              </Pressable>
-                            );
-                          })}
-                        </View>
-                      </View>
-                    )}
-                  </View>
-                  <Pressable onPress={() => removeArtwork(art.localId)} hitSlop={8}>
-                    <Text style={styles.removeText}>✕</Text>
-                  </Pressable>
-                </Pressable>
-              );
-            })}
-
-            {/* 공개 버튼 */}
-            <Pressable onPress={handleCreate} disabled={loading} style={{ marginTop: 28 }}>
-              <View style={[styles.createBtn, loading && { opacity: 0.5 }]}>
-                {loading && <ActivityIndicator color={C.white} size="small" />}
-                <Text style={styles.createBtnText}>{loading ? '생성 중...' : '전시관 공개하기'}</Text>
-                {!loading && <Text style={styles.createBtnArrow}>→</Text>}
-              </View>
-            </Pressable>
           </Animated.View>
         )}
 
@@ -550,4 +639,24 @@ const styles = StyleSheet.create({
   createBtn: { backgroundColor: C.fg, paddingVertical: 18, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: C.gold, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 },
   createBtnText: { color: C.white, fontSize: 16, fontWeight: '700', letterSpacing: 2 },
   createBtnArrow: { color: C.gold, fontSize: 18 },
+
+  wallSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4 },
+  wallSectionTitle: { fontSize: 13, fontWeight: '700', color: C.fg, letterSpacing: 1 },
+  wallSectionCount: { fontSize: 11, color: C.gold, fontWeight: '600' },
+  wallSectionArrow: { fontSize: 12, color: C.mutedLight, marginLeft: 'auto' },
+
+  artItemCompact: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, paddingHorizontal: 4 },
+  artThumbSmall: { width: 36, height: 36, borderRadius: 6 },
+  artTitleCompact: { fontSize: 13, color: C.fg, fontWeight: '600' },
+
+  wallNavRow: { flexDirection: 'row', gap: 8, marginTop: 24, flexWrap: 'wrap' },
+  wallNavBtn: { flex: 1, minWidth: 70, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: C.border, alignItems: 'center', gap: 2 },
+  wallNavBtnActive: { borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.08)' },
+  wallNavLabel: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 1 },
+  wallNavLabelActive: { color: C.gold },
+  wallNavCount: { fontSize: 10, color: C.mutedLight, fontWeight: '600' },
+  wallNavCountActive: { color: C.gold },
+
+  overviewBtn: { marginTop: 12, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: C.border, alignItems: 'center' },
+  overviewBtnText: { fontSize: 13, color: C.muted, fontWeight: '600', letterSpacing: 1 },
 });
