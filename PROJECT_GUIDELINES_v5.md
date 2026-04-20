@@ -469,41 +469,65 @@ exhibitions
 2. 전시관 크기 선택 (4종 템플릿)
 3. 4면 벽 색상 개별 설정 (펼친 도면 뷰)
 4. 벽면 정면 에디터에서 터치한 위치에 작품 배치
-   - 작품 크기 (가로/세로 cm) 조절
+   - 드래그로 작품 위치 이동
+   - 두 손가락 핀치로 크기 조절 (비율 유지)
+   - 크기 +/- 버튼으로 가로/세로 개별 조절 (10~300cm)
    - 바닥에서의 높이 조절
-   - 작품 간 거리(cm) 라벨 표시
+   - 작품 간 거리(cm) 라벨 자동 표시
+   - 1m 눈금선 + 눈높이(150cm) 가이드라인
    - 다중 각도 사진 업로드 (위/아래/좌/우, 선택)
+5. 작품 메타데이터 입력
+   - 작품명 (필수)
+   - 제작 연도
+   - 재료/기법 (칩 선택: 캔버스에 유채, 디지털 프린트 등 12종)
+   - 에디션 (판화용, 예: 1/10, AP)
+   - 작품 설명
 
 **관람자 측 (1인칭 뷰어)**:
-1. 입구: 전시 서문 읽기 → 입장
-2. 1인칭 시점: 정면 벽 + 양옆 벽이 원근감 있게 보임
-3. 좌우 회전: 슬라이드 + 걷는 흔들림 애니메이션
-4. 작품 터치 → 클로즈업 + 다중 각도 감상 (작가가 올린 각도만 활성화)
+1. 입구: 전시 제목, 작가명, 서문 읽기 → "전시관 입장" 버튼
+2. 1인칭 시점: 정면 벽 + 양옆 벽이 원근감(perspective) 있게 보임
+3. 좌우 회전: 사이드 벽 터치 또는 하단 ←→ 버튼, 나침반(N/E/S/W)으로 직접 이동
+4. 작품 터치 → 클로즈업 감상
+   - 벽면 배경 + 액자 프레임 + 스포트라이트 효과
+   - 작품 플레이트: "작품명, 2024 · 캔버스에 유채 · 60×40cm · AP"
+   - 다중 각도 감상 (작가가 올린 각도만 버튼 활성화)
+5. 천장 조명 + 바닥 타일 원근감으로 몰입감 제공
 
 **DB 테이블**:
 - `exhibitions` - 전시관 정보 (서문, 방 타입, 4면 벽 색상)
 - `exhibition_artworks` - 작품 배치 (벽면, 위치 cm, 크기 cm)
-- `artworks` - 다중 각도 이미지 (image_top/bottom/left/right_url)
+- `artworks` - 다중 각도 이미지 + 메타데이터 (연도, 재료, 실제 크기, 에디션)
 
 **주요 컴포넌트** (`components/exhibition/`):
-- `room-geometry.ts` - 공유 타입/상수/유틸
-- `WallFaceEditor.tsx` - 벽면 정면 편집 뷰
-- `Room3DView.tsx` - 펼친 도면 형태 전시관 뷰
-- `FirstPersonViewer.tsx` - 1인칭 관람 뷰어
+- `room-geometry.ts` - 공유 타입/상수/유틸 (Wall, RoomType, PlacedArtwork, MEDIUM_OPTIONS 등)
+- `WallFaceEditor.tsx` - 벽면 정면 편집 뷰 (터치 배치 + 드래그 이동 + 핀치 리사이즈)
+- `Room3DView.tsx` - 펼친 도면 형태 전시관 뷰 (벽 선택용)
+- `FirstPersonViewer.tsx` - 1인칭 관람 뷰어 (벽면 전환 + 작품 클로즈업 + 각도 전환)
 
 **라우트**:
 - `app/exhibition/create.tsx` - 전시관 만들기 (4단계 위저드)
 - `app/exhibition/[id].tsx` - 전시관 뷰어 (입구→1인칭 관람)
 
+### UI 디자인 변경 이력
+- 로그인/회원가입: FloatingShape 배경 애니메이션, PlayfulDiamond, 인풋 포커스 골드 전환
+- 온보딩: 가로형 카드 + 라디오 선택 애니메이션
+- 홈: 프로필 아바타 + 퀵액션 리스트 + Coming Soon 카드
+- 탐색: 카테고리 그리드 + 검색바 + 트렌딩
+- 탭바: Home→홈, Explore→탐색 (한글화)
+
 ### Git 커밋 히스토리
 ```
+d506087 feat: add pinch-to-resize for artworks on wall editor
+8dab74c feat: add artwork metadata fields, drag-to-move on wall, fix viewer UX
+5be6c91 fix: improve first-person viewer UX - center wall, reduce arrows, remove shake
+60a384e feat: add virtual exhibition gallery with first-person viewer
+164b4e0 ㅇ
+fd1c7f6 feat: redesign login/signup screens with floating shape animations
+3452ecd feat: add playful diamond animation and polish landing screen
+702826e PROJECT_GUIDELINES_v5.md
+9dc4d6d feat: add email/password auth, onboarding, and splash screen
 1575ab9 chore: add app.json with EAS config
 f5f4b10 feat: redesign home screen with animated floating shapes
-8ff18c3 fix: improve home screen layout and responsiveness
-a0f23ec feat: add MOUI-IST branded home screen and Supabase integration
-226882d chore: add Vercel deployment config
-f226029 init
-f20d927 Initial commit
 ```
 
 ## 응답 규칙
