@@ -1,6 +1,6 @@
-import { useMemo, useRef } from 'react';
-import { StyleSheet, View, Text, Pressable, ScrollView } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { useMemo, useRef, useState } from 'react';
+import { StyleSheet, View, Text, Pressable, ScrollView, PanResponder } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import {
   type Wall, type RoomType, type PlacedArtwork,
   getWallLength, getWallHeight, cmToPx, pxToCm, WALL_LABELS,
@@ -19,94 +19,69 @@ type Props = {
   selectedArtworkId: string | null;
   onPlaceArtwork: (wall: Wall, posXcm: number, posYcm: number) => void;
   onSelectArtwork: (id: string) => void;
+  onMoveArtwork: (id: string, posXcm: number, posYcm: number) => void;
   onClose: () => void;
   containerWidth: number;
 };
 
 export default function WallFaceEditor({
   wall, roomType, wallColor, artworks, selectedArtworkId,
-  onPlaceArtwork, onSelectArtwork, onClose, containerWidth,
+  onPlaceArtwork, onSelectArtwork, onMoveArtwork, onClose, containerWidth,
 }: Props) {
   const wallLenCm = getWallLength(roomType, wall);
   const wallHCm = getWallHeight(roomType);
 
-  // 벽면 px - 가로를 꽉 채우되 너무 넓으면 스크롤
   const minPxPerCm = 0.3;
   const wallWidthPx = Math.max(containerWidth, wallLenCm * minPxPerCm);
-  const wallHeightPx = (wallHCm / wallLenCm) * wallWidthPx;
+  const wallHeightPx = Math.max((wallHCm / wallLenCm) * wallWidthPx, 180);
 
-  // 벽의 작품 (이 벽에 있는 것만)
   const wallArtworks = useMemo(() =>
     artworks.filter(a => a.wall === wall).sort((a, b) => a.positionX - b.positionX),
     [artworks, wall]
   );
 
-  // 거리 라벨 계산
+  // 거리 라벨
   const distanceLabels = useMemo(() => {
     if (wallArtworks.length === 0) return [];
     const labels: { fromPx: number; toPx: number; cm: number }[] = [];
 
-    // 왼쪽 벽 → 첫 작품
     const first = wallArtworks[0];
     const firstLeftEdge = first.positionX - first.widthCm / 2;
     if (firstLeftEdge > 5) {
-      labels.push({
-        fromPx: 0,
-        toPx: cmToPx(firstLeftEdge, wallLenCm, wallWidthPx),
-        cm: Math.round(firstLeftEdge),
-      });
+      labels.push({ fromPx: 0, toPx: cmToPx(firstLeftEdge, wallLenCm, wallWidthPx), cm: Math.round(firstLeftEdge) });
     }
 
-    // 작품 사이
     for (let i = 0; i < wallArtworks.length - 1; i++) {
       const rightEdge = wallArtworks[i].positionX + wallArtworks[i].widthCm / 2;
       const leftEdge = wallArtworks[i + 1].positionX - wallArtworks[i + 1].widthCm / 2;
       const gap = leftEdge - rightEdge;
       if (gap > 3) {
-        labels.push({
-          fromPx: cmToPx(rightEdge, wallLenCm, wallWidthPx),
-          toPx: cmToPx(leftEdge, wallLenCm, wallWidthPx),
-          cm: Math.round(gap),
-        });
+        labels.push({ fromPx: cmToPx(rightEdge, wallLenCm, wallWidthPx), toPx: cmToPx(leftEdge, wallLenCm, wallWidthPx), cm: Math.round(gap) });
       }
     }
 
-    // 마지막 작품 → 오른쪽 벽
     const last = wallArtworks[wallArtworks.length - 1];
     const lastRightEdge = last.positionX + last.widthCm / 2;
     const remaining = wallLenCm - lastRightEdge;
     if (remaining > 5) {
-      labels.push({
-        fromPx: cmToPx(lastRightEdge, wallLenCm, wallWidthPx),
-        toPx: wallWidthPx,
-        cm: Math.round(remaining),
-      });
+      labels.push({ fromPx: cmToPx(lastRightEdge, wallLenCm, wallWidthPx), toPx: wallWidthPx, cm: Math.round(remaining) });
     }
 
     return labels;
   }, [wallArtworks, wallLenCm, wallWidthPx]);
 
-  // 벽면 터치 → 클릭한 위치에 배치
-  const wallRef = useRef<View>(null);
-
+  // 벽면 빈곳 터치 → 배치
   const handleWallPress = (e: any) => {
-    // web에서는 nativeEvent.offsetX/offsetY 사용, 없으면 pageX 기반 계산
     const nativeEvt = e.nativeEvent;
     let localX = nativeEvt.offsetX ?? nativeEvt.locationX;
     let localY = nativeEvt.offsetY ?? nativeEvt.locationY;
-
-    // offsetX/locationX 둘 다 없으면 pageX로 계산
     if (localX == null || localY == null || isNaN(localX) || isNaN(localY)) {
-      // fallback: 벽면 중앙
       localX = wallWidthPx / 2;
       localY = wallHeightPx / 2;
     }
-
     const posXcm = Math.round(pxToCm(localX, wallWidthPx, wallLenCm));
     const posYcm = Math.round(wallHCm - pxToCm(localY, wallHeightPx, wallHCm));
-    const clampedX = Math.max(30, Math.min(wallLenCm - 30, posXcm));
-    const clampedY = Math.max(30, Math.min(wallHCm - 20, posYcm));
-    onPlaceArtwork(wall, clampedX, clampedY);
+    onPlaceArtwork(wall, Math.max(30, Math.min(wallLenCm - 30, posXcm)), Math.max(30, Math.min(wallHCm - 20, posYcm)));
   };
 
   const isDark = ['#333333', '#1B2A4A', '#4A1B2A', '#1B3A2A'].includes(wallColor);
@@ -115,7 +90,6 @@ export default function WallFaceEditor({
 
   return (
     <Animated.View entering={FadeInDown.duration(300).springify()} style={styles.container}>
-      {/* 헤더 */}
       <View style={styles.header}>
         <View>
           <Text style={styles.headerTitle}>{WALL_LABELS[wall]}</Text>
@@ -128,118 +102,76 @@ export default function WallFaceEditor({
         </Pressable>
       </View>
 
-      <Text style={styles.hint}>벽면을 터치하면 그 위치에 작품이 걸립니다</Text>
+      <Text style={styles.hint}>터치: 작품 걸기 · 드래그: 작품 이동</Text>
 
-      {/* 벽면 에디터 */}
       <ScrollView horizontal showsHorizontalScrollIndicator={true}
-        contentContainerStyle={{ borderRadius: 10, overflow: 'hidden' }}>
+        contentContainerStyle={{ borderRadius: 10, overflow: 'hidden' }}
+        scrollEnabled={!selectedArtworkId}>
         <Pressable onPress={handleWallPress} style={{ position: 'relative' }}>
-          <View style={[styles.wallSurface, {
-            width: wallWidthPx,
-            height: Math.max(wallHeightPx, 180),
-            backgroundColor: wallColor,
-          }]}>
-            {/* 세로 눈금 (1m마다) */}
+          <View style={[styles.wallSurface, { width: wallWidthPx, height: wallHeightPx, backgroundColor: wallColor }]}>
+            {/* 세로 눈금 */}
             {Array.from({ length: Math.floor(wallLenCm / 100) }, (_, i) => {
               const x = cmToPx((i + 1) * 100, wallLenCm, wallWidthPx);
               return (
-                <View key={`v${i}`} style={{
-                  position: 'absolute', left: x, top: 0, bottom: 0,
-                  width: 1, backgroundColor: gridColor,
-                }}>
-                  <Text style={{ position: 'absolute', bottom: 4, left: 4, fontSize: 9, color: textColor, fontWeight: '600' }}>
-                    {i + 1}m
-                  </Text>
+                <View key={`v${i}`} style={{ position: 'absolute', left: x, top: 0, bottom: 0, width: 1, backgroundColor: gridColor }}>
+                  <Text style={{ position: 'absolute', bottom: 4, left: 4, fontSize: 9, color: textColor, fontWeight: '600' }}>{i + 1}m</Text>
                 </View>
               );
             })}
 
-            {/* 가로 눈금 (1m마다, 바닥 기준) */}
+            {/* 가로 눈금 */}
             {Array.from({ length: Math.floor(wallHCm / 100) }, (_, i) => {
               const y = wallHeightPx - cmToPx((i + 1) * 100, wallHCm, wallHeightPx);
               return (
-                <View key={`h${i}`} style={{
-                  position: 'absolute', top: y, left: 0, right: 0,
-                  height: 1, backgroundColor: gridColor,
-                }}>
-                  <Text style={{ position: 'absolute', left: 4, top: -12, fontSize: 9, color: textColor, fontWeight: '600' }}>
-                    {i + 1}m
-                  </Text>
+                <View key={`h${i}`} style={{ position: 'absolute', top: y, left: 0, right: 0, height: 1, backgroundColor: gridColor }}>
+                  <Text style={{ position: 'absolute', left: 4, top: -12, fontSize: 9, color: textColor, fontWeight: '600' }}>{i + 1}m</Text>
                 </View>
               );
             })}
 
-            {/* 눈높이 (150cm) */}
+            {/* 눈높이 */}
             {wallHCm >= 150 && (
               <View style={{
-                position: 'absolute',
-                top: wallHeightPx - cmToPx(150, wallHCm, wallHeightPx),
+                position: 'absolute', top: wallHeightPx - cmToPx(150, wallHCm, wallHeightPx),
                 left: 0, right: 0, height: 1,
                 borderTopWidth: 1, borderStyle: 'dashed',
                 borderColor: isDark ? 'rgba(200,169,110,0.4)' : 'rgba(200,169,110,0.6)',
               }}>
-                <Text style={{
-                  position: 'absolute', right: 6, top: -14,
-                  fontSize: 9, color: C.gold, fontWeight: '600',
-                }}>
-                  눈높이 150cm
-                </Text>
+                <Text style={{ position: 'absolute', right: 6, top: -14, fontSize: 9, color: C.gold, fontWeight: '600' }}>눈높이 150cm</Text>
               </View>
             )}
 
             {/* 바닥 */}
-            <View style={{
-              position: 'absolute', bottom: 0, left: 0, right: 0,
-              height: 4, backgroundColor: '#8B7355',
-            }} />
+            <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 4, backgroundColor: '#8B7355' }} />
 
-            {/* 작품들 */}
-            {wallArtworks.map(art => {
-              const w = cmToPx(art.widthCm, wallLenCm, wallWidthPx);
-              const h = cmToPx(art.heightCm, wallHCm, wallHeightPx);
-              const left = cmToPx(art.positionX, wallLenCm, wallWidthPx) - w / 2;
-              const top = wallHeightPx - cmToPx(art.positionY, wallHCm, wallHeightPx) - h / 2;
-              const isSelected = art.localId === selectedArtworkId;
-              const frameColor = isDark ? '#D4C5A9' : '#5C4A32';
-
-              return (
-                <Pressable
-                  key={art.localId}
-                  onPress={() => onSelectArtwork(art.localId)}
-                  style={{
-                    position: 'absolute', left, top, width: w, height: h,
-                    borderWidth: isSelected ? 3 : 2.5,
-                    borderColor: isSelected ? C.gold : frameColor,
-                    backgroundColor: '#fff', padding: 2,
-                    shadowColor: '#000', shadowOffset: { width: 1, height: 3 },
-                    shadowOpacity: isDark ? 0.4 : 0.15, shadowRadius: 4,
-                    zIndex: isSelected ? 10 : 1,
-                  }}
-                >
-                  <Animated.Image source={{ uri: art.uri }}
-                    style={{ width: '100%', height: '100%' }} resizeMode="cover" />
-                </Pressable>
-              );
-            })}
+            {/* 작품들 (드래그 가능) */}
+            {wallArtworks.map(art => (
+              <DraggableArtwork
+                key={art.localId}
+                art={art}
+                wallLenCm={wallLenCm}
+                wallHCm={wallHCm}
+                wallWidthPx={wallWidthPx}
+                wallHeightPx={wallHeightPx}
+                isSelected={art.localId === selectedArtworkId}
+                isDark={isDark}
+                onSelect={() => onSelectArtwork(art.localId)}
+                onMove={(x, y) => onMoveArtwork(art.localId, x, y)}
+              />
+            ))}
 
             {/* 거리 라벨 */}
             {distanceLabels.map((d, i) => {
               const width = d.toPx - d.fromPx;
               if (width < 25) return null;
-              // 벽 중간 높이에 표시
-              const labelY = wallHeightPx * 0.5;
               return (
                 <View key={`dist${i}`} style={{
                   position: 'absolute', left: d.fromPx, width,
-                  top: labelY - 8, height: 16,
-                  flexDirection: 'row', alignItems: 'center',
-                  zIndex: 0,
+                  top: wallHeightPx * 0.5 - 8, height: 16,
+                  flexDirection: 'row', alignItems: 'center', zIndex: 0,
                 }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(200,169,110,0.4)' }} />
-                  <View style={{
-                    backgroundColor: 'rgba(200,169,110,0.2)',
-                    paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, marginHorizontal: 2,
-                  }}>
+                  <View style={{ backgroundColor: 'rgba(200,169,110,0.2)', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 4, marginHorizontal: 2 }}>
                     <Text style={{ fontSize: 8, color: C.gold, fontWeight: '700' }}>{d.cm}cm</Text>
                   </View>
                   <View style={{ flex: 1, height: 1, backgroundColor: 'rgba(200,169,110,0.4)' }} />
@@ -253,16 +185,120 @@ export default function WallFaceEditor({
   );
 }
 
+/* ── 드래그 가능한 작품 ── */
+function DraggableArtwork({
+  art, wallLenCm, wallHCm, wallWidthPx, wallHeightPx,
+  isSelected, isDark, onSelect, onMove,
+}: {
+  art: PlacedArtwork;
+  wallLenCm: number; wallHCm: number;
+  wallWidthPx: number; wallHeightPx: number;
+  isSelected: boolean; isDark: boolean;
+  onSelect: () => void;
+  onMove: (posXcm: number, posYcm: number) => void;
+}) {
+  const w = cmToPx(art.widthCm, wallLenCm, wallWidthPx);
+  const h = cmToPx(art.heightCm, wallHCm, wallHeightPx);
+  const baseLeft = cmToPx(art.positionX, wallLenCm, wallWidthPx) - w / 2;
+  const baseTop = wallHeightPx - cmToPx(art.positionY, wallHCm, wallHeightPx) - h / 2;
+
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const draggingRef = useRef(false);
+
+  const panResponder = useMemo(() =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
+      onPanResponderGrant: () => {
+        onSelect();
+        draggingRef.current = false;
+        setIsDragging(false);
+      },
+      onPanResponderMove: (_, g) => {
+        if (Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3) {
+          draggingRef.current = true;
+          setIsDragging(true);
+          setDragOffset({ x: g.dx, y: g.dy });
+        }
+      },
+      onPanResponderRelease: (_, g) => {
+        if (draggingRef.current) {
+          const newCenterPxX = cmToPx(art.positionX, wallLenCm, wallWidthPx) + g.dx;
+          const newCenterPxY = (wallHeightPx - cmToPx(art.positionY, wallHCm, wallHeightPx)) + g.dy;
+
+          const newXcm = Math.round(pxToCm(newCenterPxX, wallWidthPx, wallLenCm));
+          const newYcm = Math.round(wallHCm - pxToCm(newCenterPxY, wallHeightPx, wallHCm));
+
+          // 먼저 offset 리셋 → 그 다음 부모에 위치 전달
+          setDragOffset({ x: 0, y: 0 });
+          setIsDragging(false);
+          draggingRef.current = false;
+
+          // setTimeout으로 리셋 후 move 호출 (리렌더 순서 보장)
+          setTimeout(() => {
+            onMove(
+              Math.max(art.widthCm / 2, Math.min(wallLenCm - art.widthCm / 2, newXcm)),
+              Math.max(art.heightCm / 2, Math.min(wallHCm - art.heightCm / 2, newYcm))
+            );
+          }, 0);
+        } else {
+          setDragOffset({ x: 0, y: 0 });
+          setIsDragging(false);
+          draggingRef.current = false;
+        }
+      },
+    }),
+    [art.positionX, art.positionY, art.widthCm, art.heightCm, wallLenCm, wallHCm, wallWidthPx, wallHeightPx]
+  );
+
+  const frameColor = isDark ? '#D4C5A9' : '#5C4A32';
+
+  return (
+    <View
+      {...panResponder.panHandlers}
+      style={{
+        position: 'absolute',
+        left: baseLeft + dragOffset.x,
+        top: baseTop + dragOffset.y,
+        width: w, height: h,
+        borderWidth: isSelected ? 3 : 2.5,
+        borderColor: isDragging ? C.gold : (isSelected ? C.gold : frameColor),
+        backgroundColor: '#fff', padding: 2,
+        shadowColor: '#000', shadowOffset: { width: 1, height: 3 },
+        shadowOpacity: isDark ? 0.4 : 0.15, shadowRadius: isDragging ? 8 : 4,
+        zIndex: isSelected || isDragging ? 10 : 1,
+        opacity: isDragging ? 0.85 : 1,
+      }}
+    >
+      <Animated.Image source={{ uri: art.uri }}
+        style={{ width: '100%', height: '100%' }} resizeMode="cover" />
+      {isDragging && (
+        <View style={styles.dragLabel}>
+          <Text style={styles.dragLabelText}>
+            {Math.round(pxToCm(baseLeft + dragOffset.x + w / 2, wallWidthPx, wallLenCm))}cm
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { gap: 8 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   headerTitle: { fontSize: 16, fontWeight: '800', color: C.fg, letterSpacing: 1 },
   headerDim: { fontSize: 11, color: C.muted, marginTop: 2 },
-  closeBtn: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10,
-    borderWidth: 1, borderColor: C.border,
-  },
+  closeBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: C.border },
   closeBtnText: { fontSize: 12, color: C.muted, fontWeight: '600' },
   hint: { fontSize: 11, color: C.gold, letterSpacing: 0.5 },
   wallSurface: { position: 'relative', overflow: 'hidden' },
+  dragLabel: {
+    position: 'absolute', bottom: -18, left: 0, right: 0,
+    alignItems: 'center',
+  },
+  dragLabelText: {
+    fontSize: 9, color: C.gold, fontWeight: '700',
+    backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+  },
 });

@@ -83,6 +83,12 @@ export default function CreateExhibitionScreen() {
     }
   };
 
+  const moveArtwork = (id: string, posXcm: number, posYcm: number) => {
+    setArtworks(prev => prev.map(a =>
+      a.localId === id ? { ...a, positionX: posXcm, positionY: posYcm } : a
+    ));
+  };
+
   const removeArtwork = (id: string) => {
     setArtworks(prev => prev.filter(a => a.localId !== id));
     if (selectedArtworkId === id) setSelectedArtworkId(null);
@@ -308,6 +314,7 @@ export default function CreateExhibitionScreen() {
                   selectedArtworkId={selectedArtworkId}
                   onPlaceArtwork={handlePlaceArtwork}
                   onSelectArtwork={setSelectedArtworkId}
+                  onMoveArtwork={moveArtwork}
                   onClose={() => setWallEditorOpen(null)}
                   containerWidth={mapWidth}
                 />
