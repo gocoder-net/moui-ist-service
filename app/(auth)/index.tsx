@@ -15,6 +15,7 @@ import Animated, {
   withTiming,
   withDelay,
   withSequence,
+  withSpring,
   Easing,
 } from 'react-native-reanimated';
 
@@ -157,11 +158,135 @@ function FloatingShape({
   );
 }
 
+function PlayfulDiamond() {
+  const rot = useSharedValue(0);
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    const play = () => {
+      rot.value = withSequence(
+        // 빠르게 한 바퀴 돌기
+        withTiming(360, { duration: 600, easing: Easing.in(Easing.cubic) }),
+        // 살짝 지나쳤다 스프링으로 멈춤
+        withSpring(360, { damping: 6, stiffness: 200 }),
+        // 쉬기
+        withDelay(1500, withTiming(360, { duration: 0 })),
+        // 반대로 반 바퀴 빠르게
+        withTiming(180, { duration: 400, easing: Easing.inOut(Easing.cubic) }),
+        // 멈칫
+        withSpring(180, { damping: 8, stiffness: 250 }),
+        // 쉬기
+        withDelay(2000, withTiming(180, { duration: 0 })),
+        // 다시 정방향 한 바퀴 반
+        withTiming(720, { duration: 800, easing: Easing.in(Easing.quad) }),
+        withSpring(720, { damping: 5, stiffness: 180 }),
+        // 쉬기
+        withDelay(1200, withTiming(720, { duration: 0 })),
+        // 살짝 까딱 (장난)
+        withTiming(740, { duration: 200, easing: Easing.out(Easing.cubic) }),
+        withSpring(720, { damping: 10, stiffness: 300 }),
+        // 쉬기 후 리셋
+        withDelay(1500, withTiming(0, { duration: 0 })),
+      );
+
+      scale.value = withSequence(
+        // 돌 때 살짝 커짐
+        withTiming(1.1, { duration: 300 }),
+        withTiming(1, { duration: 300 }),
+        // 쉴 때 원래
+        withDelay(1500, withTiming(1, { duration: 0 })),
+        // 반대로 돌 때
+        withTiming(0.9, { duration: 200 }),
+        withSpring(1, { damping: 8 }),
+        withDelay(2000, withTiming(1, { duration: 0 })),
+        // 큰 회전
+        withTiming(1.15, { duration: 400 }),
+        withTiming(1, { duration: 400 }),
+        withDelay(1200, withTiming(1, { duration: 0 })),
+        // 까딱할 때 찌그러짐
+        withTiming(1.05, { duration: 200 }),
+        withSpring(1, { damping: 12 }),
+        withDelay(1500, withTiming(1, { duration: 0 })),
+      );
+    };
+
+    play();
+    // 총: 600+200+1500+400+200+2000+800+200+1200+200+200+1500 ≈ 9000
+    const interval = setInterval(play, 9200);
+    return () => clearInterval(interval);
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [
+      { rotate: `${rot.value}deg` },
+      { scale: scale.value },
+    ],
+  }));
+
+  return (
+    <View style={diamondS.wrap}>
+      <Animated.View style={[diamondS.box, animStyle]} />
+    </View>
+  );
+}
+
+const diamondS = StyleSheet.create({
+  wrap: {
+    marginBottom: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  box: {
+    width: 18,
+    height: 18,
+    borderWidth: 1.5,
+    borderColor: C.gold,
+    transform: [{ rotate: '45deg' }],
+  },
+});
+
+function BouncingChar({ char, index, isWide }: { char: string; index: number; isWide: boolean }) {
+  const translateY = useSharedValue(0);
+
+  useEffect(() => {
+    const charDelay = index * 120;
+
+    const runBounce = () => {
+      translateY.value = withDelay(
+        charDelay,
+        withSequence(
+          withTiming(-18, { duration: 150, easing: Easing.out(Easing.cubic) }),
+          withSpring(0, { damping: 8, stiffness: 200, mass: 0.5 }),
+        ),
+      );
+    };
+
+    // 첫 바운스
+    runBounce();
+
+    // 5초마다 반복
+    const interval = setInterval(runBounce, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+
+  return (
+    <Animated.Text style={[styles.logo, isWide && styles.logoWide, animStyle]}>
+      {char}
+    </Animated.Text>
+  );
+}
+
 export default function LandingScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isWide = width > 500;
   const router = useRouter();
+
+  const chars = ['모', '의', '스', '트'];
 
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
@@ -198,11 +323,13 @@ export default function LandingScreen() {
 
       {/* 중앙 — 메인 */}
       <View style={styles.center}>
-        <View style={styles.decorDiamond} />
+        <PlayfulDiamond />
 
-        <Text style={[styles.logo, isWide && styles.logoWide]}>
-          모의스트
-        </Text>
+        <View style={styles.logoRow}>
+          {chars.map((char, i) => (
+            <BouncingChar key={i} char={char} index={i} isWide={isWide} />
+          ))}
+        </View>
 
         <View style={styles.divider} />
 
@@ -270,6 +397,10 @@ const styles = StyleSheet.create({
     borderColor: C.gold,
     transform: [{ rotate: '45deg' }],
     marginBottom: 28,
+  },
+  logoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   logo: {
     fontSize: 38,

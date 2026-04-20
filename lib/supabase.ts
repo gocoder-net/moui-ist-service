@@ -3,8 +3,10 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import type { Database } from "@/types/database";
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabaseUrl =
+  process.env.EXPO_PUBLIC_SUPABASE_URL || "https://placeholder.supabase.co";
+const supabaseAnonKey =
+  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || "placeholder";
 
 const SecureStoreAdapter = {
   getItem: (key: string) => {
