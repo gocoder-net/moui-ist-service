@@ -23,6 +23,9 @@ type Placement = {
   width_cm: number; height_cm: number;
   artwork: {
     id: string; title: string; description: string | null; image_url: string;
+    year: number | null; medium: string | null;
+    width_cm: number | null; height_cm: number | null;
+    edition: string | null;
     image_top_url: string | null; image_bottom_url: string | null;
     image_left_url: string | null; image_right_url: string | null;
   };
@@ -195,10 +198,14 @@ export default function FirstPersonViewer({ roomType, wallColors, placements, on
           {/* 플레이트 */}
           <View style={styles.closeupPlate}>
             <Text style={[styles.plateTitle, { color: isDark ? '#eee' : '#333' }]}>
-              {art.title}
+              {art.title}{art.year ? `, ${art.year}` : ''}
             </Text>
             <Text style={[styles.plateMeta, { color: isDark ? '#aaa' : '#777' }]}>
-              {selectedPlacement.width_cm} × {selectedPlacement.height_cm} cm
+              {[
+                art.medium,
+                (art.width_cm && art.height_cm) ? `${art.width_cm} × ${art.height_cm} cm` : `${selectedPlacement.width_cm} × ${selectedPlacement.height_cm} cm`,
+                art.edition,
+              ].filter(Boolean).join(' · ')}
             </Text>
             {art.description && (
               <Text style={[styles.plateDesc, { color: isDark ? '#888' : '#999' }]}>

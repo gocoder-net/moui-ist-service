@@ -47,6 +47,11 @@ export type Database = {
           id: string;
           user_id: string;
           title: string;
+          year: number | null;
+          medium: string | null;
+          width_cm: number | null;
+          height_cm: number | null;
+          edition: string | null;
           description: string | null;
           image_url: string;
           image_top_url: string | null;
@@ -61,6 +66,11 @@ export type Database = {
           id?: string;
           user_id: string;
           title: string;
+          year?: number | null;
+          medium?: string | null;
+          width_cm?: number | null;
+          height_cm?: number | null;
+          edition?: string | null;
           description?: string | null;
           image_url: string;
           image_top_url?: string | null;
@@ -71,6 +81,11 @@ export type Database = {
         };
         Update: {
           title?: string;
+          year?: number | null;
+          medium?: string | null;
+          width_cm?: number | null;
+          height_cm?: number | null;
+          edition?: string | null;
           description?: string | null;
           image_url?: string;
           image_top_url?: string | null;

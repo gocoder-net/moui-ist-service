@@ -48,6 +48,10 @@ export type PlacedArtwork = {
   localId: string;
   uri: string;
   title: string;
+  year?: number;          // 제작 연도
+  medium?: string;        // 재료/기법
+  edition?: string;       // 에디션
+  description?: string;   // 작품 설명
   wall: Wall;
   positionX: number;   // cm from left edge of wall (center of artwork)
   positionY: number;   // cm from floor (center of artwork)
@@ -58,3 +62,19 @@ export type PlacedArtwork = {
   leftUri?: string;
   rightUri?: string;
 };
+
+// 자주 쓰이는 재료/기법 목록
+export const MEDIUM_OPTIONS = [
+  '캔버스에 유채',
+  '캔버스에 아크릴',
+  '종이에 수채',
+  '종이에 연필',
+  '종이에 펜',
+  '종이에 혼합재료',
+  '디지털 페인팅',
+  '디지털 프린트',
+  '사진',
+  '판화',
+  '혼합매체',
+  '기타',
+];

@@ -24,6 +24,15 @@ create table public.artworks (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references public.profiles(id) on delete cascade not null,
   title text not null,
+  -- 제작 연도 (예: 2024)
+  year integer,
+  -- 재료/기법 (예: '캔버스에 유채', '종이에 수채', '디지털 프린트')
+  medium text,
+  -- 작품 실제 크기 (cm)
+  width_cm numeric,
+  height_cm numeric,
+  -- 에디션 (판화 등, 예: '1/10', 'AP')
+  edition text,
   description text,
   image_url text not null,
   image_top_url text,

@@ -12,7 +12,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import {
   type Wall, type RoomType, type PlacedArtwork,
-  ROOM_TEMPLATES, WALL_LABELS,
+  ROOM_TEMPLATES, WALL_LABELS, MEDIUM_OPTIONS,
 } from '@/components/exhibition/room-geometry';
 import Room3DView from '@/components/exhibition/Room3DView';
 import WallFaceEditor from '@/components/exhibition/WallFaceEditor';
@@ -127,9 +127,17 @@ export default function CreateExhibitionScreen() {
       const rightUrl = art.rightUri ? await uploadImage(art.rightUri) : null;
 
       const { data: artData } = await supabase.from('artworks')
-        .insert({ user_id: user.id, title: art.title, image_url: imageUrl,
+        .insert({
+          user_id: user.id, title: art.title, image_url: imageUrl,
+          year: art.year || null,
+          medium: art.medium || null,
+          width_cm: art.widthCm,
+          height_cm: art.heightCm,
+          edition: art.edition || null,
+          description: art.description || null,
           image_top_url: topUrl, image_bottom_url: bottomUrl,
-          image_left_url: leftUrl, image_right_url: rightUrl })
+          image_left_url: leftUrl, image_right_url: rightUrl,
+        })
         .select('id').single();
       if (!artData) continue;
 
@@ -328,7 +336,59 @@ export default function CreateExhibitionScreen() {
 
                     {isSelected && (
                       <View style={styles.sizeSection}>
-                        {/* 크기 조절 */}
+                        {/* ── 작품 정보 ── */}
+                        <Text style={[styles.label, { marginTop: 4, marginBottom: 2 }]}>작품 정보</Text>
+
+                        <View style={styles.fieldRow}>
+                          <Text style={styles.fieldLabel}>제작 연도</Text>
+                          <TextInput style={styles.fieldInput}
+                            placeholder="예: 2024" placeholderTextColor={C.mutedLight}
+                            keyboardType="number-pad" maxLength={4}
+                            value={art.year ? String(art.year) : ''}
+                            onChangeText={(t) => setArtworks(prev => prev.map(a =>
+                              a.localId === art.localId ? { ...a, year: t ? parseInt(t) || undefined : undefined } : a))}
+                          />
+                        </View>
+
+                        <View style={styles.fieldRow}>
+                          <Text style={styles.fieldLabel}>재료/기법</Text>
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+                            <View style={{ flexDirection: 'row', gap: 6 }}>
+                              {MEDIUM_OPTIONS.map(m => (
+                                <Pressable key={m}
+                                  style={[styles.mediumChip, art.medium === m && styles.mediumChipSel]}
+                                  onPress={() => setArtworks(prev => prev.map(a =>
+                                    a.localId === art.localId ? { ...a, medium: art.medium === m ? undefined : m } : a))}>
+                                  <Text style={[styles.mediumChipText, art.medium === m && styles.mediumChipTextSel]}>{m}</Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          </ScrollView>
+                        </View>
+
+                        <View style={styles.fieldRow}>
+                          <Text style={styles.fieldLabel}>에디션 (판화 등)</Text>
+                          <TextInput style={styles.fieldInput}
+                            placeholder="예: 1/10, AP" placeholderTextColor={C.mutedLight}
+                            value={art.edition || ''}
+                            onChangeText={(t) => setArtworks(prev => prev.map(a =>
+                              a.localId === art.localId ? { ...a, edition: t || undefined } : a))}
+                          />
+                        </View>
+
+                        <View style={styles.fieldRow}>
+                          <Text style={styles.fieldLabel}>작품 설명</Text>
+                          <TextInput style={[styles.fieldInput, { minHeight: 50, textAlignVertical: 'top' }]}
+                            placeholder="작품에 대한 설명" placeholderTextColor={C.mutedLight}
+                            multiline value={art.description || ''}
+                            onChangeText={(t) => setArtworks(prev => prev.map(a =>
+                              a.localId === art.localId ? { ...a, description: t || undefined } : a))}
+                          />
+                        </View>
+
+                        {/* ── 전시 크기 (벽면 배치) ── */}
+                        <Text style={[styles.label, { marginTop: 14, marginBottom: 2 }]}>전시 크기 · 위치</Text>
+
                         {[
                           { label: '가로', key: 'widthCm' as const, min: 10, max: 300 },
                           { label: '세로', key: 'heightCm' as const, min: 10, max: 300 },
@@ -359,8 +419,8 @@ export default function CreateExhibitionScreen() {
                           </Pressable>
                         </View>
 
-                        {/* 다중 각도 */}
-                        <Text style={[styles.label, { marginTop: 12, marginBottom: 6 }]}>다른 각도 사진 (선택)</Text>
+                        {/* ── 다중 각도 ── */}
+                        <Text style={[styles.label, { marginTop: 14, marginBottom: 6 }]}>다른 각도 사진 (선택)</Text>
                         <View style={styles.angleRow}>
                           {(['top', 'bottom', 'left', 'right'] as const).map(angle => {
                             const key = `${angle}Uri` as keyof PlacedArtwork;
@@ -450,6 +510,14 @@ const styles = StyleSheet.create({
   artTitleInput: { fontSize: 14, color: C.fg, fontWeight: '600', paddingVertical: 0 },
   artMeta: { fontSize: 10, color: C.muted, marginTop: 3 },
   removeText: { fontSize: 16, color: C.muted, fontWeight: '600', paddingTop: 4 },
+
+  fieldRow: { marginBottom: 8 },
+  fieldLabel: { fontSize: 11, color: C.muted, fontWeight: '600', marginBottom: 4 },
+  fieldInput: { borderWidth: 1, borderColor: C.border, borderRadius: 10, backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: C.fg },
+  mediumChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: C.border, backgroundColor: '#fff' },
+  mediumChipSel: { borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.1)' },
+  mediumChipText: { fontSize: 11, color: C.muted },
+  mediumChipTextSel: { color: C.gold, fontWeight: '600' },
 
   sizeSection: { marginTop: 10, gap: 8 },
   sizeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
