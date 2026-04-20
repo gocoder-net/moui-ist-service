@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import Animated, { FadeIn, FadeInUp, FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import Room3DView from '@/components/exhibition/Room3DView';
-import FirstPersonViewer from '@/components/exhibition/FirstPersonViewer';
+import GalleryScene from '@/components/exhibition/gallery-3d/GalleryScene';
 import { ROOM_TEMPLATES, WALL_LABELS as WALL_LABELS_SHARED } from '@/components/exhibition/room-geometry';
 
 const C = {
@@ -311,16 +311,17 @@ export default function ExhibitionViewer() {
     east: exhibition.wall_color_east, west: exhibition.wall_color_west,
   }[w]);
 
-  // 1인칭 관람 모드
+  // 3D 몰입형 관람 모드
   if (mode === 'map') {
     return (
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-        <FirstPersonViewer
+        <GalleryScene
           roomType={exhibition.room_type as RoomType}
           wallColors={{
             north: exhibition.wall_color_north, south: exhibition.wall_color_south,
             east: exhibition.wall_color_east, west: exhibition.wall_color_west,
           }}
+          floorColor={exhibition.floor_color}
           placements={placements}
           onClose={() => setMode('entrance')}
         />
