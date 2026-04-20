@@ -1,98 +1,254 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Dimensions, ScrollView } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+const { width, height } = Dimensions.get('window');
+const isWide = width > 600;
+
+// 웹사이트 컬러 반전 버전
+const C = {
+  bg: '#FFFFFF',        // 순백
+  fg: '#0A0A0A',        // 웹 #f0ece4 → 반전
+  gold: '#C8A96E',      // 골드 유지
+  goldLight: '#E0C992',
+  muted: '#9A958E',     // 웹 #5a5550 → 반전
+  border: '#DDD9D2',    // 웹 #1e1e1e → 반전
+};
 
 export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+  const insets = useSafeAreaInsets();
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+  return (
+    <View style={[styles.container, { paddingTop: insets.top }]}>
+      <ScrollView
+        contentContainerStyle={styles.scroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* 히어로 — 웹사이트 구조 그대로 반전 */}
+        <View style={[styles.hero, { minHeight: height - insets.top - 80 }]}>
+
+          {/* 네비 로고 */}
+          <Text style={styles.navLogo}>
+            MOUI<Text style={styles.gold}>-</Text>IST
+          </Text>
+
+          {/* 영문 서브 */}
+          <Text style={styles.eyebrow}>MOUI-IST</Text>
+
+          {/* 메인 타이틀 (한글) */}
+          <Text style={styles.title}>
+            모의스트
+          </Text>
+
+          {/* 태그라인 */}
+          <Text style={styles.subtitle}>창작을 모의하는 커뮤니티</Text>
+
+          {/* 설명 */}
+          <Text style={styles.tagline}>
+            작가, 지망생, 감상자가{'\n'}
+            함께 <Text style={styles.taglineBold}>모의</Text>하는 창작 공간
+          </Text>
+
+          {/* 스크롤 인디케이터 */}
+          <View style={styles.scrollIndicator}>
+            <Text style={styles.scrollText}>SCROLL</Text>
+            <View style={styles.scrollLine} />
+          </View>
+        </View>
+
+        {/* 인용문 */}
+        <View style={styles.quote}>
+          <Text style={styles.quoteText}>
+            당신의 작품을{'\n'}세상에 보여주세요
+          </Text>
+          <Text style={styles.quoteAttr}>포트폴리오 · 네트워킹 · 전시</Text>
+        </View>
+
+        {/* CTA */}
+        <View style={styles.cta}>
+          <Text style={styles.ctaLabel}>JOIN THE CONSPIRACY</Text>
+          <Text style={styles.ctaHeading}>
+            창작의 모의에{'\n'}함께하세요
+          </Text>
+
+          <Pressable style={styles.btnPrimary}>
+            <Text style={styles.btnPrimaryText}>작가로 시작하기</Text>
+          </Pressable>
+
+          <Pressable style={styles.btnSecondary}>
+            <Text style={styles.btnSecondaryText}>감상자로 둘러보기</Text>
+          </Pressable>
+        </View>
+
+        {/* 푸터 */}
+        <View style={styles.footer}>
+          <View style={styles.footerLine} />
+          <Text style={styles.footerText}>© 2026 MOUI-IST  ·  ALL RIGHTS RESERVED</Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    backgroundColor: C.bg,
+  },
+  scroll: {
+    flexGrow: 1,
+  },
+  hero: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    position: 'relative',
+  },
+  navLogo: {
+    position: 'absolute',
+    top: 24,
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 6,
+    color: C.fg,
+  },
+  gold: {
+    color: C.gold,
+  },
+  eyebrow: {
+    fontSize: 9,
+    fontWeight: '400',
+    letterSpacing: 6,
+    color: C.gold,
+    marginBottom: 28,
+  },
+  title: {
+    fontSize: isWide ? 72 : 44,
+    fontWeight: '900',
+    letterSpacing: isWide ? 16 : 10,
+    color: C.fg,
+    textAlign: 'center',
+    lineHeight: isWide ? 80 : 52,
+  },
+  subtitle: {
+    fontSize: 13,
+    fontWeight: '300',
+    letterSpacing: 4,
+    color: C.gold,
+    marginTop: 12,
+    marginBottom: 28,
+  },
+  tagline: {
+    fontSize: 16,
+    fontWeight: '300',
+    color: 'rgba(10,10,10,0.6)',
+    textAlign: 'center',
+  },
+  taglineBold: {
+    color: C.gold,
+    fontWeight: '700',
+  },
+  scrollIndicator: {
+    position: 'absolute',
+    bottom: 28,
     alignItems: 'center',
     gap: 8,
   },
-  stepContainer: {
-    gap: 8,
+  scrollText: {
+    fontSize: 8,
+    fontWeight: '400',
+    letterSpacing: 4,
+    color: C.muted,
+  },
+  scrollLine: {
+    width: 1,
+    height: 32,
+    backgroundColor: C.gold,
+    opacity: 0.5,
+  },
+  quote: {
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+  },
+  quoteText: {
+    fontSize: isWide ? 40 : 28,
+    fontWeight: '200',
+    color: C.fg,
+    textAlign: 'center',
+    lineHeight: isWide ? 56 : 42,
+  },
+  quoteAttr: {
+    fontSize: 10,
+    fontWeight: '400',
+    letterSpacing: 4,
+    color: C.muted,
+    marginTop: 20,
+  },
+  cta: {
+    borderTopWidth: 1,
+    borderColor: C.border,
+    paddingVertical: 80,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    gap: 12,
+  },
+  ctaLabel: {
+    fontSize: 9,
+    fontWeight: '400',
+    letterSpacing: 6,
+    color: C.gold,
     marginBottom: 8,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  ctaHeading: {
+    fontSize: isWide ? 48 : 32,
+    fontWeight: '900',
+    color: C.fg,
+    textAlign: 'center',
+    lineHeight: isWide ? 60 : 44,
+    marginBottom: 24,
+  },
+  btnPrimary: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: C.fg,
+    paddingVertical: 18,
+    alignItems: 'center',
+  },
+  btnPrimaryText: {
+    color: C.bg,
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 3,
+  },
+  btnSecondary: {
+    width: '100%',
+    maxWidth: 320,
+    borderWidth: 1,
+    borderColor: C.border,
+    paddingVertical: 18,
+    alignItems: 'center',
+  },
+  btnSecondaryText: {
+    color: C.muted,
+    fontSize: 13,
+    fontWeight: '400',
+    letterSpacing: 3,
+  },
+  footer: {
+    paddingVertical: 24,
+    paddingHorizontal: 32,
+    alignItems: 'center',
+    gap: 12,
+  },
+  footerLine: {
+    width: 30,
+    height: 1,
+    backgroundColor: C.border,
+  },
+  footerText: {
+    fontSize: 9,
+    fontWeight: '300',
+    letterSpacing: 2,
+    color: C.muted,
   },
 });
