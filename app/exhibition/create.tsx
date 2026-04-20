@@ -83,6 +83,12 @@ export default function CreateExhibitionScreen() {
     }
   };
 
+  const resizeArtwork = (id: string, widthCm: number, heightCm: number) => {
+    setArtworks(prev => prev.map(a =>
+      a.localId === id ? { ...a, widthCm, heightCm } : a
+    ));
+  };
+
   const moveArtwork = (id: string, posXcm: number, posYcm: number) => {
     setArtworks(prev => prev.map(a =>
       a.localId === id ? { ...a, positionX: posXcm, positionY: posYcm } : a
@@ -315,6 +321,7 @@ export default function CreateExhibitionScreen() {
                   onPlaceArtwork={handlePlaceArtwork}
                   onSelectArtwork={setSelectedArtworkId}
                   onMoveArtwork={moveArtwork}
+                  onResizeArtwork={resizeArtwork}
                   onClose={() => setWallEditorOpen(null)}
                   containerWidth={mapWidth}
                 />

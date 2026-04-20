@@ -20,13 +20,14 @@ type Props = {
   onPlaceArtwork: (wall: Wall, posXcm: number, posYcm: number) => void;
   onSelectArtwork: (id: string) => void;
   onMoveArtwork: (id: string, posXcm: number, posYcm: number) => void;
+  onResizeArtwork: (id: string, widthCm: number, heightCm: number) => void;
   onClose: () => void;
   containerWidth: number;
 };
 
 export default function WallFaceEditor({
   wall, roomType, wallColor, artworks, selectedArtworkId,
-  onPlaceArtwork, onSelectArtwork, onMoveArtwork, onClose, containerWidth,
+  onPlaceArtwork, onSelectArtwork, onMoveArtwork, onResizeArtwork, onClose, containerWidth,
 }: Props) {
   const wallLenCm = getWallLength(roomType, wall);
   const wallHCm = getWallHeight(roomType);
@@ -157,6 +158,7 @@ export default function WallFaceEditor({
                 isDark={isDark}
                 onSelect={() => onSelectArtwork(art.localId)}
                 onMove={(x, y) => onMoveArtwork(art.localId, x, y)}
+                onResize={(w, h) => onResizeArtwork(art.localId, w, h)}
               />
             ))}
 
@@ -185,10 +187,18 @@ export default function WallFaceEditor({
   );
 }
 
-/* ── 드래그 가능한 작품 ── */
+/* ── 두 터치 사이 거리 ── */
+function getTouchDistance(touches: any[]): number {
+  if (touches.length < 2) return 0;
+  const dx = touches[0].pageX - touches[1].pageX;
+  const dy = touches[0].pageY - touches[1].pageY;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+/* ── 드래그 + 핀치 가능한 작품 ── */
 function DraggableArtwork({
   art, wallLenCm, wallHCm, wallWidthPx, wallHeightPx,
-  isSelected, isDark, onSelect, onMove,
+  isSelected, isDark, onSelect, onMove, onResize,
 }: {
   art: PlacedArtwork;
   wallLenCm: number; wallHCm: number;
@@ -196,6 +206,7 @@ function DraggableArtwork({
   isSelected: boolean; isDark: boolean;
   onSelect: () => void;
   onMove: (posXcm: number, posYcm: number) => void;
+  onResize: (widthCm: number, heightCm: number) => void;
 }) {
   const w = cmToPx(art.widthCm, wallLenCm, wallWidthPx);
   const h = cmToPx(art.heightCm, wallHCm, wallHeightPx);
@@ -203,39 +214,76 @@ function DraggableArtwork({
   const baseTop = wallHeightPx - cmToPx(art.positionY, wallHCm, wallHeightPx) - h / 2;
 
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [scaleOffset, setScaleOffset] = useState(1);
   const [isDragging, setIsDragging] = useState(false);
+  const [isPinching, setIsPinching] = useState(false);
   const draggingRef = useRef(false);
+  const pinchingRef = useRef(false);
+  const initialPinchDist = useRef(0);
 
   const panResponder = useMemo(() =>
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3,
-      onPanResponderGrant: () => {
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
         onSelect();
         draggingRef.current = false;
+        pinchingRef.current = false;
         setIsDragging(false);
+        setIsPinching(false);
+        if (evt.nativeEvent.touches?.length >= 2) {
+          initialPinchDist.current = getTouchDistance(evt.nativeEvent.touches);
+          pinchingRef.current = true;
+          setIsPinching(true);
+        }
       },
-      onPanResponderMove: (_, g) => {
-        if (Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3) {
+      onPanResponderMove: (evt, g) => {
+        const touches = evt.nativeEvent.touches;
+
+        // 핀치 (두 손가락)
+        if (touches && touches.length >= 2) {
+          if (!pinchingRef.current) {
+            initialPinchDist.current = getTouchDistance(touches);
+            pinchingRef.current = true;
+            setIsPinching(true);
+          }
+          const currentDist = getTouchDistance(touches);
+          if (initialPinchDist.current > 0) {
+            const scale = currentDist / initialPinchDist.current;
+            setScaleOffset(Math.max(0.3, Math.min(3, scale)));
+          }
+          return;
+        }
+
+        // 드래그 (한 손가락)
+        if (!pinchingRef.current && (Math.abs(g.dx) > 3 || Math.abs(g.dy) > 3)) {
           draggingRef.current = true;
           setIsDragging(true);
           setDragOffset({ x: g.dx, y: g.dy });
         }
       },
       onPanResponderRelease: (_, g) => {
+        // 핀치 끝
+        if (pinchingRef.current) {
+          const newWidth = Math.round(Math.max(10, Math.min(300, art.widthCm * scaleOffset)));
+          const newHeight = Math.round(Math.max(10, Math.min(300, art.heightCm * scaleOffset)));
+          setScaleOffset(1);
+          setIsPinching(false);
+          pinchingRef.current = false;
+          setTimeout(() => onResize(newWidth, newHeight), 0);
+          return;
+        }
+
+        // 드래그 끝
         if (draggingRef.current) {
           const newCenterPxX = cmToPx(art.positionX, wallLenCm, wallWidthPx) + g.dx;
           const newCenterPxY = (wallHeightPx - cmToPx(art.positionY, wallHCm, wallHeightPx)) + g.dy;
-
           const newXcm = Math.round(pxToCm(newCenterPxX, wallWidthPx, wallLenCm));
           const newYcm = Math.round(wallHCm - pxToCm(newCenterPxY, wallHeightPx, wallHCm));
 
-          // 먼저 offset 리셋 → 그 다음 부모에 위치 전달
           setDragOffset({ x: 0, y: 0 });
           setIsDragging(false);
           draggingRef.current = false;
-
-          // setTimeout으로 리셋 후 move 호출 (리렌더 순서 보장)
           setTimeout(() => {
             onMove(
               Math.max(art.widthCm / 2, Math.min(wallLenCm - art.widthCm / 2, newXcm)),
@@ -253,21 +301,24 @@ function DraggableArtwork({
   );
 
   const frameColor = isDark ? '#D4C5A9' : '#5C4A32';
+  const displayW = w * (isPinching ? scaleOffset : 1);
+  const displayH = h * (isPinching ? scaleOffset : 1);
+  const displayLeft = isPinching ? (baseLeft + w / 2 - displayW / 2) : (baseLeft + dragOffset.x);
+  const displayTop = isPinching ? (baseTop + h / 2 - displayH / 2) : (baseTop + dragOffset.y);
 
   return (
     <View
       {...panResponder.panHandlers}
       style={{
         position: 'absolute',
-        left: baseLeft + dragOffset.x,
-        top: baseTop + dragOffset.y,
-        width: w, height: h,
+        left: displayLeft, top: displayTop,
+        width: displayW, height: displayH,
         borderWidth: isSelected ? 3 : 2.5,
-        borderColor: isDragging ? C.gold : (isSelected ? C.gold : frameColor),
+        borderColor: (isDragging || isPinching) ? C.gold : (isSelected ? C.gold : frameColor),
         backgroundColor: '#fff', padding: 2,
         shadowColor: '#000', shadowOffset: { width: 1, height: 3 },
-        shadowOpacity: isDark ? 0.4 : 0.15, shadowRadius: isDragging ? 8 : 4,
-        zIndex: isSelected || isDragging ? 10 : 1,
+        shadowOpacity: isDark ? 0.4 : 0.15, shadowRadius: (isDragging || isPinching) ? 8 : 4,
+        zIndex: (isSelected || isDragging || isPinching) ? 10 : 1,
         opacity: isDragging ? 0.85 : 1,
       }}
     >
@@ -277,6 +328,13 @@ function DraggableArtwork({
         <View style={styles.dragLabel}>
           <Text style={styles.dragLabelText}>
             {Math.round(pxToCm(baseLeft + dragOffset.x + w / 2, wallWidthPx, wallLenCm))}cm
+          </Text>
+        </View>
+      )}
+      {isPinching && (
+        <View style={styles.dragLabel}>
+          <Text style={styles.dragLabelText}>
+            {Math.round(art.widthCm * scaleOffset)}×{Math.round(art.heightCm * scaleOffset)}cm
           </Text>
         </View>
       )}
