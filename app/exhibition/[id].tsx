@@ -42,7 +42,7 @@ type Exhibition = {
   room_type: RoomType;
   wall_color_north: string; wall_color_south: string;
   wall_color_east: string; wall_color_west: string;
-  floor_color: string; ceiling_color: string; user_id: string;
+  floor_color: string; ceiling_color: string; poster_image_url: string | null; user_id: string;
   profiles: { name: string | null; username: string } | null;
 };
 
@@ -325,6 +325,9 @@ export default function ExhibitionViewer() {
           ceilingColor={exhibition.ceiling_color ?? '#F5F5F0'}
           placements={placements}
           onClose={() => setMode('entrance')}
+          title={exhibition.title}
+          foreword={exhibition.foreword}
+          posterUrl={exhibition.poster_image_url}
         />
       </View>
     );

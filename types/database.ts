@@ -133,6 +133,7 @@ export type Database = {
           wall_color_west: string;
           floor_color: string;
           ceiling_color: string;
+          poster_image_url: string | null;
           is_published: boolean;
           created_at: string;
           updated_at: string;
@@ -149,6 +150,7 @@ export type Database = {
           wall_color_west?: string;
           floor_color?: string;
           ceiling_color?: string;
+          poster_image_url?: string | null;
           is_published?: boolean;
         };
         Update: {
@@ -162,6 +164,7 @@ export type Database = {
           wall_color_west?: string;
           floor_color?: string;
           ceiling_color?: string;
+          poster_image_url?: string | null;
           is_published?: boolean;
         };
         Relationships: [

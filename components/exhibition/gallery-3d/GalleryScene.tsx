@@ -1,7 +1,11 @@
 import { useRef, useCallback, useState, useMemo, useEffect } from 'react';
 import {
-  View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions,
+  View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions, Platform,
 } from 'react-native';
+import Animated, {
+  useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing,
+  FadeInDown,
+} from 'react-native-reanimated';
 import * as THREE from 'three';
 import { Image } from 'expo-image';
 import GalleryCanvas, { type CanvasHandle } from './GalleryCanvas';
@@ -25,7 +29,8 @@ const DIR_LABELS: Record<Wall, string> = { north: 'N', east: 'E', south: 'S', we
 type ViewAngle = 'front' | 'top' | 'bottom' | 'left' | 'right';
 
 export default function GalleryScene({
-  roomType, wallColors, floorColor, ceilingColor, placements, onClose
+  roomType, wallColors, floorColor, ceilingColor, placements, onClose,
+  title, foreword, posterUrl,
 }: GallerySceneProps) {
   const dims = useMemo(() => getRoomDimensions(roomType), [roomType]);
   const { width: sw } = useWindowDimensions();
@@ -48,6 +53,13 @@ export default function GalleryScene({
   // HUD state
   const [currentDir, setCurrentDir] = useState<Wall>('north');
   const lastDirRef = useRef<Wall>('north');
+
+  // Intro animation state: 'foreword' → 'doors' → null
+  const [introPhase, setIntroPhase] = useState<'foreword' | 'doors' | null>(
+    (foreword || posterUrl) ? 'foreword' : 'doors'
+  );
+  const [sceneReady, setSceneReady] = useState(false);
+  const doorStartRef = useRef(0);
 
   // Artwork detail overlay state
   const [selectedPlacement, setSelectedPlacement] = useState<Placement3D | null>(null);
@@ -78,6 +90,11 @@ export default function GalleryScene({
     camera.aspect = handle.width / handle.height;
     camera.updateProjectionMatrix();
 
+    // Start camera at entrance (outside south wall, looking north)
+    const startZ = dims.depthM / 2 + 0.5;
+    camera.position.set(0, 1.6, startZ);
+    camera.rotation.set(0, 0, 0, 'YXZ');
+
     scene.background = new THREE.Color(C.bg);
 
     buildRoom(scene, dims, wallColors, floorColor, ceilingColor);
@@ -86,9 +103,27 @@ export default function GalleryScene({
       artworkMeshesRef.current = meshes;
     });
 
+    setSceneReady(true);
+
+    const WALK_START = 800;
+    const WALK_DUR = 2000;
+    const INTRO_END = 3200;
+
     const animate = () => {
       animRef.current = requestAnimationFrame(animate);
-      controls.updateCamera();
+
+      // Door opening + camera walk-in
+      if (doorStartRef.current > 0) {
+        const elapsed = Date.now() - doorStartRef.current;
+        if (elapsed < INTRO_END) {
+          const t = Math.max(0, Math.min((elapsed - WALK_START) / WALK_DUR, 1));
+          const ease = 1 - Math.pow(1 - t, 3);
+          camera.position.set(0, 1.6, startZ * (1 - ease));
+          camera.rotation.set(0, 0, 0, 'YXZ');
+        } else {
+          controls.updateCamera();
+        }
+      }
 
       const dir = controls.getDirection();
       if (dir !== lastDirRef.current) {
@@ -115,6 +150,26 @@ export default function GalleryScene({
       });
       handleRef.current?.renderer.dispose();
     };
+  }, []);
+
+  // When transitioning to 'doors' phase, start the door animation timer
+  useEffect(() => {
+    if (introPhase === 'doors' && sceneReady) {
+      doorStartRef.current = Date.now();
+      const timer = setTimeout(() => setIntroPhase(null), 3200);
+      return () => clearTimeout(timer);
+    }
+  }, [introPhase, sceneReady]);
+
+  // If no foreword/poster, start doors immediately when scene ready
+  useEffect(() => {
+    if (introPhase === 'doors' && sceneReady && doorStartRef.current === 0) {
+      doorStartRef.current = Date.now();
+    }
+  }, [sceneReady, introPhase]);
+
+  const handleEnterGallery = useCallback(() => {
+    setIntroPhase('doors');
   }, []);
 
   const artCountOnWall = useMemo(
@@ -224,45 +279,53 @@ export default function GalleryScene({
         />
       </View>
 
-      {/* HUD */}
-      <View style={styles.hud}>
-        <View style={styles.hudTop}>
-          <View style={styles.compass}>
-            {WALL_ORDER.map((w) => (
-              <View key={w} style={[styles.compassItem, w === currentDir && styles.compassItemActive]}>
-                <Text style={[styles.compassText, w === currentDir && styles.compassTextActive]}>
-                  {DIR_LABELS[w]}
-                </Text>
-              </View>
-            ))}
+      {/* HUD — hidden during intro */}
+      {!introPhase && (
+        <View style={styles.hud}>
+          <View style={styles.hudTop}>
+            <View style={styles.compass}>
+              {WALL_ORDER.map((w) => (
+                <Pressable
+                  key={w}
+                  style={[styles.compassItem, w === currentDir && styles.compassItemActive]}
+                  onPress={() => controls.navigateToWall(w)}
+                >
+                  <Text style={[styles.compassText, w === currentDir && styles.compassTextActive]}>
+                    {DIR_LABELS[w]}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
+
+          <Text style={styles.dirLabel}>{WALL_LABELS[currentDir]}</Text>
+          <Text style={styles.dirSub}>작품 {artCountOnWall}점</Text>
+
+          <View style={styles.hudBottom}>
+            <Joystick setJoystick={controls.setJoystick} />
+            <SpeedControl onChange={controls.setSpeedMult} />
+          </View>
+
+          <Pressable style={styles.exitBtn} onPress={onClose}>
+            <Text style={styles.exitText}>전시관 나가기</Text>
+          </Pressable>
         </View>
+      )}
 
-        <Text style={styles.dirLabel}>{WALL_LABELS[currentDir]}</Text>
-        <Text style={styles.dirSub}>작품 {artCountOnWall}점</Text>
+      {/* Foreword overlay */}
+      {introPhase === 'foreword' && (
+        <ForewordOverlay
+          title={title}
+          foreword={foreword}
+          posterUrl={posterUrl}
+          onEnter={handleEnterGallery}
+        />
+      )}
 
-        <View style={styles.dpad}>
-          <View style={styles.dpadRow}>
-            <View style={{ width: 52 }} />
-            <MoveBtn icon="↑" label="전진" dir="forward" setMove={controls.setMove} />
-            <View style={{ width: 52 }} />
-          </View>
-          <View style={styles.dpadRow}>
-            <MoveBtn icon="←" label="좌" dir="left" setMove={controls.setMove} />
-            <View style={styles.dpadCenter} />
-            <MoveBtn icon="→" label="우" dir="right" setMove={controls.setMove} />
-          </View>
-          <View style={styles.dpadRow}>
-            <View style={{ width: 52 }} />
-            <MoveBtn icon="↓" label="후진" dir="backward" setMove={controls.setMove} />
-            <View style={{ width: 52 }} />
-          </View>
-        </View>
-
-        <Pressable style={styles.exitBtn} onPress={onClose}>
-          <Text style={styles.exitText}>전시관 나가기</Text>
-        </Pressable>
-      </View>
+      {/* Door opening overlay */}
+      {introPhase === 'doors' && (
+        <DoorOverlay sceneReady={sceneReady} screenWidth={sw} title={title} />
+      )}
     </View>
   );
 }
@@ -284,21 +347,244 @@ function AngleBtn({ k, icon, label, cur, has, set }: {
   );
 }
 
-/* ── Move button (hold to move) ── */
-function MoveBtn({ icon, label, dir, setMove }: {
-  icon: string; label: string;
-  dir: 'forward' | 'backward' | 'left' | 'right';
-  setMove: (d: typeof dir, pressed: boolean) => void;
+/* ── Foreword Overlay (poster + foreword scroll) ── */
+function ForewordOverlay({ title, foreword, posterUrl, onEnter }: {
+  title?: string; foreword?: string | null; posterUrl?: string | null;
+  onEnter: () => void;
 }) {
+  const { width: sw } = useWindowDimensions();
+  const posterW = sw - 80;
+
   return (
-    <Pressable
-      style={styles.moveBtn}
-      onPressIn={() => setMove(dir, true)}
-      onPressOut={() => setMove(dir, false)}
+    <View style={styles.forewordRoot}>
+      <ScrollView
+        contentContainerStyle={styles.forewordScroll}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Poster image */}
+        {posterUrl && (
+          <Animated.View entering={FadeInDown.delay(200).duration(600)}>
+            <Image
+              source={{ uri: posterUrl }}
+              style={{ width: posterW, height: posterW * 1.4, borderRadius: 4 }}
+              contentFit="cover"
+              transition={300}
+            />
+          </Animated.View>
+        )}
+
+        {/* Title */}
+        <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.forewordTitleWrap}>
+          <View style={styles.forewordDiamond} />
+          <Text style={styles.forewordTitleText}>{title || '전시'}</Text>
+          <View style={styles.forewordTitleDivider} />
+        </Animated.View>
+
+        {/* Foreword text */}
+        {foreword && (
+          <Animated.View entering={FadeInDown.delay(600).duration(500)} style={styles.forewordTextBox}>
+            <Text style={styles.forewordLabel}>전시 서문</Text>
+            <View style={styles.forewordTextDivider} />
+            <Text style={styles.forewordBody}>{foreword}</Text>
+          </Animated.View>
+        )}
+
+        {/* Enter button */}
+        <Animated.View entering={FadeInDown.delay(800).duration(400)}>
+          <Pressable style={styles.forewordEnterBtn} onPress={onEnter}>
+            <Text style={styles.forewordEnterText}>전시관 입장</Text>
+            <Text style={styles.forewordEnterArrow}>→</Text>
+          </Pressable>
+        </Animated.View>
+      </ScrollView>
+    </View>
+  );
+}
+
+/* ── Door Opening Overlay ── */
+function DoorOverlay({ sceneReady, screenWidth, title }: {
+  sceneReady: boolean; screenWidth: number; title?: string;
+}) {
+  const halfW = screenWidth / 2;
+
+  const leftX = useSharedValue(0);
+  const rightX = useSharedValue(0);
+  const crackOp = useSharedValue(0);
+  const titleOp = useSharedValue(1);
+  const overlayOp = useSharedValue(1);
+
+  useEffect(() => {
+    if (!sceneReady) return;
+    const doorEase = Easing.bezier(0.22, 1, 0.36, 1);
+    crackOp.value = withDelay(200, withTiming(1, { duration: 500 }));
+    leftX.value = withDelay(700, withTiming(-halfW - 20, { duration: 1400, easing: doorEase }));
+    rightX.value = withDelay(700, withTiming(halfW + 20, { duration: 1400, easing: doorEase }));
+    titleOp.value = withDelay(500, withTiming(0, { duration: 600 }));
+    overlayOp.value = withDelay(2200, withTiming(0, { duration: 800 }));
+  }, [sceneReady]);
+
+  const containerStyle = useAnimatedStyle(() => ({ opacity: overlayOp.value }));
+  const leftStyle = useAnimatedStyle(() => ({ transform: [{ translateX: leftX.value }] }));
+  const rightStyle = useAnimatedStyle(() => ({ transform: [{ translateX: rightX.value }] }));
+  const crackStyle = useAnimatedStyle(() => ({ opacity: crackOp.value }));
+  const titleStyle = useAnimatedStyle(() => ({ opacity: titleOp.value }));
+
+  return (
+    <Animated.View style={[styles.introOverlay, containerStyle]} pointerEvents="auto">
+      <Animated.View style={[styles.introCrack, crackStyle]} />
+
+      <Animated.View style={[styles.introDoor, styles.introDoorLeft, leftStyle]}>
+        <View style={styles.introDoorPanel} />
+        <View style={[styles.introDoorHandle, { right: 18 }]} />
+      </Animated.View>
+
+      <Animated.View style={[styles.introDoor, styles.introDoorRight, rightStyle]}>
+        <View style={styles.introDoorPanel} />
+        <View style={[styles.introDoorHandle, { left: 18 }]} />
+      </Animated.View>
+
+      <Animated.View style={[styles.introTitleWrap, titleStyle]}>
+        <Text style={styles.introTitleSub}>MOUI-IST</Text>
+        <View style={styles.introTitleLine} />
+        <Text style={styles.introTitle}>{title || '전시관 입장'}</Text>
+      </Animated.View>
+    </Animated.View>
+  );
+}
+
+/* ── Virtual Joystick ── */
+const JOYSTICK_SIZE = 120;
+const KNOB_SIZE = 44;
+const MAX_R = (JOYSTICK_SIZE - KNOB_SIZE) / 2;
+
+function Joystick({ setJoystick }: { setJoystick: (x: number, y: number) => void }) {
+  const [knobPos, setKnobPos] = useState({ x: 0, y: 0 });
+  const baseRef = useRef<View>(null);
+  const originRef = useRef({ x: 0, y: 0 });
+  const activeRef = useRef(false);
+  const webElRef = useRef<any>(null);
+
+  const clampKnob = (dx: number, dy: number) => {
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > MAX_R) {
+      dx = (dx / dist) * MAX_R;
+      dy = (dy / dist) * MAX_R;
+    }
+    return { dx, dy };
+  };
+
+  const emitJoystick = (dx: number, dy: number) => {
+    const { dx: cx, dy: cy } = clampKnob(dx, dy);
+    setKnobPos({ x: cx, y: cy });
+    setJoystick(cx / MAX_R, cy / MAX_R);
+  };
+
+  const resetJoystick = () => {
+    setKnobPos({ x: 0, y: 0 });
+    setJoystick(0, 0);
+    activeRef.current = false;
+  };
+
+  // Touch (mobile) handlers via responder
+  const onStart = useCallback((e: any) => {
+    const { pageX, pageY } = e.nativeEvent;
+    baseRef.current?.measure((_x, _y, _w, _h, px, py) => {
+      originRef.current = { x: px + JOYSTICK_SIZE / 2, y: py + JOYSTICK_SIZE / 2 };
+      activeRef.current = true;
+      emitJoystick(pageX - originRef.current.x, pageY - originRef.current.y);
+    });
+  }, []);
+
+  const onMove = useCallback((e: any) => {
+    if (!activeRef.current) return;
+    const { pageX, pageY } = e.nativeEvent;
+    emitJoystick(pageX - originRef.current.x, pageY - originRef.current.y);
+  }, []);
+
+  const onEnd = useCallback(() => resetJoystick(), []);
+
+  // Web mouse handlers
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = webElRef.current;
+    if (!el) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      originRef.current = { x: rect.left + JOYSTICK_SIZE / 2, y: rect.top + JOYSTICK_SIZE / 2 };
+      activeRef.current = true;
+      emitJoystick(e.clientX - originRef.current.x, e.clientY - originRef.current.y);
+
+      const onMouseMove = (ev: MouseEvent) => {
+        if (!activeRef.current) return;
+        emitJoystick(ev.clientX - originRef.current.x, ev.clientY - originRef.current.y);
+      };
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        resetJoystick();
+      };
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    };
+
+    el.addEventListener('mousedown', onMouseDown);
+    return () => el.removeEventListener('mousedown', onMouseDown);
+  }, []);
+
+  const setRef = useCallback((node: any) => {
+    baseRef.current = node;
+    if (Platform.OS === 'web') webElRef.current = node;
+  }, []);
+
+  return (
+    <View
+      ref={setRef}
+      onStartShouldSetResponder={() => true}
+      onMoveShouldSetResponder={() => true}
+      onResponderGrant={onStart}
+      onResponderMove={onMove}
+      onResponderRelease={onEnd}
+      onResponderTerminate={onEnd}
+      style={styles.joystickBase}
     >
-      <Text style={styles.moveBtnIcon}>{icon}</Text>
-      <Text style={styles.moveBtnLabel}>{label}</Text>
-    </Pressable>
+      {/* Direction hints */}
+      <Text style={[styles.joystickHint, { top: 4 }]}>▲</Text>
+      <Text style={[styles.joystickHint, { bottom: 4 }]}>▼</Text>
+      <Text style={[styles.joystickHint, { left: 6 }]}>◀</Text>
+      <Text style={[styles.joystickHint, { right: 6 }]}>▶</Text>
+      {/* Knob */}
+      <View style={[styles.joystickKnob, {
+        transform: [{ translateX: knobPos.x }, { translateY: knobPos.y }],
+      }]} />
+    </View>
+  );
+}
+
+/* ── Speed Control ── */
+const SPEED_OPTS: { label: string; icon: string; mult: number }[] = [
+  { label: '느리게', icon: '🐢', mult: 0.4 },
+  { label: '보통',   icon: '🚶', mult: 1 },
+  { label: '빠르게', icon: '🏃', mult: 2.2 },
+];
+
+function SpeedControl({ onChange }: { onChange: (m: number) => void }) {
+  const [idx, setIdx] = useState(1);
+  return (
+    <View style={styles.speedPanel}>
+      <Text style={styles.speedTitle}>이동속도</Text>
+      {SPEED_OPTS.map((opt, i) => (
+        <Pressable
+          key={i}
+          style={[styles.speedBtn, i === idx && styles.speedBtnActive]}
+          onPress={() => { setIdx(i); onChange(opt.mult); }}
+        >
+          <Text style={styles.speedIcon}>{opt.icon}</Text>
+          <Text style={[styles.speedLabel, i === idx && { color: C.gold }]}>{opt.label}</Text>
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
@@ -331,20 +617,114 @@ const styles = StyleSheet.create({
   dirLabel: { color: C.fg, fontSize: 14, fontWeight: '800', letterSpacing: 1 },
   dirSub: { color: C.muted, fontSize: 10 },
 
-  dpad: { gap: 2, marginTop: 2 },
-  dpadRow: { flexDirection: 'row', justifyContent: 'center', gap: 2 },
-  dpadCenter: { width: 52, height: 42, borderRadius: 10 },
-  moveBtn: {
-    width: 52, height: 42, borderRadius: 10,
+  hudBottom: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 4 },
+
+  joystickBase: {
+    width: JOYSTICK_SIZE, height: JOYSTICK_SIZE, borderRadius: JOYSTICK_SIZE / 2,
+    borderWidth: 1.5, borderColor: C.border,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    justifyContent: 'center', alignItems: 'center',
+    marginTop: 4,
+  },
+  joystickKnob: {
+    width: KNOB_SIZE, height: KNOB_SIZE, borderRadius: KNOB_SIZE / 2,
+    backgroundColor: 'rgba(200,169,110,0.35)',
+    borderWidth: 2, borderColor: C.gold,
+  },
+  joystickHint: {
+    position: 'absolute', fontSize: 8, color: 'rgba(255,255,255,0.15)',
+  },
+
+  speedPanel: { alignItems: 'center', gap: 6 },
+  speedTitle: { fontSize: 9, color: C.muted, letterSpacing: 1 },
+  speedBtn: {
+    width: 52, height: 36, borderRadius: 8,
     borderWidth: 1, borderColor: C.border,
     justifyContent: 'center', alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  moveBtnIcon: { fontSize: 16, color: C.gold, lineHeight: 18 },
-  moveBtnLabel: { fontSize: 7, color: C.muted },
+  speedBtnActive: { borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.12)' },
+  speedIcon: { fontSize: 14, lineHeight: 18 },
+  speedLabel: { fontSize: 7, color: C.muted },
 
   exitBtn: { marginTop: 4 },
   exitText: { color: C.mutedDark, fontSize: 11 },
+
+  // Foreword overlay
+  forewordRoot: {
+    ...StyleSheet.absoluteFillObject, zIndex: 110,
+    backgroundColor: C.bg,
+  },
+  forewordScroll: {
+    alignItems: 'center', paddingVertical: 60, paddingHorizontal: 32, gap: 28,
+  },
+  forewordTitleWrap: { alignItems: 'center', gap: 10 },
+  forewordDiamond: {
+    width: 10, height: 10, borderRadius: 2, backgroundColor: C.gold,
+    transform: [{ rotate: '45deg' }],
+  },
+  forewordTitleText: {
+    fontSize: 24, fontWeight: '800', color: C.fg, letterSpacing: 2, textAlign: 'center',
+  },
+  forewordTitleDivider: { width: 50, height: 1, backgroundColor: 'rgba(200,169,110,0.4)' },
+  forewordTextBox: {
+    width: '100%', gap: 10,
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1, borderColor: C.border,
+    borderRadius: 6, padding: 20,
+  },
+  forewordLabel: { fontSize: 10, color: C.gold, fontWeight: '700', letterSpacing: 3 },
+  forewordTextDivider: { width: 30, height: 1, backgroundColor: 'rgba(200,169,110,0.3)' },
+  forewordBody: { fontSize: 15, color: '#CCC', lineHeight: 26, letterSpacing: 0.5 },
+  forewordEnterBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingVertical: 16, paddingHorizontal: 40,
+    borderWidth: 1.5, borderColor: C.gold, borderRadius: 30,
+    marginTop: 12,
+  },
+  forewordEnterText: { fontSize: 15, fontWeight: '700', color: C.gold, letterSpacing: 2 },
+  forewordEnterArrow: { fontSize: 16, color: C.gold },
+
+  // Intro overlay
+  introOverlay: {
+    ...StyleSheet.absoluteFillObject, zIndex: 100,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  introCrack: {
+    position: 'absolute', width: 2, top: 0, bottom: 0, alignSelf: 'center',
+    backgroundColor: 'rgba(255,248,220,0.5)',
+    shadowColor: '#FFF8DC', shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.9, shadowRadius: 30,
+  },
+  introDoor: {
+    position: 'absolute', top: 0, bottom: 0, width: '52%',
+    backgroundColor: '#1A1410', justifyContent: 'center',
+  },
+  introDoorLeft: {
+    left: 0, borderRightWidth: 1, borderRightColor: 'rgba(200,169,110,0.25)',
+  },
+  introDoorRight: {
+    right: 0, borderLeftWidth: 1, borderLeftColor: 'rgba(200,169,110,0.25)',
+  },
+  introDoorPanel: {
+    position: 'absolute', top: '12%', bottom: '12%', left: 24, right: 24,
+    borderWidth: 1, borderColor: 'rgba(200,169,110,0.12)', borderRadius: 3,
+  },
+  introDoorHandle: {
+    position: 'absolute', width: 6, height: 44, borderRadius: 3,
+    backgroundColor: C.gold, shadowColor: C.gold,
+    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 6,
+  },
+  introTitleWrap: { zIndex: 10, alignItems: 'center', gap: 8 },
+  introTitleSub: {
+    fontSize: 10, color: 'rgba(200,169,110,0.5)', letterSpacing: 6, fontWeight: '600',
+  },
+  introTitleLine: {
+    width: 40, height: 1, backgroundColor: 'rgba(200,169,110,0.3)',
+  },
+  introTitle: {
+    fontSize: 20, color: C.gold, fontWeight: '800', letterSpacing: 4,
+  },
 
   // Artwork detail overlay
   detailWall: {

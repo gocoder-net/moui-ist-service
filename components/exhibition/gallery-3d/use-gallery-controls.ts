@@ -17,7 +17,10 @@ export default function useGalleryControls({
 }: Params) {
   const yawRef = useRef(0);       // 0 = facing north (-Z)
   const pitchRef = useRef(0);
-  const moveRef = useRef({ forward: false, backward: false, left: false, right: false });
+  // Analog joystick input: x = left/right (-1..1), y = forward/backward (-1..1)
+  const joystickRef = useRef({ x: 0, y: 0 });
+  const speedMultRef = useRef(1);       // 0.5 / 1 / 2
+  const autoNavRef = useRef<{ targetYaw: number; targetX: number; targetZ: number } | null>(null);
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
   const isDraggingRef = useRef(false);
 
@@ -64,39 +67,75 @@ export default function useGalleryControls({
     }
   }, [onArtworkTap]);
 
-  /* ── HUD button controls ── */
-  const setMove = useCallback(
-    (dir: 'forward' | 'backward' | 'left' | 'right', pressed: boolean) => {
-      moveRef.current[dir] = pressed;
-    },
-    [],
-  );
+  /* ── Joystick input ── */
+  const setJoystick = useCallback((x: number, y: number) => {
+    joystickRef.current = { x, y };
+  }, []);
+
+  /* ── Speed control ── */
+  const setSpeedMult = useCallback((m: number) => { speedMultRef.current = m; }, []);
+
+  /* ── Auto-navigate to wall ── */
+  const navigateToWall = useCallback((wall: Wall) => {
+    const hw = dims.widthM / 2;
+    const hd = dims.depthM / 2;
+    const offset = 0.5; // distance from wall
+    const targets: Record<Wall, { yaw: number; x: number; z: number }> = {
+      north: { yaw: 0,            x: 0, z:  hd - offset },  // face -Z
+      south: { yaw: Math.PI,      x: 0, z: -hd + offset },  // face +Z
+      east:  { yaw: -Math.PI / 2, x: -hw + offset, z: 0 },  // face +X
+      west:  { yaw: Math.PI / 2,  x:  hw - offset, z: 0 },  // face -X
+    };
+    autoNavRef.current = {
+      targetYaw: targets[wall].yaw,
+      targetX: targets[wall].x,
+      targetZ: targets[wall].z,
+    };
+  }, [dims]);
 
   /* ── Per-frame camera update (called from animation loop) ── */
   const updateCamera = useCallback(() => {
     const camera = cameraRef.current;
     if (!camera) return;
 
-    const speed = 0.045;
-    const ms = moveRef.current;
-    const sinY = Math.sin(yawRef.current);
-    const cosY = Math.cos(yawRef.current);
+    // Auto-navigate animation
+    const nav = autoNavRef.current;
+    if (nav) {
+      // Smooth yaw rotation
+      let yawDiff = nav.targetYaw - yawRef.current;
+      // Normalize to [-PI, PI]
+      while (yawDiff > Math.PI) yawDiff -= 2 * Math.PI;
+      while (yawDiff < -Math.PI) yawDiff += 2 * Math.PI;
+      yawRef.current += yawDiff * 0.08;
+      pitchRef.current *= 0.9; // level out pitch
 
-    if (ms.forward) {
-      camera.position.x -= sinY * speed;
-      camera.position.z -= cosY * speed;
+      // Smooth position
+      const dx = nav.targetX - camera.position.x;
+      const dz = nav.targetZ - camera.position.z;
+      camera.position.x += dx * 0.05;
+      camera.position.z += dz * 0.05;
+
+      // Done when close enough
+      if (Math.abs(yawDiff) < 0.01 && Math.abs(dx) < 0.01 && Math.abs(dz) < 0.01) {
+        yawRef.current = nav.targetYaw;
+        camera.position.x = nav.targetX;
+        camera.position.z = nav.targetZ;
+        autoNavRef.current = null;
+      }
     }
-    if (ms.backward) {
-      camera.position.x += sinY * speed;
-      camera.position.z += cosY * speed;
-    }
-    if (ms.left) {
-      camera.position.x -= cosY * speed;
-      camera.position.z += sinY * speed;
-    }
-    if (ms.right) {
-      camera.position.x += cosY * speed;
-      camera.position.z -= sinY * speed;
+
+    // Joystick movement
+    const maxSpeed = 0.06 * speedMultRef.current;
+    const { x: jx, y: jy } = joystickRef.current;
+    const mag = Math.min(Math.sqrt(jx * jx + jy * jy), 1);
+    if (mag > 0.05) {
+      autoNavRef.current = null; // cancel auto-nav on manual input
+      const speed = maxSpeed * mag;
+      const sinY = Math.sin(yawRef.current);
+      const cosY = Math.cos(yawRef.current);
+      // jy negative = stick up = forward, jx positive = stick right
+      camera.position.x += (jy * sinY + jx * cosY) * speed;
+      camera.position.z += (jy * cosY - jx * sinY) * speed;
     }
 
     // Collision — keep inside room with margin
@@ -117,7 +156,9 @@ export default function useGalleryControls({
     onTouchStart,
     onTouchMove,
     onTouchEnd,
-    setMove,
+    setJoystick,
+    setSpeedMult,
+    navigateToWall,
     updateCamera,
     getDirection,
     yawRef,

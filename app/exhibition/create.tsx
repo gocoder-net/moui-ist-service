@@ -47,6 +47,7 @@ export default function CreateExhibitionScreen() {
   const [customHex, setCustomHex] = useState('');
   const [selectedWall, setSelectedWall] = useState<Wall | null>(null);
   const [artworks, setArtworks] = useState<PlacedArtwork[]>([]);
+  const [posterUri, setPosterUri] = useState<string | null>(null);
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
   const [wallEditorOpen, setWallEditorOpen] = useState<Wall | null>(null);
   const [loading, setLoading] = useState(false);
@@ -147,6 +148,12 @@ export default function CreateExhibitionScreen() {
       return supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
     };
 
+    // Upload poster if present
+    let posterImageUrl: string | null = null;
+    if (posterUri) {
+      posterImageUrl = await uploadImage(posterUri);
+    }
+
     const { data: exhibition, error: exErr } = await supabase.from('exhibitions')
       .insert({
         user_id: user.id, title: title.trim(),
@@ -156,6 +163,7 @@ export default function CreateExhibitionScreen() {
         wall_color_north: wallColors.north, wall_color_south: wallColors.south,
         wall_color_east: wallColors.east, wall_color_west: wallColors.west,
         floor_color: floorColor, ceiling_color: ceilingColor,
+        poster_image_url: posterImageUrl,
         is_published: true,
       })
       .select('id').single();
@@ -243,6 +251,34 @@ export default function CreateExhibitionScreen() {
             <TextInput style={[styles.input, { minHeight: 120, textAlignVertical: 'top' }]}
               placeholder="이번 전시는..." placeholderTextColor={C.mutedLight}
               value={foreword} onChangeText={setForeword} multiline />
+
+            <Text style={[styles.label, { marginTop: 20 }]}>전시 포스터 (선택)</Text>
+            <Text style={styles.hint}>전시관 입장 화면에 표시됩니다</Text>
+            <Pressable
+              style={styles.posterPicker}
+              onPress={async () => {
+                const result = await ImagePicker.launchImageLibraryAsync({
+                  mediaTypes: ['images'], quality: 0.8,
+                });
+                if (!result.canceled && result.assets[0]) {
+                  setPosterUri(result.assets[0].uri);
+                }
+              }}
+            >
+              {posterUri ? (
+                <Image source={{ uri: posterUri }} style={styles.posterPreview} contentFit="cover" />
+              ) : (
+                <View style={styles.posterPlaceholder}>
+                  <Text style={{ fontSize: 28, color: C.mutedLight }}>+</Text>
+                  <Text style={{ fontSize: 11, color: C.muted }}>포스터 이미지 선택</Text>
+                </View>
+              )}
+            </Pressable>
+            {posterUri && (
+              <Pressable onPress={() => setPosterUri(null)} style={{ alignSelf: 'flex-end', marginTop: 4 }}>
+                <Text style={{ fontSize: 11, color: C.muted }}>삭제</Text>
+              </Pressable>
+            )}
 
             <Pressable style={styles.nextBtn} onPress={() => {
               if (!title.trim()) { Alert.alert('알림', '전시 이름을 입력해주세요.'); return; }
@@ -691,6 +727,17 @@ const styles = StyleSheet.create({
   sub: { fontSize: 13, color: C.muted, marginBottom: 20 },
   label: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 2, textTransform: 'uppercase', marginBottom: 8 },
   hint: { fontSize: 11, color: C.mutedLight, marginBottom: 8, fontStyle: 'italic' },
+
+  posterPicker: {
+    width: '100%', aspectRatio: 0.7, borderRadius: 8,
+    borderWidth: 1.5, borderColor: C.border, borderStyle: 'dashed',
+    overflow: 'hidden',
+  },
+  posterPreview: { width: '100%', height: '100%' },
+  posterPlaceholder: {
+    flex: 1, justifyContent: 'center', alignItems: 'center', gap: 6,
+    backgroundColor: C.inputBg,
+  },
   input: { borderWidth: 1.5, borderColor: C.border, borderRadius: 14, backgroundColor: C.inputBg, paddingHorizontal: 16, paddingVertical: 13, fontSize: 15, color: C.fg },
 
   nextBtn: { backgroundColor: C.fg, paddingVertical: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 24 },

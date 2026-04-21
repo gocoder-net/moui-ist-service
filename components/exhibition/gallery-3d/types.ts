@@ -41,4 +41,8 @@ export type GallerySceneProps = {
   ceilingColor: string;
   placements: Placement3D[];
   onClose: () => void;
+  // Intro overlay
+  title?: string;
+  foreword?: string | null;
+  posterUrl?: string | null;
 };
