@@ -44,18 +44,26 @@ export default function Room3DView({
   const getWallArtworks = (wall: Wall) => artworks.filter(a => a.wall === wall);
 
   const renderThumbs = (wall: Wall, faceW: number) => {
-    const wallLen = (wall === 'north' || wall === 'south') ? room.northSouth : room.eastWest;
+    const isVertical = wall === 'east' || wall === 'west';
+    const wallLen = isVertical ? room.eastWest : room.northSouth;
     return getWallArtworks(wall).map(art => {
-      const artW = Math.max(cmToPx(art.widthCm, wallLen, faceW), 8);
-      const artLeft = cmToPx(art.positionX, wallLen, faceW) - artW / 2;
+      const artSize = Math.max(cmToPx(art.widthCm, wallLen, faceW), 8);
+      const artPos = cmToPx(art.positionX, wallLen, faceW) - artSize / 2;
       return (
         <Pressable
           key={art.localId}
           onPress={() => viewerMode && onArtworkSelect?.(art)}
-          style={{
+          style={isVertical ? {
             position: 'absolute',
-            left: artLeft, top: (wallH - 16) / 2,
-            width: artW, height: 16,
+            top: artPos, left: (wallH - 16) / 2,
+            height: artSize, width: 16,
+            backgroundColor: '#fff',
+            borderWidth: 1, borderColor: '#8B7355',
+            borderRadius: 1, overflow: 'hidden',
+          } : {
+            position: 'absolute',
+            left: artPos, top: (wallH - 16) / 2,
+            width: artSize, height: 16,
             backgroundColor: '#fff',
             borderWidth: 1, borderColor: '#8B7355',
             borderRadius: 1, overflow: 'hidden',

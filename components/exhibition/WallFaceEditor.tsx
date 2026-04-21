@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { StyleSheet, View, Text, Pressable, ScrollView, PanResponder } from 'react-native';
+import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
+import { StyleSheet, View, Text, Pressable, ScrollView, PanResponder, Platform } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import {
@@ -221,6 +221,76 @@ function DraggableArtwork({
   const draggingRef = useRef(false);
   const pinchingRef = useRef(false);
   const initialPinchDist = useRef(0);
+  const webElRef = useRef<any>(null);
+
+  // Stable refs for callbacks (avoid stale closures in useEffect)
+  const cbRef = useRef({ onSelect, onMove });
+  cbRef.current = { onSelect, onMove };
+  const artStateRef = useRef({ positionX: art.positionX, positionY: art.positionY, widthCm: art.widthCm, heightCm: art.heightCm });
+  artStateRef.current = { positionX: art.positionX, positionY: art.positionY, widthCm: art.widthCm, heightCm: art.heightCm };
+  const dimsRef = useRef({ wallLenCm, wallHCm, wallWidthPx, wallHeightPx });
+  dimsRef.current = { wallLenCm, wallHCm, wallWidthPx, wallHeightPx };
+
+  // Web mouse drag support
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = webElRef.current;
+    if (!el) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      cbRef.current.onSelect();
+
+      const startX = e.clientX;
+      const startY = e.clientY;
+      let moved = false;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+        if (!moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) moved = true;
+        if (moved) {
+          draggingRef.current = true;
+          setIsDragging(true);
+          setDragOffset({ x: dx, y: dy });
+        }
+      };
+
+      const onMouseUp = (ev: MouseEvent) => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+
+        if (moved) {
+          const dx = ev.clientX - startX;
+          const dy = ev.clientY - startY;
+          const d = dimsRef.current;
+          const a = artStateRef.current;
+          const cx = cmToPx(a.positionX, d.wallLenCm, d.wallWidthPx) + dx;
+          const cy = (d.wallHeightPx - cmToPx(a.positionY, d.wallHCm, d.wallHeightPx)) + dy;
+          const nx = Math.round(pxToCm(cx, d.wallWidthPx, d.wallLenCm));
+          const ny = Math.round(d.wallHCm - pxToCm(cy, d.wallHeightPx, d.wallHCm));
+          setDragOffset({ x: 0, y: 0 });
+          setIsDragging(false);
+          draggingRef.current = false;
+          cbRef.current.onMove(
+            Math.max(a.widthCm / 2, Math.min(d.wallLenCm - a.widthCm / 2, nx)),
+            Math.max(a.heightCm / 2, Math.min(d.wallHCm - a.heightCm / 2, ny))
+          );
+        } else {
+          setDragOffset({ x: 0, y: 0 });
+          setIsDragging(false);
+          draggingRef.current = false;
+        }
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    };
+
+    el.addEventListener('mousedown', onMouseDown);
+    return () => el.removeEventListener('mousedown', onMouseDown);
+  }, []);
 
   const panResponder = useMemo(() =>
     PanResponder.create({
@@ -307,8 +377,13 @@ function DraggableArtwork({
   const displayLeft = isPinching ? (baseLeft + w / 2 - displayW / 2) : (baseLeft + dragOffset.x);
   const displayTop = isPinching ? (baseTop + h / 2 - displayH / 2) : (baseTop + dragOffset.y);
 
+  const setWebRef = useCallback((node: any) => {
+    webElRef.current = node;
+  }, []);
+
   return (
     <View
+      ref={Platform.OS === 'web' ? setWebRef : undefined}
       {...panResponder.panHandlers}
       style={{
         position: 'absolute',
@@ -321,6 +396,8 @@ function DraggableArtwork({
         shadowOpacity: isDark ? 0.4 : 0.15, shadowRadius: (isDragging || isPinching) ? 8 : 4,
         zIndex: (isSelected || isDragging || isPinching) ? 10 : 1,
         opacity: isDragging ? 0.85 : 1,
+        // @ts-ignore - web cursor
+        ...(Platform.OS === 'web' ? { cursor: isDragging ? 'grabbing' : 'grab' } : {}),
       }}
     >
       <Image source={{ uri: art.uri }}
