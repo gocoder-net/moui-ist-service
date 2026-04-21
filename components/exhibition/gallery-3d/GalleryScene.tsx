@@ -637,7 +637,7 @@ const styles = StyleSheet.create({
 
   // HUD
   hud: {
-    backgroundColor: 'rgba(8,8,8,0.97)',
+    backgroundColor: 'rgba(8,8,8,0.75)',
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderTopWidth: 1,
