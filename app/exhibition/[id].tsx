@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useRef } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import {
   StyleSheet, View, Text, Pressable, ScrollView,
   useWindowDimensions, ActivityIndicator,
@@ -8,6 +8,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import Animated, { FadeIn, FadeInUp, FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { Image } from 'expo-image';
+import * as Speech from 'expo-speech';
 import Room3DView from '@/components/exhibition/Room3DView';
 import GalleryScene from '@/components/exhibition/gallery-3d/GalleryScene';
 import { ROOM_TEMPLATES, WALL_LABELS as WALL_LABELS_SHARED } from '@/components/exhibition/room-geometry';
@@ -46,60 +47,126 @@ type Exhibition = {
   profiles: { name: string | null; username: string } | null;
 };
 
-/** 서문 텍스트를 문장 단위로 분리 */
+/** 서문 텍스트를 ~200자 단위로 문장/단락 경계에서 분리 */
+const CHUNK_TARGET = 200;
+
 function splitForeword(text: string): string[] {
-  // 줄바꿈이 충분히 있으면 그대로 사용
-  const byNewline = text.split('\n').filter((l) => l.trim());
-  if (byNewline.length >= 3) return byNewline;
-  // 문장 부호로 분리
-  const bySentence = text.split(/(?<=[.!?。])\s*/).filter((s) => s.trim());
-  if (bySentence.length >= 3) return bySentence;
-  // 약 40자 단위로 분리
-  const words = text.split(/\s+/);
-  const result: string[] = [];
-  let cur = '';
-  for (const w of words) {
-    if (cur.length + w.length > 40 && cur) { result.push(cur.trim()); cur = w; }
-    else cur += (cur ? ' ' : '') + w;
+  // 문장 단위로 쪼개기 (마침표, 물음표, 느낌표, 줄바꿈)
+  const sentences = text.split(/(?<=[.!?。\n])\s*/).filter((s) => s.trim());
+  if (sentences.length <= 1) {
+    // 문장 부호 없으면 쉼표/공백 기준으로
+    const parts = text.split(/(?<=[,，])\s*/).filter((s) => s.trim());
+    if (parts.length <= 1) return [text.trim()];
+    return mergeToChunks(parts);
   }
-  if (cur.trim()) result.push(cur.trim());
-  return result;
+  return mergeToChunks(sentences);
+}
+
+function mergeToChunks(parts: string[]): string[] {
+  const chunks: string[] = [];
+  let cur = '';
+  for (const part of parts) {
+    if (cur && cur.length + part.length > CHUNK_TARGET) {
+      chunks.push(cur.trim());
+      cur = part;
+    } else {
+      cur += (cur ? ' ' : '') + part;
+    }
+  }
+  if (cur.trim()) chunks.push(cur.trim());
+  return chunks;
 }
 
 /* ── 노래방 스타일 서문 ── */
-const CHUNK_SIZE = 3;
 
 function KaraokeForeword({ text }: { text: string }) {
-  const lines = useMemo(() => splitForeword(text), [text]);
-  const totalChunks = Math.ceil(lines.length / CHUNK_SIZE);
-  const [chunkIdx, setChunkIdx] = useState(0);
+  const chunks = useMemo(() => splitForeword(text), [text]);
+  const total = chunks.length;
+  const [idx, setIdx] = useState(0);
   const [showAll, setShowAll] = useState(false);
+  const [ttsOn, setTtsOn] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const touchStartX = useRef(0);
+  const ttsOnRef = useRef(false);
+  const voiceIdRef = useRef<string | undefined>(undefined);
 
-  // 3초마다 자동 넘김
+  // Pick best Korean voice on mount
   useEffect(() => {
-    if (showAll || totalChunks <= 1) return;
-    const timer = setTimeout(() => {
-      setChunkIdx((prev) => (prev + 1) % totalChunks);
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [chunkIdx, showAll, totalChunks]);
+    Speech.getAvailableVoicesAsync().then((voices) => {
+      const koVoices = voices.filter((v) => v.language.startsWith('ko'));
+      const premium = koVoices.find((v) => v.quality === 'Enhanced' || v.name?.includes('Enhanced') || v.name?.includes('Premium'));
+      voiceIdRef.current = premium?.identifier || koVoices[0]?.identifier;
+    }).catch(() => {});
+  }, []);
 
-  const goNext = () => setChunkIdx((prev) => Math.min(prev + 1, totalChunks - 1));
-  const goPrev = () => setChunkIdx((prev) => Math.max(prev - 1, 0));
+  const speakChunk = useCallback((i: number) => {
+    if (!ttsOnRef.current || !chunks[i]) return;
+    Speech.stop();
+    setIsSpeaking(true);
+    Speech.speak(chunks[i], {
+      language: 'ko-KR',
+      voice: voiceIdRef.current,
+      rate: 0.95,
+      pitch: 1.0,
+      onDone: () => setIsSpeaking(false),
+      onStopped: () => setIsSpeaking(false),
+    });
+  }, [chunks]);
+
+  // Speak when chunk changes
+  useEffect(() => {
+    if (!showAll) speakChunk(idx);
+  }, [idx, showAll]);
+
+  // Auto advance — TTS on: wait for speech done, TTS off: 5 seconds
+  useEffect(() => {
+    if (showAll || total <= 1) return;
+    if (ttsOn && isSpeaking) return; // wait for speech to finish
+    const delay = ttsOn ? 500 : 5000; // short pause after speech, or 5s auto
+    const timer = setTimeout(() => {
+      setIdx((prev) => (prev + 1) % total);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [idx, showAll, total, ttsOn, isSpeaking]);
+
+  useEffect(() => { return () => { Speech.stop(); }; }, []);
+
+  const toggleTts = () => {
+    const next = !ttsOn;
+    setTtsOn(next);
+    ttsOnRef.current = next;
+    if (!next) { Speech.stop(); setIsSpeaking(false); }
+    else if (!showAll) speakChunk(idx);
+  };
+
+  const handleShowAll = () => {
+    setShowAll(true);
+    Speech.stop();
+    setIsSpeaking(false);
+  };
+
+  const handleFold = () => {
+    setShowAll(false);
+  };
+
+  const goNext = () => setIdx((prev) => Math.min(prev + 1, total - 1));
+  const goPrev = () => setIdx((prev) => Math.max(prev - 1, 0));
 
   if (showAll) {
     return (
       <Animated.View entering={FadeIn.duration(300)}>
         <Text style={styles.forewordText}>{text}</Text>
-        <Pressable style={styles.showAllBtn} onPress={() => setShowAll(false)}>
-          <Text style={styles.showAllText}>접기</Text>
-        </Pressable>
+        <View style={styles.karaokeFooter}>
+          <Pressable style={styles.showAllBtn} onPress={handleFold}>
+            <Text style={styles.showAllText}>접기</Text>
+          </Pressable>
+          <Pressable style={styles.ttsBtn} onPress={toggleTts}>
+            <Text style={styles.ttsBtnText}>{ttsOn ? '🔊' : '🔇'}</Text>
+          </Pressable>
+        </View>
       </Animated.View>
     );
   }
-
-  const currentLines = lines.slice(chunkIdx * CHUNK_SIZE, chunkIdx * CHUNK_SIZE + CHUNK_SIZE);
 
   return (
     <View>
@@ -115,32 +182,35 @@ function KaraokeForeword({ text }: { text: string }) {
           else if (dx > 40) goPrev();
         }}
       >
-        {currentLines.map((line, i) => (
-          <Animated.Text
-            key={`${chunkIdx}-${i}`}
-            entering={FadeInUp.delay(i * 400).duration(500).springify()}
-            exiting={FadeOutUp.duration(300)}
-            style={styles.karaokeLine}
-          >
-            {line}
-          </Animated.Text>
-        ))}
+        <Animated.Text
+          key={idx}
+          entering={FadeInUp.duration(500).springify()}
+          exiting={FadeOutUp.duration(300)}
+          style={styles.karaokeLine}
+        >
+          {chunks[idx]}
+        </Animated.Text>
       </View>
 
-      {/* 프로그레스 + 전체보기 */}
+      {/* 프로그레스 + 전체보기 + TTS */}
       <View style={styles.karaokeFooter}>
-        {totalChunks > 1 && (
+        {total > 1 && (
           <View style={styles.karaokeDots}>
-            {Array.from({ length: totalChunks }).map((_, i) => (
-              <Pressable key={i} onPress={() => setChunkIdx(i)}>
-                <View style={[styles.karaokeDot, i === chunkIdx && styles.karaokeDotActive]} />
+            {Array.from({ length: total }).map((_, i) => (
+              <Pressable key={i} onPress={() => setIdx(i)}>
+                <View style={[styles.karaokeDot, i === idx && styles.karaokeDotActive]} />
               </Pressable>
             ))}
           </View>
         )}
-        <Pressable style={styles.showAllBtn} onPress={() => setShowAll(true)}>
-          <Text style={styles.showAllText}>전체보기</Text>
-        </Pressable>
+        <View style={styles.karaokeActions}>
+          <Pressable style={styles.showAllBtn} onPress={handleShowAll}>
+            <Text style={styles.showAllText}>전체보기</Text>
+          </Pressable>
+          <Pressable style={styles.ttsBtn} onPress={toggleTts}>
+            <Text style={styles.ttsBtnText}>{ttsOn ? '🔊' : '🔇'}</Text>
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -149,7 +219,7 @@ function KaraokeForeword({ text }: { text: string }) {
 /* ── 1. 입구 화면 (서문 + 포스터) ── */
 function EntranceView({ exhibition, onEnter }: { exhibition: Exhibition; onEnter: () => void }) {
   const { width: sw } = useWindowDimensions();
-  const posterW = sw - 80;
+  const posterW = Math.min(sw * 0.65, 280);
   const hasForeword = !!exhibition.foreword?.trim();
 
   return (
@@ -164,15 +234,24 @@ function EntranceView({ exhibition, onEnter }: { exhibition: Exhibition; onEnter
         </Text>
       </Animated.View>
 
-      {/* 포스터 이미지 */}
+      {/* 포스터 이미지 — 길거리 포스터 스타일 */}
       {exhibition.poster_image_url && (
         <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.posterWrap}>
-          <Image
-            source={{ uri: exhibition.poster_image_url }}
-            style={{ width: posterW, height: posterW * 1.4, borderRadius: 6 }}
-            contentFit="cover"
-            transition={300}
-          />
+          <View style={[styles.posterFrame, { width: posterW + 8, height: posterW * 1.4 + 8 }]}>
+            <Image
+              source={{ uri: exhibition.poster_image_url }}
+              style={{ width: posterW, height: posterW * 1.4 }}
+              contentFit="cover"
+              transition={300}
+            />
+            {/* 테이프 — 4 모서리 */}
+            <View style={[styles.tape, styles.tapeTL]} />
+            <View style={[styles.tape, styles.tapeTR]} />
+            <View style={[styles.tape, styles.tapeBL]} />
+            <View style={[styles.tape, styles.tapeBR]} />
+          </View>
+          {/* 포스터 그림자 */}
+          <View style={[styles.posterShadow, { width: posterW - 10, height: 6 }]} />
         </Animated.View>
       )}
 
@@ -551,7 +630,28 @@ const styles = StyleSheet.create({
   entranceLine: { width: 32, height: 1, backgroundColor: C.gold, marginVertical: 8 },
   entranceAuthor: { fontSize: 14, color: C.gold, fontWeight: '600', letterSpacing: 1 },
   entranceDesc: { fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 20, marginTop: 8, paddingHorizontal: 8 },
-  posterWrap: { alignItems: 'center', marginTop: 16 },
+  posterWrap: { alignItems: 'center', marginTop: 24, marginBottom: 8 },
+  posterFrame: {
+    justifyContent: 'center', alignItems: 'center',
+    backgroundColor: '#1a1a1a',
+    padding: 4,
+  },
+  posterShadow: {
+    marginTop: 6,
+    borderRadius: 50,
+    backgroundColor: 'rgba(200,169,110,0.08)',
+  },
+  tape: {
+    position: 'absolute',
+    width: 32, height: 14,
+    backgroundColor: 'rgba(200,180,140,0.35)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(200,180,140,0.15)',
+  },
+  tapeTL: { top: -6, left: -8, transform: [{ rotate: '-35deg' }] },
+  tapeTR: { top: -6, right: -8, transform: [{ rotate: '35deg' }] },
+  tapeBL: { bottom: -6, left: -8, transform: [{ rotate: '35deg' }] },
+  tapeBR: { bottom: -6, right: -8, transform: [{ rotate: '-35deg' }] },
   forewordBox: { width: '100%', borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 24, marginTop: 20, gap: 10 },
   karaokeWindow: { minHeight: 90, justifyContent: 'center', gap: 8, marginVertical: 8 },
   karaokeLine: { fontSize: 14, color: '#ddd', lineHeight: 24, textAlign: 'center' },
@@ -559,8 +659,11 @@ const styles = StyleSheet.create({
   karaokeDots: { flexDirection: 'row', gap: 6 },
   karaokeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.border },
   karaokeDotActive: { backgroundColor: C.gold, width: 16, borderRadius: 3 },
+  karaokeActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   showAllBtn: { paddingVertical: 6, paddingHorizontal: 16, borderWidth: 1, borderColor: C.border, borderRadius: 12 },
   showAllText: { fontSize: 10, color: C.gold, fontWeight: '600', letterSpacing: 1 },
+  ttsBtn: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: C.border, justifyContent: 'center', alignItems: 'center' },
+  ttsBtnText: { fontSize: 14 },
   forewordLabel: { fontSize: 11, color: C.gold, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
   forewordDivider: { height: 1, backgroundColor: C.border },
   forewordText: { fontSize: 14, color: '#ccc', lineHeight: 24 },
