@@ -61,10 +61,12 @@ export default function GalleryScene({
   // Artwork detail overlay state
   const [selectedPlacement, setSelectedPlacement] = useState<Placement3D | null>(null);
   const [viewAngle, setViewAngle] = useState<ViewAngle>('front');
+  const pausedRef = useRef(false);
 
   const handleArtworkTap = useCallback((placementId: string) => {
     const found = placements.find((p) => p.id === placementId);
     if (found) {
+      pausedRef.current = true;
       setSelectedPlacement(found);
       setViewAngle('front');
     }
@@ -77,6 +79,16 @@ export default function GalleryScene({
     canvasSize: canvasSizeRef,
     onArtworkTap: handleArtworkTap,
   });
+
+  // Pause camera & reset inputs when viewing artwork detail
+  useEffect(() => {
+    if (selectedPlacement) {
+      controls.setJoystick(0, 0);
+      controls.setLook(0, 0);
+    } else {
+      pausedRef.current = false;
+    }
+  }, [selectedPlacement]);
 
   const handleReady = useCallback((handle: CanvasHandle) => {
     handleRef.current = handle;
@@ -118,7 +130,7 @@ export default function GalleryScene({
           camera.position.set(0, 1.6, startZ * (1 - ease));
           camera.rotation.set(0, 0, 0, 'YXZ');
         } else {
-          controls.updateCamera();
+          if (!pausedRef.current) controls.updateCamera();
         }
       }
 
@@ -163,129 +175,47 @@ export default function GalleryScene({
     [placements, currentDir],
   );
 
-  // ── Artwork detail overlay ──
-  if (selectedPlacement) {
+  // Precompute detail info (avoids IIFE in JSX)
+  const detailInfo = useMemo(() => {
+    if (!selectedPlacement) return null;
     const art = selectedPlacement.artwork;
     const wc = wallColors[selectedPlacement.wall];
     const isDark = DARK_WALLS.includes(wc);
-    const frameColor = isDark ? '#D4C5A9' : '#5C4A32';
     const imgW = sw - 64;
-    const imgH = imgW * (selectedPlacement.height_cm / selectedPlacement.width_cm);
-
-    const angles: Record<ViewAngle, string | null | undefined> = {
-      front: art.image_url,
-      top: art.image_top_url,
-      bottom: art.image_bottom_url,
-      left: art.image_left_url,
-      right: art.image_right_url,
+    return {
+      art, wc, isDark,
+      frameColor: isDark ? '#D4C5A9' : '#5C4A32',
+      imgW,
+      imgH: imgW * (selectedPlacement.height_cm / selectedPlacement.width_cm),
+      angles: {
+        front: art.image_url, top: art.image_top_url,
+        bottom: art.image_bottom_url, left: art.image_left_url, right: art.image_right_url,
+      } as Record<ViewAngle, string | null | undefined>,
     };
-    const currentImg = angles[viewAngle] || art.image_url;
+  }, [selectedPlacement, wallColors, sw]);
 
-    return (
-      <View style={styles.root}>
-        <ScrollView contentContainerStyle={[styles.detailWall, { backgroundColor: wc }]}>
-          <View style={styles.detailSpotlight} />
+  const currentDetailImg = detailInfo
+    ? (detailInfo.angles[viewAngle] || detailInfo.art.image_url)
+    : null;
 
-          {/* Frame + Image with edge eye icons */}
-          <View style={[styles.detailFrame, {
-            borderColor: frameColor, width: imgW + 16, height: imgH + 16,
-          }]}>
-            <Image
-              key={currentImg}
-              source={{ uri: currentImg! }}
-              style={{ width: imgW, height: imgH }}
-              contentFit="cover"
-              transition={250}
-            />
-
-            {/* Tap image to return to front when viewing alt angle */}
-            {viewAngle !== 'front' && (
-              <Pressable
-                style={StyleSheet.absoluteFill}
-                onPress={() => setViewAngle('front')}
-              />
-            )}
-
-            {/* Edge eye icons — only shown on front view */}
-            {viewAngle === 'front' && angles.top && (
-              <Pressable style={[styles.edgeIcon, styles.edgeTop]} onPress={() => setViewAngle('top')}>
-                <Text style={styles.edgeIconText}>👁</Text>
-              </Pressable>
-            )}
-            {viewAngle === 'front' && angles.bottom && (
-              <Pressable style={[styles.edgeIcon, styles.edgeBottom]} onPress={() => setViewAngle('bottom')}>
-                <Text style={styles.edgeIconText}>👁</Text>
-              </Pressable>
-            )}
-            {viewAngle === 'front' && angles.left && (
-              <Pressable style={[styles.edgeIcon, styles.edgeLeft]} onPress={() => setViewAngle('left')}>
-                <Text style={styles.edgeIconText}>👁</Text>
-              </Pressable>
-            )}
-            {viewAngle === 'front' && angles.right && (
-              <Pressable style={[styles.edgeIcon, styles.edgeRight]} onPress={() => setViewAngle('right')}>
-                <Text style={styles.edgeIconText}>👁</Text>
-              </Pressable>
-            )}
-          </View>
-
-          {/* Angle label when viewing alt */}
-          {viewAngle !== 'front' && (
-            <View style={styles.angleLabelBadge}>
-              <Text style={styles.angleLabelText}>
-                {{ top: '위에서 본 모습', bottom: '아래에서 본 모습', left: '왼쪽에서 본 모습', right: '오른쪽에서 본 모습' }[viewAngle]}
-              </Text>
-              <Pressable onPress={() => setViewAngle('front')}>
-                <Text style={styles.angleLabelBack}>정면으로 ✕</Text>
-              </Pressable>
-            </View>
-          )}
-
-          {/* Info plate */}
-          <View style={styles.detailPlate}>
-            <Text style={[styles.plateTitle, { color: isDark ? '#eee' : '#333' }]}>
-              {art.title}{art.year ? `, ${art.year}` : ''}
-            </Text>
-            <Text style={[styles.plateMeta, { color: isDark ? '#aaa' : '#777' }]}>
-              {[
-                art.medium,
-                `${selectedPlacement.width_cm} × ${selectedPlacement.height_cm} cm`,
-                art.edition,
-              ].filter(Boolean).join(' · ')}
-            </Text>
-            {art.description && (
-              <Text style={[styles.plateDesc, { color: isDark ? '#888' : '#999' }]}>
-                {art.description}
-              </Text>
-            )}
-          </View>
-        </ScrollView>
-
-        <Pressable
-          style={styles.backBar}
-          onPress={() => { setSelectedPlacement(null); setViewAngle('front'); }}
-        >
-          <Text style={styles.backBarText}>← 전시관으로 돌아가기</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
-  // ── Main 3D view ──
+  // ── Render (canvas always mounted) ──
   return (
     <View style={styles.root}>
       <View style={styles.canvasArea}>
         <GalleryCanvas onReady={handleReady} style={StyleSheet.absoluteFill} />
-        <View
-          style={StyleSheet.absoluteFill}
-          onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
-          onResponderGrant={controls.onTouchStart}
-          onResponderMove={controls.onTouchMove}
-          onResponderRelease={controls.onTouchEnd}
-        />
+        {/* Touch overlay for drag-to-look — disabled during detail */}
+        {!selectedPlacement && (
+          <View
+            style={StyleSheet.absoluteFill}
+            onStartShouldSetResponder={() => true}
+            onMoveShouldSetResponder={() => true}
+            onResponderGrant={controls.onTouchStart}
+            onResponderMove={controls.onTouchMove}
+            onResponderRelease={controls.onTouchEnd}
+          />
+        )}
         {/* Minimap overlay */}
-        {!introPhase && (
+        {!introPhase && !selectedPlacement && (
           <View style={styles.minimapWrap} pointerEvents="none">
             <Minimap
               cameraRef={cameraRef}
@@ -299,8 +229,8 @@ export default function GalleryScene({
         )}
       </View>
 
-      {/* HUD — hidden during intro */}
-      {!introPhase && (
+      {/* HUD — hidden during intro & detail */}
+      {!introPhase && !selectedPlacement && (
         <View style={styles.hud}>
           <View style={styles.hudTop}>
             <View style={styles.compass}>
@@ -324,7 +254,8 @@ export default function GalleryScene({
           <View style={styles.hudBottom}>
             <Joystick setJoystick={controls.setJoystick} label="이동" />
             <View style={styles.hudCenter}>
-              <SpeedControl onChange={controls.setSpeedMult} />
+              <SpeedControl onChange={controls.setSpeedMult} label="이동속도" />
+              <SpeedControl onChange={controls.setLookSpeed} label="시선속도" />
             </View>
             <Joystick setJoystick={controls.setLook} label="시선" />
           </View>
@@ -332,6 +263,92 @@ export default function GalleryScene({
           <Pressable style={styles.exitBtn} onPress={onClose}>
             <Text style={styles.exitIcon}>🚪</Text>
             <Text style={styles.exitText}>나가기</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Artwork detail overlay */}
+      {detailInfo && selectedPlacement && (
+        <View style={styles.detailOverlay}>
+          <ScrollView contentContainerStyle={[styles.detailWall, { backgroundColor: detailInfo.wc }]}>
+            <View style={styles.detailSpotlight} />
+
+            <View style={[styles.detailFrame, {
+              borderColor: detailInfo.frameColor,
+              width: detailInfo.imgW + 16, height: detailInfo.imgH + 16,
+            }]}>
+              <Image
+                key={currentDetailImg}
+                source={{ uri: currentDetailImg! }}
+                style={{ width: detailInfo.imgW, height: detailInfo.imgH }}
+                contentFit="cover"
+                transition={250}
+              />
+
+              {viewAngle !== 'front' && (
+                <Pressable
+                  style={StyleSheet.absoluteFill}
+                  onPress={() => setViewAngle('front')}
+                />
+              )}
+
+              {viewAngle === 'front' && detailInfo.angles.top && (
+                <Pressable style={[styles.edgeIcon, styles.edgeTop]} onPress={() => setViewAngle('top')}>
+                  <Text style={styles.edgeIconText}>👁</Text>
+                </Pressable>
+              )}
+              {viewAngle === 'front' && detailInfo.angles.bottom && (
+                <Pressable style={[styles.edgeIcon, styles.edgeBottom]} onPress={() => setViewAngle('bottom')}>
+                  <Text style={styles.edgeIconText}>👁</Text>
+                </Pressable>
+              )}
+              {viewAngle === 'front' && detailInfo.angles.left && (
+                <Pressable style={[styles.edgeIcon, styles.edgeLeft]} onPress={() => setViewAngle('left')}>
+                  <Text style={styles.edgeIconText}>👁</Text>
+                </Pressable>
+              )}
+              {viewAngle === 'front' && detailInfo.angles.right && (
+                <Pressable style={[styles.edgeIcon, styles.edgeRight]} onPress={() => setViewAngle('right')}>
+                  <Text style={styles.edgeIconText}>👁</Text>
+                </Pressable>
+              )}
+            </View>
+
+            {viewAngle !== 'front' && (
+              <View style={styles.angleLabelBadge}>
+                <Text style={styles.angleLabelText}>
+                  {{ top: '위에서 본 모습', bottom: '아래에서 본 모습', left: '왼쪽에서 본 모습', right: '오른쪽에서 본 모습' }[viewAngle]}
+                </Text>
+                <Pressable onPress={() => setViewAngle('front')}>
+                  <Text style={styles.angleLabelBack}>정면으로 ✕</Text>
+                </Pressable>
+              </View>
+            )}
+
+            <View style={styles.detailPlate}>
+              <Text style={[styles.plateTitle, { color: detailInfo.isDark ? '#eee' : '#333' }]}>
+                {detailInfo.art.title}{detailInfo.art.year ? `, ${detailInfo.art.year}` : ''}
+              </Text>
+              <Text style={[styles.plateMeta, { color: detailInfo.isDark ? '#aaa' : '#777' }]}>
+                {[
+                  detailInfo.art.medium,
+                  `${selectedPlacement.width_cm} × ${selectedPlacement.height_cm} cm`,
+                  detailInfo.art.edition,
+                ].filter(Boolean).join(' · ')}
+              </Text>
+              {detailInfo.art.description && (
+                <Text style={[styles.plateDesc, { color: detailInfo.isDark ? '#888' : '#999' }]}>
+                  {detailInfo.art.description}
+                </Text>
+              )}
+            </View>
+          </ScrollView>
+
+          <Pressable
+            style={styles.backBar}
+            onPress={() => { setSelectedPlacement(null); setViewAngle('front'); }}
+          >
+            <Text style={styles.backBarText}>← 전시관으로 돌아가기</Text>
           </Pressable>
         </View>
       )}
@@ -594,7 +611,7 @@ function Joystick({ setJoystick, label }: { setJoystick: (x: number, y: number) 
 /* ── Speed Control ── */
 const SPEED_MULTS = [0.2, 0.5, 1, 1.8, 3];
 
-function SpeedControl({ onChange }: { onChange: (m: number) => void }) {
+function SpeedControl({ onChange, label = '이동속도' }: { onChange: (m: number) => void; label?: string }) {
   const [level, setLevel] = useState(2); // 0-4, default 2 (= speed 3)
   const dec = () => { if (level > 0) { const n = level - 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
   const inc = () => { if (level < 4) { const n = level + 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
@@ -609,7 +626,7 @@ function SpeedControl({ onChange }: { onChange: (m: number) => void }) {
           <Text style={styles.speedPmText}>+</Text>
         </Pressable>
       </View>
-      <Text style={styles.speedLabel}>이동속도</Text>
+      <Text style={styles.speedLabel}>{label}</Text>
     </View>
   );
 }
@@ -761,6 +778,11 @@ const styles = StyleSheet.create({
   },
 
   // Artwork detail overlay
+  detailOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 50,
+    backgroundColor: C.bg,
+  },
   detailWall: {
     flexGrow: 1, justifyContent: 'center', alignItems: 'center',
     gap: 16, paddingVertical: 24,

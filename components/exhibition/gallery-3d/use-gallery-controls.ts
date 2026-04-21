@@ -22,6 +22,7 @@ export default function useGalleryControls({
   // Look joystick input: x = yaw, y = pitch (-1..1)
   const lookRef = useRef({ x: 0, y: 0 });
   const speedMultRef = useRef(1);
+  const lookSpeedRef = useRef(1);
   const autoNavRef = useRef<{ targetYaw: number; targetX: number; targetZ: number } | null>(null);
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
   const isDraggingRef = useRef(false);
@@ -80,6 +81,7 @@ export default function useGalleryControls({
 
   /* ── Speed control ── */
   const setSpeedMult = useCallback((m: number) => { speedMultRef.current = m; }, []);
+  const setLookSpeed = useCallback((m: number) => { lookSpeedRef.current = m; }, []);
 
   /* ── Auto-navigate to wall ── */
   const navigateToWall = useCallback((wall: Wall) => {
@@ -135,8 +137,9 @@ export default function useGalleryControls({
     const lookMag = Math.sqrt(lx * lx + ly * ly);
     if (lookMag > 0.05) {
       autoNavRef.current = null;
-      yawRef.current -= lx * 0.04;
-      pitchRef.current = clamp(pitchRef.current - ly * 0.03, -Math.PI / 3, Math.PI / 3);
+      const ls = lookSpeedRef.current;
+      yawRef.current -= lx * 0.04 * ls;
+      pitchRef.current = clamp(pitchRef.current - ly * 0.03 * ls, -Math.PI / 3, Math.PI / 3);
     }
 
     // Movement joystick
@@ -173,6 +176,7 @@ export default function useGalleryControls({
     setJoystick,
     setLook,
     setSpeedMult,
+    setLookSpeed,
     navigateToWall,
     updateCamera,
     getDirection,
