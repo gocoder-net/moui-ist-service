@@ -264,6 +264,10 @@ export default function GalleryScene({
         {!selectedPlacement && (
           <View
             style={StyleSheet.absoluteFill}
+            onLayout={(e) => {
+              const { width, height } = e.nativeEvent.layout;
+              if (width > 0 && height > 0) canvasSizeRef.current = { width, height };
+            }}
             onStartShouldSetResponder={() => true}
             onMoveShouldSetResponder={() => true}
             onResponderGrant={controls.onTouchStart}

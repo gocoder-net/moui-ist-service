@@ -34,13 +34,17 @@ export default function useGalleryControls({
   const autoNavRef = useRef<{ targetYaw: number; targetX: number; targetZ: number } | null>(null);
   const autoTourRef = useRef<TourState | null>(null);
   const tourPaceRef = useRef(0.5);  // pace multiplier, default level 1 (TOUR_PACES[0])
-  const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
+  const touchStartRef = useRef({ x: 0, y: 0, locX: 0, locY: 0, time: 0 });
   const isDraggingRef = useRef(false);
 
   /* ── Canvas touch: drag to look + tap for artwork ── */
   const onTouchStart = useCallback((e: GestureResponderEvent) => {
-    const { pageX, pageY } = e.nativeEvent;
-    touchStartRef.current = { x: pageX, y: pageY, time: Date.now() };
+    const { pageX, pageY, locationX, locationY } = e.nativeEvent;
+    touchStartRef.current = {
+      x: pageX, y: pageY,
+      locX: locationX ?? 0, locY: locationY ?? 0,
+      time: Date.now(),
+    };
     isDraggingRef.current = false;
   }, []);
 
@@ -61,13 +65,16 @@ export default function useGalleryControls({
     }
   }, []);
 
-  const onTouchEnd = useCallback((e: GestureResponderEvent) => {
+  const onTouchEnd = useCallback((_e: GestureResponderEvent) => {
     if (!isDraggingRef.current && Date.now() - touchStartRef.current.time < 300) {
-      const { locationX, locationY } = e.nativeEvent;
+      // Use locationX/Y captured at touch *start* — onResponderRelease
+      // does not reliably provide locationX/Y on Android.
+      const lx = touchStartRef.current.locX;
+      const ly = touchStartRef.current.locY;
       const { width, height } = canvasSize.current;
       if (width > 0 && height > 0 && cameraRef.current) {
-        const ndcX = (locationX / width) * 2 - 1;
-        const ndcY = -(locationY / height) * 2 + 1;
+        const ndcX = (lx / width) * 2 - 1;
+        const ndcY = -(ly / height) * 2 + 1;
 
         const raycaster = new THREE.Raycaster();
         raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), cameraRef.current);
