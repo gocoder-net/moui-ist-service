@@ -135,73 +135,77 @@ export default function CreateExhibitionScreen() {
   const handleCreate = async () => {
     if (!title.trim()) { Alert.alert('알림', '전시관 이름을 입력해주세요.'); return; }
     if (artworks.length === 0) { Alert.alert('알림', '작품을 배치해주세요.'); return; }
-    if (!user) return;
+    if (!user) { Alert.alert('알림', '로그인이 필요합니다.'); return; }
 
     setLoading(true);
+    try {
+      const uploadImage = async (uri: string): Promise<string | null> => {
+        const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        const { error } = await supabase.storage.from('artworks').upload(fileName, blob, { contentType: 'image/jpeg' });
+        if (error) return null;
+        return supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
+      };
 
-    const uploadImage = async (uri: string): Promise<string | null> => {
-      const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
-      const response = await fetch(uri);
-      const blob = await response.blob();
-      const { error } = await supabase.storage.from('artworks').upload(fileName, blob, { contentType: 'image/jpeg' });
-      if (error) return null;
-      return supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
-    };
+      // Upload poster if present
+      let posterImageUrl: string | null = null;
+      if (posterUri) {
+        posterImageUrl = await uploadImage(posterUri);
+      }
 
-    // Upload poster if present
-    let posterImageUrl: string | null = null;
-    if (posterUri) {
-      posterImageUrl = await uploadImage(posterUri);
-    }
-
-    const { data: exhibition, error: exErr } = await supabase.from('exhibitions')
-      .insert({
-        user_id: user.id, title: title.trim(),
-        description: description.trim() || null,
-        foreword: foreword.trim() || null,
-        room_type: roomType,
-        wall_color_north: wallColors.north, wall_color_south: wallColors.south,
-        wall_color_east: wallColors.east, wall_color_west: wallColors.west,
-        floor_color: floorColor, ceiling_color: ceilingColor,
-        poster_image_url: posterImageUrl,
-        is_published: true,
-      })
-      .select('id').single();
-
-    if (exErr || !exhibition) { Alert.alert('오류', '전시관 생성 실패'); setLoading(false); return; }
-
-    for (const art of artworks) {
-      const imageUrl = await uploadImage(art.uri);
-      if (!imageUrl) continue;
-      const topUrl = art.topUri ? await uploadImage(art.topUri) : null;
-      const bottomUrl = art.bottomUri ? await uploadImage(art.bottomUri) : null;
-      const leftUrl = art.leftUri ? await uploadImage(art.leftUri) : null;
-      const rightUrl = art.rightUri ? await uploadImage(art.rightUri) : null;
-
-      const { data: artData } = await supabase.from('artworks')
+      const { data: exhibition, error: exErr } = await supabase.from('exhibitions')
         .insert({
-          user_id: user.id, title: art.title, image_url: imageUrl,
-          year: art.year || null,
-          medium: art.medium || null,
-          width_cm: art.widthCm,
-          height_cm: art.heightCm,
-          edition: art.edition || null,
-          description: art.description || null,
-          image_top_url: topUrl, image_bottom_url: bottomUrl,
-          image_left_url: leftUrl, image_right_url: rightUrl,
+          user_id: user.id, title: title.trim(),
+          description: description.trim() || null,
+          foreword: foreword.trim() || null,
+          room_type: roomType,
+          wall_color_north: wallColors.north, wall_color_south: wallColors.south,
+          wall_color_east: wallColors.east, wall_color_west: wallColors.west,
+          floor_color: floorColor, ceiling_color: ceilingColor,
+          poster_image_url: posterImageUrl,
+          is_published: true,
         })
         .select('id').single();
-      if (!artData) continue;
 
-      await supabase.from('exhibition_artworks').insert({
-        exhibition_id: exhibition.id, artwork_id: artData.id,
-        wall: art.wall, position_x: art.positionX, position_y: art.positionY,
-        width_cm: art.widthCm, height_cm: art.heightCm,
-      });
+      if (exErr || !exhibition) { Alert.alert('오류', `전시관 생성 실패: ${exErr?.message || '알 수 없는 오류'}`); setLoading(false); return; }
+
+      for (const art of artworks) {
+        const imageUrl = await uploadImage(art.uri);
+        if (!imageUrl) continue;
+        const topUrl = art.topUri ? await uploadImage(art.topUri) : null;
+        const bottomUrl = art.bottomUri ? await uploadImage(art.bottomUri) : null;
+        const leftUrl = art.leftUri ? await uploadImage(art.leftUri) : null;
+        const rightUrl = art.rightUri ? await uploadImage(art.rightUri) : null;
+
+        const { data: artData } = await supabase.from('artworks')
+          .insert({
+            user_id: user.id, title: art.title, image_url: imageUrl,
+            year: art.year || null,
+            medium: art.medium || null,
+            width_cm: art.widthCm,
+            height_cm: art.heightCm,
+            edition: art.edition || null,
+            description: art.description || null,
+            image_top_url: topUrl, image_bottom_url: bottomUrl,
+            image_left_url: leftUrl, image_right_url: rightUrl,
+          })
+          .select('id').single();
+        if (!artData) continue;
+
+        await supabase.from('exhibition_artworks').insert({
+          exhibition_id: exhibition.id, artwork_id: artData.id,
+          wall: art.wall, position_x: art.positionX, position_y: art.positionY,
+          width_cm: art.widthCm, height_cm: art.heightCm,
+        });
+      }
+
+      setLoading(false);
+      router.replace(`/exhibition/${exhibition.id}`);
+    } catch (e: any) {
+      setLoading(false);
+      Alert.alert('오류', e?.message || '전시관 생성 중 오류가 발생했습니다.');
     }
-
-    setLoading(false);
-    router.replace(`/exhibition/${exhibition.id}`);
   };
 
   const stepLabels = ['정보', '전시관', '벽면', '작품'];

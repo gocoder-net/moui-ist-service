@@ -228,72 +228,53 @@ moui-ist-service/
 └── tsconfig.json                # TypeScript 설정
 ```
 
-## 📍 현재 진행 상태 (2026년 4월 20일 기준)
+## 📍 현재 진행 상태 (2026년 4월 22일 기준)
 
 ### ✅ 완료된 작업
 1. 프로젝트 기획 및 로드맵 정리
 2. 필요 서비스 4개 가입 (GitHub, Supabase, Vercel, Expo)
-3. Supabase 프로젝트 생성 (moui-ist)
-4. 로컬 개발 환경 확인 (Node.js, npm, Git 설치됨)
-5. Expo 프로젝트 생성 완료 (default 템플릿, TypeScript + Expo Router)
-6. `npm install` 완료
-7. 로컬에서 `npm run web` 정상 동작 확인
-8. GitHub 레포 생성 및 push 완료 (`gocoder-net/moui-ist-service`, Private)
-9. `.gitignore` 업데이트 (`.idea/`, `.vscode/`, `.env`, `.env.local` 추가)
-10. 회사 프로젝트 Git 계정 분리 완료
-11. **Vercel 연결 및 자동 배포 설정 완료** (`vercel.json` 생성, GitHub 연동)
-12. **Supabase 연동 완료** (`@supabase/supabase-js` 설치, `lib/supabase.ts` 클라이언트 초기화, 연결 테스트 성공)
-13. **홈 화면 디자인 완료** (심플 소셜형 랜딩 + 애니메이션 배경)
-    - 디자인 방향: 심플 소셜형 (Threads/Instagram 스타일), **아티스트 그룹 홈페이지 스타일 아님**
-    - 메인 타이틀: "모의스트" (한글, 중앙)
-    - 상단: "MOUI-IST" 영문 로고 (작게, 레터스페이싱)
-    - 서브카피: "작가와 감상자가 만나는 창작 커뮤니티"
-    - CTA: "시작하기" 블랙 버튼 + 골드 화살표(→)
-    - 골드 다이아몬드 장식, 골드 디바이더 라인
-    - 로그인 링크: "이미 계정이 있나요? 로그인"
-    - 태그라인: "Conspiring Creativity Since 2026"
-    - **애니메이션 배경**: `react-native-reanimated` 사용, 18개 FloatingShape 컴포넌트
-      - 도형 종류: circle, diamond, ring, line
-      - 골드 컬러 계열, opacity 0.08~0.45
-      - 떠다니는 애니메이션 (translateX/Y, rotate, scale)
-    - 반응형: `useWindowDimensions()` + `isWide = width > 500`
-14. **Vercel 배포 확인** (https://moui-ist-service.vercel.app 정상 동작)
-15. **EAS Build 설정 완료** (`eas.json` 생성, Expo CLI 로그인, 프로젝트 연결)
-16. **Android APK 빌드 성공** (EAS Build → APK 다운로드 링크 생성)
-17. **app.json 업데이트** (EAS 프로젝트 ID, Android 패키지 `com.mouiist.app` 추가)
+3. Supabase 프로젝트 생성 + DB 스키마 설계 + RLS 정책
+4. 로컬 개발 환경 확인 (Node.js, npm, Git)
+5. Expo 프로젝트 생성 + GitHub 레포 + Vercel 자동 배포
+6. **인증**: 이메일/비밀번호 회원가입/로그인 + 온보딩 (작가/일반인)
+7. **홈 화면**: 심플 소셜형 랜딩 + 골드 FloatingShape 애니메이션 + 내 전시관 목록
+8. **전시관 에디터**: 4단계 위저드 (정보→전시관→벽면→작품 배치)
+   - WallFaceEditor: 드래그 이동, 핀치 리사이즈, 모서리 핸들 리사이즈
+   - 작품 메타데이터 (연도, 재료, 에디션, 설명, 다중 각도 이미지)
+9. **3D 전시관 뷰어** (Three.js + expo-gl):
+   - 실제 미터 기반 3D 방, 벽/바닥/천장, 작품별 스포트라이트
+   - 듀얼 조이스틱 (이동 + 시선) + 캔버스 드래그 시선
+   - 나침반 벽면 이동, 미니맵, 이동속도/시선속도 조절
+   - 입장 도어 오프닝 + 360도 둘러보기 연출
+   - 작품 터치 → 상세 오버레이 (스포트라이트 빔 + 플레이트 + 다중 각도)
+   - 자동 관람 투어 모드 (속도 조절 가능)
+   - TTS 서문 낭독
+10. **Android APK 빌드**: EAS Build + 로컬 빌드 모두 성공
+11. **Android APK 버그 수정**:
+    - 이미지 로딩: `expo-file-system`으로 로컬 다운로드 후 텍스처 로딩 (순차, 재시도, 타임아웃)
+    - 조이스틱: `measure()` 대신 `locationX/Y` 기반 원점 계산
+    - 작품 탭: `onResponderRelease`의 불안정한 좌표 → 터치 시작 좌표 사용 + onLayout 캔버스 크기 보정
 
 ### 🔄 현재 단계
-**DB 스키마 설계 직전**
-- Supabase 연동은 완료, 아직 테이블은 없음
-- 홈 화면 디자인 완료 (심플 소셜형 + 애니메이션 배경)
-- Android APK 빌드 성공 (EAS Build)
-- 다음 빌드 필요 시: `eas build --platform android --profile preview`
+**전시관 핵심 기능 완성, 안정화 단계**
+- 전시관 생성→관람 전체 플로우 동작 중 (웹 + Android APK)
+- 전시관 공개 시 에러 핸들링 개선 완료 (user null 체크, try-catch)
+- 로컬 APK 빌드: `export JAVA_HOME=$(/usr/libexec/java_home -v 17) && eas build --platform android --profile preview --local`
 
-### ⏭️ 다음 단계 (순서)
+### ⏭️ 다음 단계
 
-1. **DB 스키마 설계**
-   - Supabase 대시보드 또는 SQL Editor에서 테이블 생성
-   - `profiles`, `artworks`, `follows`, `exhibitions` 테이블 생성
-   - 모든 테이블에 RLS 활성화 + policy 작성
-   - `auth.users` → `profiles` 자동 생성 trigger 설정
+1. **안정화 + 버그 수정**
+   - Android APK 텍스처 로딩 안정성 확인
+   - 전시관 공개 플로우 테스트 (로그인 상태, 업로드 실패 케이스)
 
-2. **인증 구현**
-   - 회원가입/로그인 화면 (이메일+비밀번호)
-   - 온보딩 플로우 (작가/일반인 선택)
-   - 로그인 상태 관리 (Supabase Auth 세션)
-
-3. **MVP 기능 구현**
+2. **MVP 나머지 기능**
    - 작가 프로필 페이지 (조회 → 편집)
-   - 작품 업로드 (Storage 연동)
-   - 작품 갤러리 (본인 작품 그리드)
    - 탐색 화면 (전체 작가/작품 피드 + 필터)
    - 팔로우 기능
    - 공유 링크 (`/[username]` 라우트)
-   - 전시 정보 페이지 (정적 데이터)
 
-4. **Supabase Secret Key 재생성**
+3. **Supabase Secret Key 재생성**
    - 대시보드 → Settings → API Keys에서 Secret key rotate
-   - 채팅에 노출된 키 무효화
 
 ## 🗄️ DB 스키마 (MVP 최소 구성)
 
@@ -386,11 +367,29 @@ exhibitions
 
 ### [2026-04-20] 홈 화면 디자인 반복 학습
 - **핵심 교훈**: 이 앱은 **커뮤니티 앱**이지 아티스트 그룹 홈페이지가 아님
-  - ❌ 갤러리/전시 스타일 (Pinterest, 아트갤러리)
-  - ❌ 무게감 있는 아티스트 그룹 느낌
   - ✅ 심플 소셜형 (Threads, Instagram 첫 화면 느낌)
   - ✅ 깔끔하되 와우 포인트(엣지) 있는 디자인
 - **최종 방향**: 미니멀 랜딩 + 골드 애니메이션 배경으로 프리미엄 느낌
+
+### [2026-04-21] Android APK 3D 뷰어 이슈 모음
+- **이미지 안 보임**: `expo-three`의 `loadAsync(remoteUrl)`이 Android APK에서 실패
+  - 해결: `expo-file-system`으로 로컬 다운로드 → `Asset.fromURI(localPath)` → `loadAsync(asset)`
+  - 추가 개선: 순차 로딩, 15초 타임아웃, 1회 재시도, 로컬 캐싱 (djb2 해시 파일명)
+- **작품 터치 안 됨**: `gl.drawingBufferWidth`는 물리 픽셀, `locationX`는 dp → NDC 계산 틀림
+  - 해결: `PixelRatio.get()`으로 나눠서 dp 변환 + 터치 오버레이 `onLayout`으로 정확한 dp 크기
+  - 추가: `onResponderRelease`의 `locationX/Y`가 Android에서 불안정 → 터치 시작 좌표 사용
+- **조이스틱 좌표 오류**: `view.measure()`가 Android에서 부정확한 좌표 반환
+  - 해결: `locationX/Y`로 뷰 내 오프셋 계산하여 원점 도출
+- **로컬 APK 빌드 시 Java 26 에러**: "Unsupported class file major version 70"
+  - 해결: `JAVA_HOME`을 Java 17로 지정 (`/usr/libexec/java_home -v 17`)
+
+### [2026-04-22] WallFaceEditor 리사이즈 핸들 이슈
+- **모바일에서 리사이즈 안 됨**: 부모 DraggableArtwork PanResponder가 터치 가로챔
+  - 해결: ResizeHandle에 `onPanResponderTerminationRequest: () => false`, 부모에 `resizingRef` 체크
+- **핸들 터치 시 컴포넌트 언마운트**: `isPinching=true` → `!isPinching` 조건으로 핸들 사라짐 → release 안 불림 → 영구 잠김
+  - 해결: 핸들을 항상 마운트 유지, `hidden` prop으로 `opacity: 0`만 적용
+- **드래그 후 이미지 선택창 뜸 (PC웹)**: mouseup 후 부모 Pressable의 onPress 발동
+  - 해결: `armSuppressWallPress()` — 제스처 끝 후 100ms간 벽 터치 무시
 
 ## 📦 설치된 주요 패키지
 
@@ -402,8 +401,14 @@ exhibitions
 | react-native-web | ~0.21.0 | 웹 지원 |
 | expo-router | ~6.0.23 | 파일 기반 라우팅 |
 | @supabase/supabase-js | 최신 | Supabase 클라이언트 |
-| react-native-reanimated | ~3.x | 고성능 애니메이션 (홈 화면 FloatingShape) |
-| expo-linear-gradient | ~14.x | 그라데이션 UI |
+| react-native-reanimated | ~4.1.1 | 고성능 애니메이션 (홈 화면 FloatingShape, 입장 도어 연출) |
+| expo-linear-gradient | ~15.x | 그라데이션 UI |
+| three | ^0.166.1 | 3D 렌더링 (전시관 뷰어) |
+| expo-three | ^8.0.0 | Three.js + Expo 통합 (네이티브 텍스처 로딩) |
+| expo-gl | ~16.0.10 | OpenGL ES / WebGL 컨텍스트 (네이티브 3D 렌더링) |
+| expo-image | ~3.0.11 | 고성능 이미지 컴포넌트 |
+| expo-image-picker | ~17.0.10 | 작품 이미지 선택 |
+| expo-speech | ~14.0.8 | TTS (전시 서문 낭독) |
 | typescript | ~5.9.2 | 타입 시스템 |
 
 ## 코딩 규칙
@@ -459,18 +464,19 @@ exhibitions
 
 ### 가상 전시관 기능 (핵심 기능)
 
-**개요**: 작가가 가상 전시 공간을 만들고 작품을 걸면, 관람자가 1인칭 시점으로 감상하는 온라인 전시 시스템.
+**개요**: 작가가 가상 전시 공간을 만들고 작품을 걸면, 관람자가 Three.js 기반 3D 공간에서 1인칭 시점으로 감상하는 온라인 전시 시스템.
 
 **전시관 타입** (실제 미터 단위):
 - 소형(6×4m), 중형(10×7m), 대형(15×10m), 와이드(20×8m)
 
 **작가 측 (전시관 에디터)**:
-1. 전시 정보 입력 (이름, 설명, 서문)
+1. 전시 정보 입력 (이름, 설명, 서문, 포스터 이미지)
 2. 전시관 크기 선택 (4종 템플릿)
-3. 4면 벽 색상 개별 설정 (펼친 도면 뷰)
+3. 4면 벽/바닥/천장 색상 개별 설정 (펼친 도면 뷰)
 4. 벽면 정면 에디터에서 터치한 위치에 작품 배치
    - 드래그로 작품 위치 이동
    - 두 손가락 핀치로 크기 조절 (비율 유지)
+   - **모서리 핸들 드래그로 크기 조절** (선택 시 4 코너에 핸들 표시)
    - 크기 +/- 버튼으로 가로/세로 개별 조절 (10~300cm)
    - 바닥에서의 높이 조절
    - 작품 간 거리(cm) 라벨 자동 표시
@@ -483,50 +489,73 @@ exhibitions
    - 에디션 (판화용, 예: 1/10, AP)
    - 작품 설명
 
-**관람자 측 (1인칭 뷰어)**:
-1. 입구: 전시 제목, 작가명, 서문 읽기 → "전시관 입장" 버튼
-2. 1인칭 시점: 정면 벽 + 양옆 벽이 원근감(perspective) 있게 보임
-3. 좌우 회전: 사이드 벽 터치 또는 하단 ←→ 버튼, 나침반(N/E/S/W)으로 직접 이동
-4. 작품 터치 → 클로즈업 감상
-   - 벽면 배경 + 액자 프레임 + 스포트라이트 효과
+**관람자 측 (3D 1인칭 뷰어)** — Three.js + expo-gl:
+1. 입구: 전시 제목, 포스터, 서문 (TTS 낭독 지원) → "전시관 입장"
+2. **입장 연출**: 도어 오프닝 애니메이션 + 360도 둘러보기
+3. **3D 공간**: 실제 미터 기반 방, 벽/바닥/천장, 스포트라이트 조명
+4. **조작 방식**:
+   - 이동 조이스틱 (좌) + 시선 조이스틱 (우)
+   - 캔버스 드래그로 시선 회전
+   - 나침반(N/E/S/W)으로 벽면 직접 이동
+   - 미니맵 탭으로 원하는 위치 이동
+   - 이동속도/시선속도 5단계 조절
+5. **자동 관람 (투어 모드)**: 작품 사이를 자동으로 걸어다니며 감상
+   - 각 작품 앞에서 3초간 정지 후 다음 작품으로 이동
+   - 투어 속도 5단계 조절
+6. **작품 터치 → 상세 오버레이**:
+   - 벽면 배경 + 액자 프레임 + 스포트라이트 빔 효과
    - 작품 플레이트: "작품명, 2024 · 캔버스에 유채 · 60×40cm · AP"
-   - 다중 각도 감상 (작가가 올린 각도만 버튼 활성화)
-5. 천장 조명 + 바닥 타일 원근감으로 몰입감 제공
+   - 다중 각도 감상 (작가가 올린 각도만 👁 버튼 활성화)
 
 **DB 테이블**:
-- `exhibitions` - 전시관 정보 (서문, 방 타입, 4면 벽 색상)
+- `exhibitions` - 전시관 정보 (서문, 방 타입, 4면 벽 색상, 바닥/천장 색상, 포스터)
 - `exhibition_artworks` - 작품 배치 (벽면, 위치 cm, 크기 cm)
 - `artworks` - 다중 각도 이미지 + 메타데이터 (연도, 재료, 실제 크기, 에디션)
 
 **주요 컴포넌트** (`components/exhibition/`):
 - `room-geometry.ts` - 공유 타입/상수/유틸 (Wall, RoomType, PlacedArtwork, MEDIUM_OPTIONS 등)
-- `WallFaceEditor.tsx` - 벽면 정면 편집 뷰 (터치 배치 + 드래그 이동 + 핀치 리사이즈)
+- `WallFaceEditor.tsx` - 벽면 정면 편집 뷰 (터치 배치 + 드래그 이동 + 핀치/핸들 리사이즈)
 - `Room3DView.tsx` - 펼친 도면 형태 전시관 뷰 (벽 선택용)
-- `FirstPersonViewer.tsx` - 1인칭 관람 뷰어 (벽면 전환 + 작품 클로즈업 + 각도 전환)
+
+**3D 뷰어 컴포넌트** (`components/exhibition/gallery-3d/`):
+- `GalleryScene.tsx` - 메인 3D 뷰어 (HUD, 미니맵, 조이스틱, 상세 오버레이, 입장 도어 연출)
+- `GalleryCanvas.tsx` - 캔버스 래퍼 (웹: DOM canvas, 네이티브: expo-gl GLView)
+- `GalleryRoom.ts` - 방 구조 빌드 (벽, 바닥, 천장, 코너 트림)
+- `GalleryArtwork.ts` - 작품 메시 빌드 (프레임 + 매트 + 이미지 텍스처)
+- `GalleryLighting.ts` - 조명 (앰비언트 + 작품별 스포트라이트)
+- `use-gallery-controls.ts` - 카메라 컨트롤 훅 (조이스틱, 터치, 자동 네비, 투어, 충돌)
+- `gallery-math.ts` - 수학 유틸 (좌표 변환, clamp, yaw→방향)
+- `types.ts` - 3D 뷰어 타입 정의
 
 **라우트**:
 - `app/exhibition/create.tsx` - 전시관 만들기 (4단계 위저드)
-- `app/exhibition/[id].tsx` - 전시관 뷰어 (입구→1인칭 관람)
+- `app/exhibition/[id].tsx` - 전시관 뷰어 (입구→3D 관람)
 
 ### UI 디자인 변경 이력
 - 로그인/회원가입: FloatingShape 배경 애니메이션, PlayfulDiamond, 인풋 포커스 골드 전환
 - 온보딩: 가로형 카드 + 라디오 선택 애니메이션
-- 홈: 프로필 아바타 + 퀵액션 리스트 + Coming Soon 카드
+- 홈: 프로필 아바타 + 퀵액션 리스트 + 내 전시관 목록
 - 탐색: 카테고리 그리드 + 검색바 + 트렌딩
 - 탭바: Home→홈, Explore→탐색 (한글화)
+- 전시관 뷰어: 2D CSS 기반 → Three.js 3D 뷰어로 전환
+- WallFaceEditor: 모서리 핸들 드래그 리사이즈 추가
 
-### Git 커밋 히스토리
+### Git 커밋 히스토리 (최근)
 ```
+4ec5b5f fix: Android APK 작품 탭 상세보기 안 뜨는 문제 수정
+f308fb3 feat: 작품 모서리 드래그 리사이즈 + Android APK 3D 뷰어 버그 수정
+9e9a547 feat: 자동 관람 기능 추가 — 작품 사이를 걸어다니며 감상하는 투어 모드
+d8dd9c4 feat: 홈 화면에 내 전시관 목록 섹션 추가
+c590abb feat: 작품 상세보기 스포트라이트 조명 효과 + 입장 360도 둘러보기 연출
+d79c805 미니맵 작품 점 골드색 + 글로우 효과
+e9b1563 fix: 작품 상세보기 후 카메라 위치 이탈 및 크래시 수정
+cc3df97 feat: dual joystick controls for movement and camera look
+ae1bc4b feat: add minimap overlay to 3D gallery viewer
+d4d8ad3 feat: add joystick controls, door intro animation, poster image, and foreword overlay
 d506087 feat: add pinch-to-resize for artworks on wall editor
-8dab74c feat: add artwork metadata fields, drag-to-move on wall, fix viewer UX
-5be6c91 fix: improve first-person viewer UX - center wall, reduce arrows, remove shake
 60a384e feat: add virtual exhibition gallery with first-person viewer
-164b4e0 ㅇ
 fd1c7f6 feat: redesign login/signup screens with floating shape animations
-3452ecd feat: add playful diamond animation and polish landing screen
-702826e PROJECT_GUIDELINES_v5.md
 9dc4d6d feat: add email/password auth, onboarding, and splash screen
-1575ab9 chore: add app.json with EAS config
 f5f4b10 feat: redesign home screen with animated floating shapes
 ```
 

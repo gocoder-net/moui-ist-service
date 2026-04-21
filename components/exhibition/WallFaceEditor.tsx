@@ -72,8 +72,16 @@ export default function WallFaceEditor({
     return labels;
   }, [wallArtworks, wallLenCm, wallWidthPx]);
 
+  // Suppress wall press right after a drag/resize (click events still fire)
+  const suppressWallPressRef = useRef(false);
+  const armSuppressWallPress = useCallback(() => {
+    suppressWallPressRef.current = true;
+    setTimeout(() => { suppressWallPressRef.current = false; }, 100);
+  }, []);
+
   // 벽면 빈곳 터치 → 배치
   const handleWallPress = (e: any) => {
+    if (suppressWallPressRef.current) return;
     const nativeEvt = e.nativeEvent;
     let localX = nativeEvt.offsetX ?? nativeEvt.locationX;
     let localY = nativeEvt.offsetY ?? nativeEvt.locationY;
@@ -160,6 +168,7 @@ export default function WallFaceEditor({
                 onSelect={() => onSelectArtwork(art.localId)}
                 onMove={(x, y) => onMoveArtwork(art.localId, x, y)}
                 onResize={(w, h) => onResizeArtwork(art.localId, w, h)}
+                onGestureEnd={armSuppressWallPress}
               />
             ))}
 
@@ -214,21 +223,23 @@ const CORNER_CURSOR: Record<Corner, string> = {
   BL: 'nesw-resize',  BR: 'nwse-resize',
 };
 
-function ResizeHandle({ corner, artWidthPx, artHeightPx, artWidthCm, artHeightCm, setScaleOffset, setIsPinching, onResizeDone }: {
+function ResizeHandle({ corner, artWidthPx, artHeightPx, artWidthCm, artHeightCm, setScaleOffset, setIsPinching, onResizeDone, onGestureEnd, hidden }: {
   corner: Corner;
   artWidthPx: number; artHeightPx: number;
   artWidthCm: number; artHeightCm: number;
   setScaleOffset: (s: number) => void;
   setIsPinching: (v: boolean) => void;
   onResizeDone: (widthCm: number, heightCm: number) => void;
+  onGestureEnd?: () => void;
+  hidden?: boolean;
 }) {
   const handleElRef = useRef<any>(null);
   const scaleRef = useRef(1);
 
   const dimsRef = useRef({ artWidthPx, artHeightPx, artWidthCm, artHeightCm });
   dimsRef.current = { artWidthPx, artHeightPx, artWidthCm, artHeightCm };
-  const cbRef = useRef({ setScaleOffset, setIsPinching, onResizeDone });
-  cbRef.current = { setScaleOffset, setIsPinching, onResizeDone };
+  const cbRef = useRef({ setScaleOffset, setIsPinching, onResizeDone, onGestureEnd });
+  cbRef.current = { setScaleOffset, setIsPinching, onResizeDone, onGestureEnd };
 
   const { x: sx, y: sy } = CORNER_SIGN[corner];
 
@@ -247,6 +258,7 @@ function ResizeHandle({ corner, artWidthPx, artHeightPx, artWidthCm, artHeightCm
     scaleRef.current = 1;
     const newW = Math.round(Math.max(10, Math.min(300, d.artWidthCm * s)));
     const newH = Math.round(Math.max(10, Math.min(300, d.artHeightCm * s)));
+    cbRef.current.onGestureEnd?.();
     cbRef.current.onResizeDone(newW, newH);
   }, []);
 
@@ -286,6 +298,7 @@ function ResizeHandle({ corner, artWidthPx, artHeightPx, artWidthCm, artHeightCm
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,  // prevent parent from stealing
       onPanResponderGrant: () => {
         scaleRef.current = 1;
         cbRef.current.setIsPinching(true);
@@ -310,6 +323,7 @@ function ResizeHandle({ corner, artWidthPx, artHeightPx, artWidthCm, artHeightCm
         styles.resizeHandle, CORNER_POS[corner] as any,
         // @ts-ignore - web cursor
         Platform.OS === 'web' ? { cursor: CORNER_CURSOR[corner] } : {},
+        hidden ? { opacity: 0 } : {},
       ]}
     />
   );
@@ -318,7 +332,7 @@ function ResizeHandle({ corner, artWidthPx, artHeightPx, artWidthCm, artHeightCm
 /* ── 드래그 + 핀치 가능한 작품 ── */
 function DraggableArtwork({
   art, wallLenCm, wallHCm, wallWidthPx, wallHeightPx,
-  isSelected, isDark, onSelect, onMove, onResize,
+  isSelected, isDark, onSelect, onMove, onResize, onGestureEnd,
 }: {
   art: PlacedArtwork;
   wallLenCm: number; wallHCm: number;
@@ -327,6 +341,7 @@ function DraggableArtwork({
   onSelect: () => void;
   onMove: (posXcm: number, posYcm: number) => void;
   onResize: (widthCm: number, heightCm: number) => void;
+  onGestureEnd?: () => void;
 }) {
   const w = cmToPx(art.widthCm, wallLenCm, wallWidthPx);
   const h = cmToPx(art.heightCm, wallHCm, wallHeightPx);
@@ -339,12 +354,13 @@ function DraggableArtwork({
   const [isPinching, setIsPinching] = useState(false);
   const draggingRef = useRef(false);
   const pinchingRef = useRef(false);
+  const resizingRef = useRef(false);   // true when ResizeHandle is active
   const initialPinchDist = useRef(0);
   const webElRef = useRef<any>(null);
 
   // Stable refs for callbacks (avoid stale closures in useEffect)
-  const cbRef = useRef({ onSelect, onMove });
-  cbRef.current = { onSelect, onMove };
+  const cbRef = useRef({ onSelect, onMove, onGestureEnd });
+  cbRef.current = { onSelect, onMove, onGestureEnd };
   const artStateRef = useRef({ positionX: art.positionX, positionY: art.positionY, widthCm: art.widthCm, heightCm: art.heightCm });
   artStateRef.current = { positionX: art.positionX, positionY: art.positionY, widthCm: art.widthCm, heightCm: art.heightCm };
   const dimsRef = useRef({ wallLenCm, wallHCm, wallWidthPx, wallHeightPx });
@@ -392,6 +408,7 @@ function DraggableArtwork({
           setDragOffset({ x: 0, y: 0 });
           setIsDragging(false);
           draggingRef.current = false;
+          cbRef.current.onGestureEnd?.();
           cbRef.current.onMove(
             Math.max(a.widthCm / 2, Math.min(d.wallLenCm - a.widthCm / 2, nx)),
             Math.max(a.heightCm / 2, Math.min(d.wallHCm - a.heightCm / 2, ny))
@@ -411,11 +428,18 @@ function DraggableArtwork({
     return () => el.removeEventListener('mousedown', onMouseDown);
   }, []);
 
+  // Wrapped setIsPinching that also tracks resizingRef for ResizeHandle
+  const setIsPinchingWrapped = useCallback((v: boolean) => {
+    resizingRef.current = v;
+    setIsPinching(v);
+  }, []);
+
   const panResponder = useMemo(() =>
     PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponder: () => !resizingRef.current,
+      onMoveShouldSetPanResponder: () => !resizingRef.current,
       onPanResponderGrant: (evt) => {
+        if (resizingRef.current) return;
         onSelect();
         draggingRef.current = false;
         pinchingRef.current = false;
@@ -522,10 +546,11 @@ function DraggableArtwork({
     >
       <Image source={{ uri: art.uri }}
         style={{ width: '100%', height: '100%' }} contentFit="cover" />
-      {isSelected && !isPinching && (['TL', 'TR', 'BL', 'BR'] as Corner[]).map(c => (
+      {isSelected && (['TL', 'TR', 'BL', 'BR'] as Corner[]).map(c => (
         <ResizeHandle key={c} corner={c} artWidthPx={w} artHeightPx={h}
           artWidthCm={art.widthCm} artHeightCm={art.heightCm}
-          setScaleOffset={setScaleOffset} setIsPinching={setIsPinching} onResizeDone={onResize} />
+          setScaleOffset={setScaleOffset} setIsPinching={setIsPinchingWrapped} onResizeDone={onResize} onGestureEnd={cbRef.current.onGestureEnd}
+          hidden={isPinching} />
       ))}
       {isDragging && (
         <View style={styles.dragLabel}>
