@@ -441,7 +441,7 @@ function Minimap({ cameraRef, yawRef, dims, wallColors, placements, onTap }: {
 
       {/* Artwork dots */}
       {artDots.map((d) => (
-        <View key={d.id} style={[styles.minimapArtDot, { left: d.x - 2, top: d.y - 2 }]} />
+        <View key={d.id} style={[styles.minimapArtDot, { left: d.x - 3, top: d.y - 3 }]} />
       ))}
 
       {/* Camera indicator */}
@@ -734,8 +734,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(10,10,10,0.75)',
   },
   minimapArtDot: {
-    position: 'absolute', width: 4, height: 4, borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.6)',
+    position: 'absolute', width: 6, height: 6, borderRadius: 3,
+    backgroundColor: C.gold,
+    shadowColor: C.gold, shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6, shadowRadius: 3,
   },
   minimapFov: {
     position: 'absolute', top: -6,
