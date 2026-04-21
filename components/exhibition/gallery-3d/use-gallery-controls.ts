@@ -44,8 +44,8 @@ export default function useGalleryControls({
     }
 
     if (isDraggingRef.current) {
-      yawRef.current -= dx * 0.004;
-      pitchRef.current = clamp(pitchRef.current - dy * 0.004, -Math.PI / 3, Math.PI / 3);
+      yawRef.current += dx * 0.004;
+      pitchRef.current = clamp(pitchRef.current + dy * 0.004, -Math.PI / 3, Math.PI / 3);
       touchStartRef.current = { ...touchStartRef.current, x: pageX, y: pageY };
     }
   }, []);
@@ -169,6 +169,18 @@ export default function useGalleryControls({
 
   const getDirection = useCallback((): Wall => yawToDirection(yawRef.current), []);
 
+  /* ── Navigate to arbitrary position (keeps current yaw) ── */
+  const navigateTo = useCallback((x: number, z: number) => {
+    const margin = 0.3;
+    const hw = dims.widthM / 2;
+    const hd = dims.depthM / 2;
+    autoNavRef.current = {
+      targetYaw: yawRef.current,
+      targetX: clamp(x, -hw + margin, hw - margin),
+      targetZ: clamp(z, -hd + margin, hd - margin),
+    };
+  }, [dims]);
+
   return {
     onTouchStart,
     onTouchMove,
@@ -178,6 +190,7 @@ export default function useGalleryControls({
     setSpeedMult,
     setLookSpeed,
     navigateToWall,
+    navigateTo,
     updateCamera,
     getDirection,
     yawRef,

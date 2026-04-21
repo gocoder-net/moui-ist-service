@@ -216,7 +216,7 @@ export default function GalleryScene({
         )}
         {/* Minimap overlay */}
         {!introPhase && !selectedPlacement && (
-          <View style={styles.minimapWrap} pointerEvents="none">
+          <View style={styles.minimapWrap}>
             <Minimap
               cameraRef={cameraRef}
               yawRef={controls.yawRef}
@@ -224,6 +224,7 @@ export default function GalleryScene({
               wallColors={{ north: wallColors.north, south: wallColors.south,
                 east: wallColors.east, west: wallColors.west }}
               placements={placements}
+              onTap={controls.navigateTo}
             />
           </View>
         )}
@@ -366,12 +367,13 @@ export default function GalleryScene({
 const MINIMAP_MAX = 100;
 const WALL_T = 4;
 
-function Minimap({ cameraRef, yawRef, dims, wallColors, placements }: {
+function Minimap({ cameraRef, yawRef, dims, wallColors, placements, onTap }: {
   cameraRef: React.MutableRefObject<THREE.PerspectiveCamera>;
   yawRef: React.MutableRefObject<number>;
   dims: RoomDimensions;
   wallColors: Record<Wall, string>;
   placements: Placement3D[];
+  onTap?: (worldX: number, worldZ: number) => void;
 }) {
   const [pos, setPos] = useState({ x: 0, z: 0, yaw: 0 });
 
@@ -411,8 +413,20 @@ function Minimap({ cameraRef, yawRef, dims, wallColors, placements }: {
     });
   }, [placements, dims, innerW, innerH, mapW, mapH]);
 
+  const handleTap = useCallback((e: any) => {
+    if (!onTap) return;
+    const { locationX, locationY } = e.nativeEvent;
+    const worldX = ((locationX - WALL_T) / innerW - 0.5) * dims.widthM;
+    const worldZ = ((locationY - WALL_T) / innerH - 0.5) * dims.depthM;
+    onTap(worldX, worldZ);
+  }, [onTap, dims, innerW, innerH]);
+
   return (
-    <View style={[styles.minimap, { width: mapW, height: mapH }]}>
+    <View
+      style={[styles.minimap, { width: mapW, height: mapH }]}
+      onStartShouldSetResponder={() => !!onTap}
+      onResponderRelease={handleTap}
+    >
       {/* Floor */}
       <View style={[styles.minimapFloor, {
         top: WALL_T, left: WALL_T, width: innerW, height: innerH,
