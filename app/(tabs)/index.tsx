@@ -1,14 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Pressable,
   ScrollView,
+  FlatList,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
+import { supabase } from '@/lib/supabase';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -155,11 +158,76 @@ function QuickCard({
   );
 }
 
+/* ── 전시관 타입 ── */
+type Exhibition = {
+  id: string;
+  title: string;
+  room_type: string;
+  poster_image_url: string | null;
+  is_published: boolean;
+  created_at: string;
+};
+
+const ROOM_EMOJI: Record<string, string> = {
+  small: '🏠',
+  medium: '🏛️',
+  large: '🏰',
+};
+
+const ROOM_LABEL: Record<string, string> = {
+  small: '소형',
+  medium: '중형',
+  large: '대형',
+};
+
+/* ── 전시관 카드 ── */
+function ExhibitionCard({ item, onPress }: { item: Exhibition; onPress: () => void }) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.exCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
+      onPress={onPress}
+    >
+      {item.poster_image_url ? (
+        <Image source={{ uri: item.poster_image_url }} style={styles.exPoster} contentFit="cover" />
+      ) : (
+        <View style={styles.exPosterPlaceholder}>
+          <Text style={styles.exPosterEmoji}>{ROOM_EMOJI[item.room_type] ?? '🏛️'}</Text>
+        </View>
+      )}
+      <View style={styles.exInfo}>
+        <Text style={styles.exTitle} numberOfLines={1}>{item.title}</Text>
+        <View style={styles.exMeta}>
+          <Text style={styles.exRoomType}>{ROOM_LABEL[item.room_type] ?? item.room_type}</Text>
+          <Text style={styles.exMetaDot}>·</Text>
+          <Text style={[styles.exPublish, item.is_published && { color: C.gold }]}>
+            {item.is_published ? '공개' : '비공개'}
+          </Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 /* ── 메인 화면 ── */
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile, signOut } = useAuth();
+
+  const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
+
+  const fetchExhibitions = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('exhibitions')
+      .select('id, title, room_type, poster_image_url, is_published, created_at')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    if (data) setExhibitions(data);
+  }, [user]);
+
+  useEffect(() => { fetchExhibitions(); }, [fetchExhibitions]);
+  useFocusEffect(useCallback(() => { fetchExhibitions(); }, [fetchExhibitions]));
 
   const userTypeLabels = { creator: '작가', aspiring: '지망생', audience: '감상자' } as const;
   const userTypeLabel = userTypeLabels[profile?.user_type ?? 'audience'];
@@ -217,6 +285,41 @@ export default function HomeScreen() {
 
         {/* 구분선 */}
         <Animated.View entering={FadeIn.delay(400).duration(300)} style={styles.dividerRow}>
+          <View style={styles.dividerLine} />
+          <View style={styles.dividerDiamond} />
+          <View style={styles.dividerLine} />
+        </Animated.View>
+
+        {/* 내 전시관 */}
+        {exhibitions.length > 0 && (
+          <Animated.View entering={FadeInDown.delay(420).duration(400).springify()}>
+            <View style={styles.exSectionHeader}>
+              <Text style={styles.sectionTitle}>🏛️ 내 전시관</Text>
+              <Pressable
+                style={({ pressed }) => [styles.exNewBtn, pressed && { opacity: 0.7 }]}
+                onPress={() => router.push('/exhibition/create')}
+              >
+                <Text style={styles.exNewBtnText}>+ 새 전시관</Text>
+              </Pressable>
+            </View>
+            <FlatList
+              data={exhibitions}
+              keyExtractor={(item) => item.id}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.exList}
+              renderItem={({ item }) => (
+                <ExhibitionCard
+                  item={item}
+                  onPress={() => router.push(`/exhibition/${item.id}`)}
+                />
+              )}
+            />
+          </Animated.View>
+        )}
+
+        {/* 구분선2 */}
+        <Animated.View entering={FadeIn.delay(440).duration(300)} style={styles.dividerRow}>
           <View style={styles.dividerLine} />
           <View style={styles.dividerDiamond} />
           <View style={styles.dividerLine} />
@@ -449,5 +552,82 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: C.gold,
     letterSpacing: 2,
+  },
+
+  /* 내 전시관 */
+  exSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 14,
+  },
+  exNewBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: C.gold,
+  },
+  exNewBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.gold,
+    letterSpacing: 0.5,
+  },
+  exList: {
+    gap: 12,
+    paddingBottom: 4,
+  },
+  exCard: {
+    width: 160,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 16,
+    backgroundColor: C.white,
+    overflow: 'hidden',
+  },
+  exPoster: {
+    width: '100%',
+    height: 110,
+  },
+  exPosterPlaceholder: {
+    width: '100%',
+    height: 110,
+    backgroundColor: '#FDFBF7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exPosterEmoji: {
+    fontSize: 40,
+  },
+  exInfo: {
+    padding: 12,
+    gap: 6,
+  },
+  exTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: C.fg,
+    letterSpacing: 0.3,
+  },
+  exMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  exRoomType: {
+    fontSize: 11,
+    color: C.muted,
+    fontWeight: '600',
+  },
+  exMetaDot: {
+    fontSize: 11,
+    color: C.mutedLight,
+  },
+  exPublish: {
+    fontSize: 11,
+    color: C.muted,
+    fontWeight: '600',
   },
 });
