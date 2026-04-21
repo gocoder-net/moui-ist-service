@@ -22,7 +22,7 @@ export default function useGalleryControls({
   // Look joystick input: x = yaw, y = pitch (-1..1)
   const lookRef = useRef({ x: 0, y: 0 });
   const speedMultRef = useRef(0.5);   // default level 2 (= SPEED_MULTS[1])
-  const lookSpeedRef = useRef(0.5);
+  const lookSpeedRef = useRef(0.2);   // default level 1 (= SPEED_MULTS[0])
   const autoNavRef = useRef<{ targetYaw: number; targetX: number; targetZ: number } | null>(null);
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
   const isDraggingRef = useRef(false);

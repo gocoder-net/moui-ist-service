@@ -262,7 +262,7 @@ export default function GalleryScene({
             <Joystick setJoystick={controls.setJoystick} label="이동" />
             <View style={styles.hudCenter}>
               <SpeedControl onChange={controls.setSpeedMult} label="이동속도" />
-              <SpeedControl onChange={controls.setLookSpeed} label="시선속도" />
+              <SpeedControl onChange={controls.setLookSpeed} label="시선속도" defaultLevel={0} />
             </View>
             <Joystick setJoystick={controls.setLook} label="시선" />
           </View>
@@ -661,8 +661,8 @@ function Joystick({ setJoystick, label }: { setJoystick: (x: number, y: number) 
 /* ── Speed Control ── */
 const SPEED_MULTS = [0.2, 0.5, 1, 1.8, 3];
 
-function SpeedControl({ onChange, label = '이동속도' }: { onChange: (m: number) => void; label?: string }) {
-  const [level, setLevel] = useState(1); // 0-4, default 1 (= speed 2)
+function SpeedControl({ onChange, label = '이동속도', defaultLevel = 1 }: { onChange: (m: number) => void; label?: string; defaultLevel?: number }) {
+  const [level, setLevel] = useState(defaultLevel);
   const dec = () => { if (level > 0) { const n = level - 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
   const inc = () => { if (level < 4) { const n = level + 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
   return (
