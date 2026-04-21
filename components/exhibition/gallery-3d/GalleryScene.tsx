@@ -279,7 +279,9 @@ export default function GalleryScene({
         <View
           style={StyleSheet.absoluteFill}
           onStartShouldSetResponder={() => true}
+          onMoveShouldSetResponder={() => true}
           onResponderGrant={controls.onTouchStart}
+          onResponderMove={controls.onTouchMove}
           onResponderRelease={controls.onTouchEnd}
         />
         {/* Minimap overlay */}

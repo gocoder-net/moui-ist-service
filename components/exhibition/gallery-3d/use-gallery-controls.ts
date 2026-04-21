@@ -24,18 +24,33 @@ export default function useGalleryControls({
   const speedMultRef = useRef(1);
   const autoNavRef = useRef<{ targetYaw: number; targetX: number; targetZ: number } | null>(null);
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
+  const isDraggingRef = useRef(false);
 
-  /* ── Canvas tap for artwork selection ── */
+  /* ── Canvas touch: drag to look + tap for artwork ── */
   const onTouchStart = useCallback((e: GestureResponderEvent) => {
     const { pageX, pageY } = e.nativeEvent;
     touchStartRef.current = { x: pageX, y: pageY, time: Date.now() };
+    isDraggingRef.current = false;
+  }, []);
+
+  const onTouchMove = useCallback((e: GestureResponderEvent) => {
+    const { pageX, pageY } = e.nativeEvent;
+    const dx = pageX - touchStartRef.current.x;
+    const dy = pageY - touchStartRef.current.y;
+
+    if (!isDraggingRef.current && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+      isDraggingRef.current = true;
+    }
+
+    if (isDraggingRef.current) {
+      yawRef.current -= dx * 0.004;
+      pitchRef.current = clamp(pitchRef.current - dy * 0.004, -Math.PI / 3, Math.PI / 3);
+      touchStartRef.current = { ...touchStartRef.current, x: pageX, y: pageY };
+    }
   }, []);
 
   const onTouchEnd = useCallback((e: GestureResponderEvent) => {
-    const { pageX, pageY } = e.nativeEvent;
-    const dx = Math.abs(pageX - touchStartRef.current.x);
-    const dy = Math.abs(pageY - touchStartRef.current.y);
-    if (dx < 10 && dy < 10 && Date.now() - touchStartRef.current.time < 300) {
+    if (!isDraggingRef.current && Date.now() - touchStartRef.current.time < 300) {
       const { locationX, locationY } = e.nativeEvent;
       const { width, height } = canvasSize.current;
       if (width > 0 && height > 0 && cameraRef.current) {
@@ -153,6 +168,7 @@ export default function useGalleryControls({
 
   return {
     onTouchStart,
+    onTouchMove,
     onTouchEnd,
     setJoystick,
     setLook,
