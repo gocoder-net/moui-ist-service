@@ -279,9 +279,7 @@ export default function GalleryScene({
         <View
           style={StyleSheet.absoluteFill}
           onStartShouldSetResponder={() => true}
-          onMoveShouldSetResponder={() => true}
           onResponderGrant={controls.onTouchStart}
-          onResponderMove={controls.onTouchMove}
           onResponderRelease={controls.onTouchEnd}
         />
         {/* Minimap overlay */}
@@ -322,13 +320,15 @@ export default function GalleryScene({
           <Text style={styles.dirSub}>작품 {artCountOnWall}점</Text>
 
           <View style={styles.hudBottom}>
-            <Joystick setJoystick={controls.setJoystick} />
-            <SpeedControl onChange={controls.setSpeedMult} />
+            <Joystick setJoystick={controls.setJoystick} label="이동" />
+            <View style={styles.hudCenter}>
+              <SpeedControl onChange={controls.setSpeedMult} />
+              <Pressable style={styles.exitBtn} onPress={onClose}>
+                <Text style={styles.exitText}>나가기</Text>
+              </Pressable>
+            </View>
+            <Joystick setJoystick={controls.setLook} label="시선" />
           </View>
-
-          <Pressable style={styles.exitBtn} onPress={onClose}>
-            <Text style={styles.exitText}>전시관 나가기</Text>
-          </Pressable>
         </View>
       )}
 
@@ -477,11 +477,11 @@ function DoorOverlay({ sceneReady, screenWidth, title }: {
 }
 
 /* ── Virtual Joystick ── */
-const JOYSTICK_SIZE = 120;
-const KNOB_SIZE = 44;
+const JOYSTICK_SIZE = 100;
+const KNOB_SIZE = 38;
 const MAX_R = (JOYSTICK_SIZE - KNOB_SIZE) / 2;
 
-function Joystick({ setJoystick }: { setJoystick: (x: number, y: number) => void }) {
+function Joystick({ setJoystick, label }: { setJoystick: (x: number, y: number) => void; label?: string }) {
   const [knobPos, setKnobPos] = useState({ x: 0, y: 0 });
   const baseRef = useRef<View>(null);
   const originRef = useRef({ x: 0, y: 0 });
@@ -563,25 +563,26 @@ function Joystick({ setJoystick }: { setJoystick: (x: number, y: number) => void
   }, []);
 
   return (
-    <View
-      ref={setRef}
-      onStartShouldSetResponder={() => true}
-      onMoveShouldSetResponder={() => true}
-      onResponderGrant={onStart}
-      onResponderMove={onMove}
-      onResponderRelease={onEnd}
-      onResponderTerminate={onEnd}
-      style={styles.joystickBase}
-    >
-      {/* Direction hints */}
-      <Text style={[styles.joystickHint, { top: 4 }]}>▲</Text>
-      <Text style={[styles.joystickHint, { bottom: 4 }]}>▼</Text>
-      <Text style={[styles.joystickHint, { left: 6 }]}>◀</Text>
-      <Text style={[styles.joystickHint, { right: 6 }]}>▶</Text>
-      {/* Knob */}
-      <View style={[styles.joystickKnob, {
-        transform: [{ translateX: knobPos.x }, { translateY: knobPos.y }],
-      }]} />
+    <View style={styles.joystickWrap}>
+      <View
+        ref={setRef}
+        onStartShouldSetResponder={() => true}
+        onMoveShouldSetResponder={() => true}
+        onResponderGrant={onStart}
+        onResponderMove={onMove}
+        onResponderRelease={onEnd}
+        onResponderTerminate={onEnd}
+        style={styles.joystickBase}
+      >
+        <Text style={[styles.joystickHint, { top: 3 }]}>▲</Text>
+        <Text style={[styles.joystickHint, { bottom: 3 }]}>▼</Text>
+        <Text style={[styles.joystickHint, { left: 5 }]}>◀</Text>
+        <Text style={[styles.joystickHint, { right: 5 }]}>▶</Text>
+        <View style={[styles.joystickKnob, {
+          transform: [{ translateX: knobPos.x }, { translateY: knobPos.y }],
+        }]} />
+      </View>
+      {label && <Text style={styles.joystickLabel}>{label}</Text>}
     </View>
   );
 }
@@ -635,14 +636,15 @@ const styles = StyleSheet.create({
   dirLabel: { color: C.fg, fontSize: 14, fontWeight: '800', letterSpacing: 1 },
   dirSub: { color: C.muted, fontSize: 10 },
 
-  hudBottom: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 4 },
+  hudBottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 4 },
+  hudCenter: { alignItems: 'center', gap: 6 },
 
+  joystickWrap: { alignItems: 'center', gap: 2 },
   joystickBase: {
     width: JOYSTICK_SIZE, height: JOYSTICK_SIZE, borderRadius: JOYSTICK_SIZE / 2,
     borderWidth: 1.5, borderColor: C.border,
     backgroundColor: 'rgba(255,255,255,0.04)',
     justifyContent: 'center', alignItems: 'center',
-    marginTop: 4,
   },
   joystickKnob: {
     width: KNOB_SIZE, height: KNOB_SIZE, borderRadius: KNOB_SIZE / 2,
@@ -650,24 +652,25 @@ const styles = StyleSheet.create({
     borderWidth: 2, borderColor: C.gold,
   },
   joystickHint: {
-    position: 'absolute', fontSize: 8, color: 'rgba(255,255,255,0.15)',
+    position: 'absolute', fontSize: 7, color: 'rgba(255,255,255,0.15)',
   },
+  joystickLabel: { fontSize: 8, color: C.muted, letterSpacing: 1 },
 
   speedPanel: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: 'rgba(255,255,255,0.04)',
-    borderWidth: 1, borderColor: C.border, borderRadius: 20,
-    paddingHorizontal: 4, paddingVertical: 2,
+    borderWidth: 1, borderColor: C.border, borderRadius: 14,
+    paddingHorizontal: 2, paddingVertical: 1,
   },
   speedPm: {
-    width: 28, height: 28, borderRadius: 14,
+    width: 22, height: 22, borderRadius: 11,
     justifyContent: 'center', alignItems: 'center',
   },
-  speedPmText: { fontSize: 18, color: C.muted, fontWeight: '600' },
-  speedLevel: { fontSize: 14, color: C.gold, fontWeight: '800', minWidth: 14, textAlign: 'center' },
+  speedPmText: { fontSize: 14, color: C.muted, fontWeight: '600' },
+  speedLevel: { fontSize: 11, color: C.gold, fontWeight: '800', minWidth: 12, textAlign: 'center' },
 
-  exitBtn: { marginTop: 4 },
-  exitText: { color: C.mutedDark, fontSize: 11 },
+  exitBtn: { marginTop: 2 },
+  exitText: { color: C.mutedDark, fontSize: 10 },
 
   // Minimap
   minimapWrap: {

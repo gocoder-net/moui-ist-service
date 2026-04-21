@@ -19,37 +19,23 @@ export default function useGalleryControls({
   const pitchRef = useRef(0);
   // Analog joystick input: x = left/right (-1..1), y = forward/backward (-1..1)
   const joystickRef = useRef({ x: 0, y: 0 });
-  const speedMultRef = useRef(1);       // 0.5 / 1 / 2
+  // Look joystick input: x = yaw, y = pitch (-1..1)
+  const lookRef = useRef({ x: 0, y: 0 });
+  const speedMultRef = useRef(1);
   const autoNavRef = useRef<{ targetYaw: number; targetX: number; targetZ: number } | null>(null);
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
-  const isDraggingRef = useRef(false);
 
-  /* ── Gesture overlay responder callbacks ── */
+  /* ── Canvas tap for artwork selection ── */
   const onTouchStart = useCallback((e: GestureResponderEvent) => {
     const { pageX, pageY } = e.nativeEvent;
     touchStartRef.current = { x: pageX, y: pageY, time: Date.now() };
-    isDraggingRef.current = false;
-  }, []);
-
-  const onTouchMove = useCallback((e: GestureResponderEvent) => {
-    const { pageX, pageY } = e.nativeEvent;
-    const dx = pageX - touchStartRef.current.x;
-    const dy = pageY - touchStartRef.current.y;
-
-    if (!isDraggingRef.current && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
-      isDraggingRef.current = true;
-    }
-
-    if (isDraggingRef.current) {
-      yawRef.current -= dx * 0.004;
-      pitchRef.current = clamp(pitchRef.current - dy * 0.004, -Math.PI / 3, Math.PI / 3);
-      touchStartRef.current = { ...touchStartRef.current, x: pageX, y: pageY };
-    }
   }, []);
 
   const onTouchEnd = useCallback((e: GestureResponderEvent) => {
-    if (!isDraggingRef.current && Date.now() - touchStartRef.current.time < 300) {
-      // Short tap → raycast for artwork selection
+    const { pageX, pageY } = e.nativeEvent;
+    const dx = Math.abs(pageX - touchStartRef.current.x);
+    const dy = Math.abs(pageY - touchStartRef.current.y);
+    if (dx < 10 && dy < 10 && Date.now() - touchStartRef.current.time < 300) {
       const { locationX, locationY } = e.nativeEvent;
       const { width, height } = canvasSize.current;
       if (width > 0 && height > 0 && cameraRef.current) {
@@ -67,9 +53,14 @@ export default function useGalleryControls({
     }
   }, [onArtworkTap]);
 
-  /* ── Joystick input ── */
+  /* ── Joystick input (movement) ── */
   const setJoystick = useCallback((x: number, y: number) => {
     joystickRef.current = { x, y };
+  }, []);
+
+  /* ── Look joystick input (camera rotation) ── */
+  const setLook = useCallback((x: number, y: number) => {
+    lookRef.current = { x, y };
   }, []);
 
   /* ── Speed control ── */
@@ -124,16 +115,24 @@ export default function useGalleryControls({
       }
     }
 
-    // Joystick movement
+    // Look joystick → yaw/pitch
+    const { x: lx, y: ly } = lookRef.current;
+    const lookMag = Math.sqrt(lx * lx + ly * ly);
+    if (lookMag > 0.05) {
+      autoNavRef.current = null;
+      yawRef.current -= lx * 0.04;
+      pitchRef.current = clamp(pitchRef.current - ly * 0.03, -Math.PI / 3, Math.PI / 3);
+    }
+
+    // Movement joystick
     const maxSpeed = 0.06 * speedMultRef.current;
     const { x: jx, y: jy } = joystickRef.current;
     const mag = Math.min(Math.sqrt(jx * jx + jy * jy), 1);
     if (mag > 0.05) {
-      autoNavRef.current = null; // cancel auto-nav on manual input
+      autoNavRef.current = null;
       const speed = maxSpeed * mag;
       const sinY = Math.sin(yawRef.current);
       const cosY = Math.cos(yawRef.current);
-      // jy negative = stick up = forward, jx positive = stick right
       camera.position.x += (jy * sinY + jx * cosY) * speed;
       camera.position.z += (jy * cosY - jx * sinY) * speed;
     }
@@ -154,9 +153,9 @@ export default function useGalleryControls({
 
   return {
     onTouchStart,
-    onTouchMove,
     onTouchEnd,
     setJoystick,
+    setLook,
     setSpeedMult,
     navigateToWall,
     updateCamera,
