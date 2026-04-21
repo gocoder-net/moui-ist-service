@@ -1,10 +1,13 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Pressable,
   ActivityIndicator,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/auth-context';
@@ -256,8 +259,12 @@ export default function OnboardingScreen() {
   const insets = useSafeAreaInsets();
   const { user, refreshProfile } = useAuth();
   const router = useRouter();
+  const [step, setStep] = useState<1 | 2>(1);
   const [selected, setSelected] = useState<UserType | null>(null);
+  const [displayName, setDisplayName] = useState('');
+  const [realName, setRealName] = useState('');
   const [loading, setLoading] = useState(false);
+  const realNameRef = useRef<TextInput>(null);
 
   // 버튼 펄스
   const btnGlow = useSharedValue(0);
@@ -272,20 +279,26 @@ export default function OnboardingScreen() {
     );
   }, []);
 
+  const canProceed = step === 1 ? !!selected : !!displayName.trim();
+
   const btnGlowStyle = useAnimatedStyle(() => ({
-    shadowOpacity: selected ? 0.15 + btnGlow.value * 0.15 : 0,
+    shadowOpacity: 0.15 + btnGlow.value * 0.15,
     shadowRadius: 12 + btnGlow.value * 8,
   }));
 
-  const handleComplete = async () => {
-    if (!selected || !user) return;
+  const handleNext = () => {
+    if (step === 1 && selected) setStep(2);
+  };
 
+  const handleComplete = async () => {
+    if (!displayName.trim() || !selected || !user) return;
     setLoading(true);
     await supabase
       .from('profiles')
       .update({
         user_type: selected,
-        name: user.email?.split('@')[0] ?? 'User',
+        name: displayName.trim(),
+        real_name: realName.trim() || null,
       })
       .eq('id', user.id);
 
@@ -295,6 +308,10 @@ export default function OnboardingScreen() {
   };
 
   return (
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+    >
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {/* 배경 떠다니는 도형들 */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -323,49 +340,115 @@ export default function OnboardingScreen() {
         </Text>
       </Animated.View>
 
-      {/* 헤더 */}
-      <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.header}>
-        <PlayfulDiamond />
-        <Text style={styles.title}>어떤 활동을 하고 싶으세요?</Text>
-        <Text style={styles.subtitle}>나중에 언제든 변경할 수 있어요</Text>
-        <View style={styles.headerLine} />
-      </Animated.View>
-
-      {/* 선택 카드 */}
-      <View style={styles.cards}>
-        <SelectionCard
-          emoji="🎨"
-          title="작가"
-          desc="작품을 올리고 감상자와 소통해요"
-          selected={selected === 'creator'}
-          onPress={() => setSelected('creator')}
-          delay={400}
-        />
-        <SelectionCard
-          emoji="✏️"
-          title="지망생"
-          desc="창작을 배우고 성장해 나가요"
-          selected={selected === 'aspiring'}
-          onPress={() => setSelected('aspiring')}
-          delay={500}
-        />
-        <SelectionCard
-          emoji="👀"
-          title="감상자"
-          desc="작품을 감상하고 작가를 응원해요"
-          selected={selected === 'audience'}
-          onPress={() => setSelected('audience')}
-          delay={600}
-        />
+      {/* Step indicator */}
+      <View style={styles.stepRow}>
+        <View style={[styles.stepDot, styles.stepDotActive]} />
+        <View style={[styles.stepLine, step === 2 && styles.stepLineActive]} />
+        <View style={[styles.stepDot, step === 2 && styles.stepDotActive]} />
       </View>
 
-      {/* 완료 버튼 */}
-      <Animated.View entering={FadeInDown.delay(700).duration(400).springify()} style={styles.bottom}>
-        <Pressable onPress={handleComplete} disabled={!selected || loading}>
+      {step === 1 ? (
+        <>
+          {/* 헤더 */}
+          <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.header}>
+            <PlayfulDiamond />
+            <Text style={styles.title}>어떤 활동을 하고 싶으세요?</Text>
+            <Text style={styles.subtitle}>나중에 언제든 변경할 수 있어요</Text>
+            <View style={styles.headerLine} />
+          </Animated.View>
+
+          {/* 선택 카드 */}
+          <View style={styles.cards}>
+            <SelectionCard
+              emoji="🎨"
+              title="작가"
+              desc="작품을 올리고 감상자와 소통해요"
+              selected={selected === 'creator'}
+              onPress={() => setSelected('creator')}
+              delay={400}
+            />
+            <SelectionCard
+              emoji="✏️"
+              title="지망생"
+              desc="창작을 배우고 성장해 나가요"
+              selected={selected === 'aspiring'}
+              onPress={() => setSelected('aspiring')}
+              delay={500}
+            />
+            <SelectionCard
+              emoji="👀"
+              title="감상자"
+              desc="작품을 감상하고 작가를 응원해요"
+              selected={selected === 'audience'}
+              onPress={() => setSelected('audience')}
+              delay={600}
+            />
+          </View>
+        </>
+      ) : (
+        <>
+          {/* Step 2: 이름 입력 */}
+          <Animated.View entering={FadeInDown.duration(400).springify()} style={styles.header}>
+            <PlayfulDiamond />
+            <Text style={styles.title}>이름을 알려주세요</Text>
+            <Text style={styles.subtitle}>활동명은 프로필에 표시돼요</Text>
+            <View style={styles.headerLine} />
+          </Animated.View>
+
+          <Animated.View entering={FadeInDown.delay(150).duration(400).springify()} style={styles.nameForm}>
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>활동명 <Text style={{ color: C.gold }}>*</Text></Text>
+              <TextInput
+                style={styles.textInput}
+                placeholder="모의스트에서 사용할 이름"
+                placeholderTextColor={C.mutedLight}
+                value={displayName}
+                onChangeText={setDisplayName}
+                returnKeyType="next"
+                onSubmitEditing={() => realNameRef.current?.focus()}
+                autoFocus
+                maxLength={30}
+              />
+              <Text style={styles.inputHint}>다른 사용자에게 보이는 이름이에요</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>본명 <Text style={styles.inputOptional}>(선택)</Text></Text>
+              <TextInput
+                ref={realNameRef}
+                style={styles.textInput}
+                placeholder="실명 (비공개)"
+                placeholderTextColor={C.mutedLight}
+                value={realName}
+                onChangeText={setRealName}
+                returnKeyType="done"
+                onSubmitEditing={handleComplete}
+                maxLength={30}
+              />
+              <Text style={styles.inputHint}>외부에 공개되지 않아요</Text>
+            </View>
+          </Animated.View>
+
+          <View style={{ flex: 1 }} />
+        </>
+      )}
+
+      {/* 하단 버튼 */}
+      <View style={styles.bottom}>
+        {step === 2 && (
+          <Pressable onPress={() => setStep(1)} style={styles.backBtn}>
+            <Text style={styles.backBtnText}>← 이전</Text>
+          </Pressable>
+        )}
+
+        <Pressable
+          onPress={step === 1 ? handleNext : handleComplete}
+          disabled={!canProceed || loading}
+        >
           <Animated.View
             style={[
               styles.btnMain,
-              !selected && styles.btnDisabled,
+              !canProceed && styles.btnDisabled,
               btnGlowStyle,
             ]}
           >
@@ -373,19 +456,20 @@ export default function OnboardingScreen() {
               <ActivityIndicator color={C.white} size="small" />
             ) : null}
             <Text style={styles.btnMainText}>
-              {loading ? '설정 중...' : '시작하기'}
+              {loading ? '설정 중...' : step === 1 ? '다음' : '시작하기'}
             </Text>
-            {!loading && selected && <Text style={styles.btnArrow}>→</Text>}
+            {!loading && canProceed && <Text style={styles.btnArrow}>→</Text>}
           </Animated.View>
         </Pressable>
 
-        <Animated.View entering={FadeIn.delay(800).duration(300)} style={styles.footerDivider}>
+        <View style={styles.footerDivider}>
           <View style={styles.footerLine} />
           <View style={styles.footerDiamond} />
           <View style={styles.footerLine} />
-        </Animated.View>
-      </Animated.View>
+        </View>
+      </View>
     </View>
+    </KeyboardAvoidingView>
   );
 }
 
@@ -537,5 +621,75 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.gold,
     transform: [{ rotate: '45deg' }],
+  },
+
+  // Step indicator
+  stepRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 0,
+    marginTop: 16,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: C.border,
+  },
+  stepDotActive: {
+    backgroundColor: C.gold,
+  },
+  stepLine: {
+    width: 32,
+    height: 1.5,
+    backgroundColor: C.border,
+  },
+  stepLineActive: {
+    backgroundColor: C.gold,
+  },
+
+  // Name form (Step 2)
+  nameForm: {
+    gap: 24,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.fg,
+    letterSpacing: 0.5,
+  },
+  inputOptional: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: C.muted,
+  },
+  textInput: {
+    backgroundColor: C.inputBg,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    color: C.fg,
+  },
+  inputHint: {
+    fontSize: 11,
+    color: C.muted,
+    marginLeft: 4,
+  },
+
+  backBtn: {
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  backBtnText: {
+    fontSize: 13,
+    color: C.muted,
+    letterSpacing: 1,
   },
 });

@@ -587,27 +587,21 @@ function Joystick({ setJoystick }: { setJoystick: (x: number, y: number) => void
 }
 
 /* ── Speed Control ── */
-const SPEED_OPTS: { label: string; icon: string; mult: number }[] = [
-  { label: '느리게', icon: '🐢', mult: 0.4 },
-  { label: '보통',   icon: '🚶', mult: 1 },
-  { label: '빠르게', icon: '🏃', mult: 2.2 },
-];
+const SPEED_MULTS = [0.2, 0.5, 1, 1.8, 3];
 
 function SpeedControl({ onChange }: { onChange: (m: number) => void }) {
-  const [idx, setIdx] = useState(1);
+  const [level, setLevel] = useState(2); // 0-4, default 2 (= speed 3)
+  const dec = () => { if (level > 0) { const n = level - 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
+  const inc = () => { if (level < 4) { const n = level + 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
   return (
     <View style={styles.speedPanel}>
-      <Text style={styles.speedTitle}>이동속도</Text>
-      {SPEED_OPTS.map((opt, i) => (
-        <Pressable
-          key={i}
-          style={[styles.speedBtn, i === idx && styles.speedBtnActive]}
-          onPress={() => { setIdx(i); onChange(opt.mult); }}
-        >
-          <Text style={styles.speedIcon}>{opt.icon}</Text>
-          <Text style={[styles.speedLabel, i === idx && { color: C.gold }]}>{opt.label}</Text>
-        </Pressable>
-      ))}
+      <Pressable onPress={dec} style={[styles.speedPm, level === 0 && { opacity: 0.25 }]}>
+        <Text style={styles.speedPmText}>−</Text>
+      </Pressable>
+      <Text style={styles.speedLevel}>{level + 1}</Text>
+      <Pressable onPress={inc} style={[styles.speedPm, level === 4 && { opacity: 0.25 }]}>
+        <Text style={styles.speedPmText}>+</Text>
+      </Pressable>
     </View>
   );
 }
@@ -659,17 +653,18 @@ const styles = StyleSheet.create({
     position: 'absolute', fontSize: 8, color: 'rgba(255,255,255,0.15)',
   },
 
-  speedPanel: { alignItems: 'center', gap: 6 },
-  speedTitle: { fontSize: 9, color: C.muted, letterSpacing: 1 },
-  speedBtn: {
-    width: 52, height: 36, borderRadius: 8,
-    borderWidth: 1, borderColor: C.border,
-    justifyContent: 'center', alignItems: 'center',
+  speedPanel: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1, borderColor: C.border, borderRadius: 20,
+    paddingHorizontal: 4, paddingVertical: 2,
   },
-  speedBtnActive: { borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.12)' },
-  speedIcon: { fontSize: 14, lineHeight: 18 },
-  speedLabel: { fontSize: 7, color: C.muted },
+  speedPm: {
+    width: 28, height: 28, borderRadius: 14,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  speedPmText: { fontSize: 18, color: C.muted, fontWeight: '600' },
+  speedLevel: { fontSize: 14, color: C.gold, fontWeight: '800', minWidth: 14, textAlign: 'center' },
 
   exitBtn: { marginTop: 4 },
   exitText: { color: C.mutedDark, fontSize: 11 },
