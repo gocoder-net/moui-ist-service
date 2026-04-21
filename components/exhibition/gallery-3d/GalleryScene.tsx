@@ -325,12 +325,14 @@ export default function GalleryScene({
             <Joystick setJoystick={controls.setJoystick} label="이동" />
             <View style={styles.hudCenter}>
               <SpeedControl onChange={controls.setSpeedMult} />
-              <Pressable style={styles.exitBtn} onPress={onClose}>
-                <Text style={styles.exitText}>나가기</Text>
-              </Pressable>
             </View>
             <Joystick setJoystick={controls.setLook} label="시선" />
           </View>
+
+          <Pressable style={styles.exitBtn} onPress={onClose}>
+            <Text style={styles.exitIcon}>🚪</Text>
+            <Text style={styles.exitText}>나가기</Text>
+          </Pressable>
         </View>
       )}
 
@@ -597,14 +599,17 @@ function SpeedControl({ onChange }: { onChange: (m: number) => void }) {
   const dec = () => { if (level > 0) { const n = level - 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
   const inc = () => { if (level < 4) { const n = level + 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
   return (
-    <View style={styles.speedPanel}>
-      <Pressable onPress={dec} style={[styles.speedPm, level === 0 && { opacity: 0.25 }]}>
-        <Text style={styles.speedPmText}>−</Text>
-      </Pressable>
-      <Text style={styles.speedLevel}>{level + 1}</Text>
-      <Pressable onPress={inc} style={[styles.speedPm, level === 4 && { opacity: 0.25 }]}>
-        <Text style={styles.speedPmText}>+</Text>
-      </Pressable>
+    <View style={styles.speedWrap}>
+      <View style={styles.speedPanel}>
+        <Pressable onPress={dec} style={[styles.speedPm, level === 0 && { opacity: 0.25 }]}>
+          <Text style={styles.speedPmText}>−</Text>
+        </Pressable>
+        <Text style={styles.speedLevel}>{level + 1}</Text>
+        <Pressable onPress={inc} style={[styles.speedPm, level === 4 && { opacity: 0.25 }]}>
+          <Text style={styles.speedPmText}>+</Text>
+        </Pressable>
+      </View>
+      <Text style={styles.speedLabel}>이동속도</Text>
     </View>
   );
 }
@@ -658,6 +663,7 @@ const styles = StyleSheet.create({
   },
   joystickLabel: { fontSize: 8, color: C.muted, letterSpacing: 1 },
 
+  speedWrap: { alignItems: 'center', gap: 2 },
   speedPanel: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     backgroundColor: 'rgba(255,255,255,0.04)',
@@ -670,8 +676,15 @@ const styles = StyleSheet.create({
   },
   speedPmText: { fontSize: 14, color: C.muted, fontWeight: '600' },
   speedLevel: { fontSize: 11, color: C.gold, fontWeight: '800', minWidth: 12, textAlign: 'center' },
+  speedLabel: { fontSize: 8, color: C.muted, letterSpacing: 1 },
 
-  exitBtn: { marginTop: 2 },
+  exitBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    marginTop: 6, paddingVertical: 6, paddingHorizontal: 14,
+    borderRadius: 12, borderWidth: 1, borderColor: C.border,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  exitIcon: { fontSize: 12 },
   exitText: { color: C.mutedDark, fontSize: 10 },
 
   // Minimap
