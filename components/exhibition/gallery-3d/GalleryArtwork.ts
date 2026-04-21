@@ -23,10 +23,16 @@ async function loadTexture(url: string): Promise<THREE.Texture> {
       );
     });
   }
-  // Native: use expo-three
+  // Native: download image first, then load as texture
+  // (expo-three loadAsync with raw URL fails on Android APK)
+  const { Asset } = require('expo-asset');
+  const asset = Asset.fromURI(url);
+  await asset.downloadAsync();
+
   const ExpoTHREE = require('expo-three');
-  const tex: THREE.Texture = await ExpoTHREE.loadAsync(url);
+  const tex: THREE.Texture = await ExpoTHREE.loadAsync(asset);
   tex.colorSpace = THREE.SRGBColorSpace;
+  tex.needsUpdate = true;
   return tex;
 }
 

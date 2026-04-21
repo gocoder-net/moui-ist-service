@@ -196,6 +196,125 @@ function getTouchDistance(touches: any[]): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
+/* ── 코너 리사이즈 핸들 ── */
+type Corner = 'TL' | 'TR' | 'BL' | 'BR';
+
+const CORNER_POS: Record<Corner, object> = {
+  TL: { top: -7, left: -7 },
+  TR: { top: -7, right: -7 },
+  BL: { bottom: -7, left: -7 },
+  BR: { bottom: -7, right: -7 },
+};
+const CORNER_SIGN: Record<Corner, { x: number; y: number }> = {
+  TL: { x: -1, y: -1 }, TR: { x: 1, y: -1 },
+  BL: { x: -1, y: 1 },  BR: { x: 1, y: 1 },
+};
+const CORNER_CURSOR: Record<Corner, string> = {
+  TL: 'nwse-resize', TR: 'nesw-resize',
+  BL: 'nesw-resize',  BR: 'nwse-resize',
+};
+
+function ResizeHandle({ corner, artWidthPx, artHeightPx, artWidthCm, artHeightCm, setScaleOffset, setIsPinching, onResizeDone }: {
+  corner: Corner;
+  artWidthPx: number; artHeightPx: number;
+  artWidthCm: number; artHeightCm: number;
+  setScaleOffset: (s: number) => void;
+  setIsPinching: (v: boolean) => void;
+  onResizeDone: (widthCm: number, heightCm: number) => void;
+}) {
+  const handleElRef = useRef<any>(null);
+  const scaleRef = useRef(1);
+
+  const dimsRef = useRef({ artWidthPx, artHeightPx, artWidthCm, artHeightCm });
+  dimsRef.current = { artWidthPx, artHeightPx, artWidthCm, artHeightCm };
+  const cbRef = useRef({ setScaleOffset, setIsPinching, onResizeDone });
+  cbRef.current = { setScaleOffset, setIsPinching, onResizeDone };
+
+  const { x: sx, y: sy } = CORNER_SIGN[corner];
+
+  const computeScale = useCallback((dx: number, dy: number) => {
+    const d = dimsRef.current;
+    const origDist = Math.sqrt(d.artWidthPx ** 2 + d.artHeightPx ** 2);
+    const newDist = Math.sqrt((d.artWidthPx + sx * dx) ** 2 + (d.artHeightPx + sy * dy) ** 2);
+    return Math.max(0.3, Math.min(3, newDist / origDist));
+  }, [sx, sy]);
+
+  const finalize = useCallback(() => {
+    const s = scaleRef.current;
+    const d = dimsRef.current;
+    cbRef.current.setIsPinching(false);
+    cbRef.current.setScaleOffset(1);
+    scaleRef.current = 1;
+    const newW = Math.round(Math.max(10, Math.min(300, d.artWidthCm * s)));
+    const newH = Math.round(Math.max(10, Math.min(300, d.artHeightCm * s)));
+    cbRef.current.onResizeDone(newW, newH);
+  }, []);
+
+  // Web mouse drag
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const el = handleElRef.current;
+    if (!el) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      scaleRef.current = 1;
+      cbRef.current.setIsPinching(true);
+      const startX = e.clientX, startY = e.clientY;
+
+      const onMouseMove = (ev: MouseEvent) => {
+        const scale = computeScale(ev.clientX - startX, ev.clientY - startY);
+        scaleRef.current = scale;
+        cbRef.current.setScaleOffset(scale);
+      };
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        finalize();
+      };
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    };
+
+    el.addEventListener('mousedown', onMouseDown);
+    return () => el.removeEventListener('mousedown', onMouseDown);
+  }, [computeScale, finalize]);
+
+  // Native PanResponder
+  const panResponder = useMemo(() =>
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: () => {
+        scaleRef.current = 1;
+        cbRef.current.setIsPinching(true);
+      },
+      onPanResponderMove: (_, g) => {
+        const scale = computeScale(g.dx, g.dy);
+        scaleRef.current = scale;
+        cbRef.current.setScaleOffset(scale);
+      },
+      onPanResponderRelease: () => { setTimeout(finalize, 0); },
+    }),
+    [computeScale, finalize]
+  );
+
+  const setRef = useCallback((node: any) => { handleElRef.current = node; }, []);
+
+  return (
+    <View
+      ref={Platform.OS === 'web' ? setRef : undefined}
+      {...panResponder.panHandlers}
+      style={[
+        styles.resizeHandle, CORNER_POS[corner] as any,
+        // @ts-ignore - web cursor
+        Platform.OS === 'web' ? { cursor: CORNER_CURSOR[corner] } : {},
+      ]}
+    />
+  );
+}
+
 /* ── 드래그 + 핀치 가능한 작품 ── */
 function DraggableArtwork({
   art, wallLenCm, wallHCm, wallWidthPx, wallHeightPx,
@@ -395,6 +514,7 @@ function DraggableArtwork({
         shadowColor: '#000', shadowOffset: { width: 1, height: 3 },
         shadowOpacity: isDark ? 0.4 : 0.15, shadowRadius: (isDragging || isPinching) ? 8 : 4,
         zIndex: (isSelected || isDragging || isPinching) ? 10 : 1,
+        overflow: 'visible',
         opacity: isDragging ? 0.85 : 1,
         // @ts-ignore - web cursor
         ...(Platform.OS === 'web' ? { cursor: isDragging ? 'grabbing' : 'grab' } : {}),
@@ -402,6 +522,11 @@ function DraggableArtwork({
     >
       <Image source={{ uri: art.uri }}
         style={{ width: '100%', height: '100%' }} contentFit="cover" />
+      {isSelected && !isPinching && (['TL', 'TR', 'BL', 'BR'] as Corner[]).map(c => (
+        <ResizeHandle key={c} corner={c} artWidthPx={w} artHeightPx={h}
+          artWidthCm={art.widthCm} artHeightCm={art.heightCm}
+          setScaleOffset={setScaleOffset} setIsPinching={setIsPinching} onResizeDone={onResize} />
+      ))}
       {isDragging && (
         <View style={styles.dragLabel}>
           <Text style={styles.dragLabelText}>
@@ -436,5 +561,9 @@ const styles = StyleSheet.create({
   dragLabelText: {
     fontSize: 9, color: C.gold, fontWeight: '700',
     backgroundColor: 'rgba(0,0,0,0.7)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4,
+  },
+  resizeHandle: {
+    position: 'absolute', width: 14, height: 14, borderRadius: 7,
+    borderWidth: 2, borderColor: '#C8A96E', backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 20,
   },
 });

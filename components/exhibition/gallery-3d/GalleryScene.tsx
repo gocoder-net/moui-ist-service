@@ -1,6 +1,6 @@
 import { useRef, useCallback, useState, useMemo, useEffect } from 'react';
 import {
-  View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions, Platform,
+  View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions, Platform, PixelRatio,
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing,
@@ -136,7 +136,9 @@ export default function GalleryScene({
 
   const handleReady = useCallback((handle: CanvasHandle) => {
     handleRef.current = handle;
-    canvasSizeRef.current = { width: handle.width, height: handle.height };
+    // Native GL reports physical pixels; touch events use dp — normalize to dp
+    const pr = Platform.OS === 'web' ? 1 : PixelRatio.get();
+    canvasSizeRef.current = { width: handle.width / pr, height: handle.height / pr };
 
     const scene = sceneRef.current;
     const camera = cameraRef.current;
@@ -661,13 +663,17 @@ function Joystick({ setJoystick, label }: { setJoystick: (x: number, y: number) 
   };
 
   // Touch (mobile) handlers via responder
+  // Use locationX/Y (view-relative) to derive page-level center, avoiding
+  // measure() which can return wrong coordinates on Android APK.
   const onStart = useCallback((e: any) => {
-    const { pageX, pageY } = e.nativeEvent;
-    baseRef.current?.measure((_x, _y, _w, _h, px, py) => {
-      originRef.current = { x: px + JOYSTICK_SIZE / 2, y: py + JOYSTICK_SIZE / 2 };
-      activeRef.current = true;
-      emitJoystick(pageX - originRef.current.x, pageY - originRef.current.y);
-    });
+    const { pageX, pageY, locationX, locationY } = e.nativeEvent;
+    const lx = locationX ?? JOYSTICK_SIZE / 2;
+    const ly = locationY ?? JOYSTICK_SIZE / 2;
+    const offsetX = lx - JOYSTICK_SIZE / 2;
+    const offsetY = ly - JOYSTICK_SIZE / 2;
+    originRef.current = { x: pageX - offsetX, y: pageY - offsetY };
+    activeRef.current = true;
+    emitJoystick(offsetX, offsetY);
   }, []);
 
   const onMove = useCallback((e: any) => {
