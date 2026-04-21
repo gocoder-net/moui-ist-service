@@ -4,7 +4,6 @@ import {
 } from 'react-native';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing,
-  FadeInDown,
 } from 'react-native-reanimated';
 import * as THREE from 'three';
 import { Image } from 'expo-image';
@@ -54,10 +53,8 @@ export default function GalleryScene({
   const [currentDir, setCurrentDir] = useState<Wall>('north');
   const lastDirRef = useRef<Wall>('north');
 
-  // Intro animation state: 'foreword' → 'doors' → null
-  const [introPhase, setIntroPhase] = useState<'foreword' | 'doors' | null>(
-    (foreword || posterUrl) ? 'foreword' : 'doors'
-  );
+  // Intro: doors open → null
+  const [introPhase, setIntroPhase] = useState<'doors' | null>('doors');
   const [sceneReady, setSceneReady] = useState(false);
   const doorStartRef = useRef(0);
 
@@ -152,25 +149,14 @@ export default function GalleryScene({
     };
   }, []);
 
-  // When transitioning to 'doors' phase, start the door animation timer
+  // Start door animation when scene is ready
   useEffect(() => {
-    if (introPhase === 'doors' && sceneReady) {
+    if (sceneReady && introPhase === 'doors') {
       doorStartRef.current = Date.now();
       const timer = setTimeout(() => setIntroPhase(null), 3200);
       return () => clearTimeout(timer);
     }
-  }, [introPhase, sceneReady]);
-
-  // If no foreword/poster, start doors immediately when scene ready
-  useEffect(() => {
-    if (introPhase === 'doors' && sceneReady && doorStartRef.current === 0) {
-      doorStartRef.current = Date.now();
-    }
-  }, [sceneReady, introPhase]);
-
-  const handleEnterGallery = useCallback(() => {
-    setIntroPhase('doors');
-  }, []);
+  }, [sceneReady]);
 
   const artCountOnWall = useMemo(
     () => placements.filter((p) => p.wall === currentDir).length,
@@ -325,16 +311,6 @@ export default function GalleryScene({
         </View>
       )}
 
-      {/* Foreword overlay */}
-      {introPhase === 'foreword' && (
-        <ForewordOverlay
-          title={title}
-          foreword={foreword}
-          posterUrl={posterUrl}
-          onEnter={handleEnterGallery}
-        />
-      )}
-
       {/* Door opening overlay */}
       {introPhase === 'doors' && (
         <DoorOverlay sceneReady={sceneReady} screenWidth={sw} title={title} />
@@ -440,60 +416,6 @@ function Minimap({ cameraRef, yawRef, dims, wallColors, placements }: {
         {/* Dot */}
         <View style={styles.minimapCamDot} />
       </View>
-    </View>
-  );
-}
-
-/* ── Foreword Overlay (poster + foreword scroll) ── */
-function ForewordOverlay({ title, foreword, posterUrl, onEnter }: {
-  title?: string; foreword?: string | null; posterUrl?: string | null;
-  onEnter: () => void;
-}) {
-  const { width: sw } = useWindowDimensions();
-  const posterW = sw - 80;
-
-  return (
-    <View style={styles.forewordRoot}>
-      <ScrollView
-        contentContainerStyle={styles.forewordScroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Poster image */}
-        {posterUrl && (
-          <Animated.View entering={FadeInDown.delay(200).duration(600)}>
-            <Image
-              source={{ uri: posterUrl }}
-              style={{ width: posterW, height: posterW * 1.4, borderRadius: 4 }}
-              contentFit="cover"
-              transition={300}
-            />
-          </Animated.View>
-        )}
-
-        {/* Title */}
-        <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.forewordTitleWrap}>
-          <View style={styles.forewordDiamond} />
-          <Text style={styles.forewordTitleText}>{title || '전시'}</Text>
-          <View style={styles.forewordTitleDivider} />
-        </Animated.View>
-
-        {/* Foreword text */}
-        {foreword && (
-          <Animated.View entering={FadeInDown.delay(600).duration(500)} style={styles.forewordTextBox}>
-            <Text style={styles.forewordLabel}>전시 서문</Text>
-            <View style={styles.forewordTextDivider} />
-            <Text style={styles.forewordBody}>{foreword}</Text>
-          </Animated.View>
-        )}
-
-        {/* Enter button */}
-        <Animated.View entering={FadeInDown.delay(800).duration(400)}>
-          <Pressable style={styles.forewordEnterBtn} onPress={onEnter}>
-            <Text style={styles.forewordEnterText}>전시관 입장</Text>
-            <Text style={styles.forewordEnterArrow}>→</Text>
-          </Pressable>
-        </Animated.View>
-      </ScrollView>
     </View>
   );
 }
@@ -778,41 +700,6 @@ const styles = StyleSheet.create({
     shadowColor: C.gold, shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8, shadowRadius: 4,
   },
-
-  // Foreword overlay
-  forewordRoot: {
-    ...StyleSheet.absoluteFillObject, zIndex: 110,
-    backgroundColor: C.bg,
-  },
-  forewordScroll: {
-    alignItems: 'center', paddingVertical: 60, paddingHorizontal: 32, gap: 28,
-  },
-  forewordTitleWrap: { alignItems: 'center', gap: 10 },
-  forewordDiamond: {
-    width: 10, height: 10, borderRadius: 2, backgroundColor: C.gold,
-    transform: [{ rotate: '45deg' }],
-  },
-  forewordTitleText: {
-    fontSize: 24, fontWeight: '800', color: C.fg, letterSpacing: 2, textAlign: 'center',
-  },
-  forewordTitleDivider: { width: 50, height: 1, backgroundColor: 'rgba(200,169,110,0.4)' },
-  forewordTextBox: {
-    width: '100%', gap: 10,
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1, borderColor: C.border,
-    borderRadius: 6, padding: 20,
-  },
-  forewordLabel: { fontSize: 10, color: C.gold, fontWeight: '700', letterSpacing: 3 },
-  forewordTextDivider: { width: 30, height: 1, backgroundColor: 'rgba(200,169,110,0.3)' },
-  forewordBody: { fontSize: 15, color: '#CCC', lineHeight: 26, letterSpacing: 0.5 },
-  forewordEnterBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingVertical: 16, paddingHorizontal: 40,
-    borderWidth: 1.5, borderColor: C.gold, borderRadius: 30,
-    marginTop: 12,
-  },
-  forewordEnterText: { fontSize: 15, fontWeight: '700', color: C.gold, letterSpacing: 2 },
-  forewordEnterArrow: { fontSize: 16, color: C.gold },
 
   // Intro overlay
   introOverlay: {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import {
   StyleSheet, View, Text, Pressable, ScrollView,
   useWindowDimensions, ActivityIndicator,
@@ -6,7 +6,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
-import Animated, { FadeIn, FadeInUp, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp, FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import Room3DView from '@/components/exhibition/Room3DView';
 import GalleryScene from '@/components/exhibition/gallery-3d/GalleryScene';
@@ -46,46 +46,165 @@ type Exhibition = {
   profiles: { name: string | null; username: string } | null;
 };
 
-/* ── 1. 입구 화면 (서문) ── */
-function EntranceView({ exhibition, onEnter }: { exhibition: Exhibition; onEnter: () => void }) {
+/** 서문 텍스트를 문장 단위로 분리 */
+function splitForeword(text: string): string[] {
+  // 줄바꿈이 충분히 있으면 그대로 사용
+  const byNewline = text.split('\n').filter((l) => l.trim());
+  if (byNewline.length >= 3) return byNewline;
+  // 문장 부호로 분리
+  const bySentence = text.split(/(?<=[.!?。])\s*/).filter((s) => s.trim());
+  if (bySentence.length >= 3) return bySentence;
+  // 약 40자 단위로 분리
+  const words = text.split(/\s+/);
+  const result: string[] = [];
+  let cur = '';
+  for (const w of words) {
+    if (cur.length + w.length > 40 && cur) { result.push(cur.trim()); cur = w; }
+    else cur += (cur ? ' ' : '') + w;
+  }
+  if (cur.trim()) result.push(cur.trim());
+  return result;
+}
+
+/* ── 노래방 스타일 서문 ── */
+const CHUNK_SIZE = 3;
+
+function KaraokeForeword({ text }: { text: string }) {
+  const lines = useMemo(() => splitForeword(text), [text]);
+  const totalChunks = Math.ceil(lines.length / CHUNK_SIZE);
+  const [chunkIdx, setChunkIdx] = useState(0);
+  const [showAll, setShowAll] = useState(false);
+  const touchStartX = useRef(0);
+
+  // 3초마다 자동 넘김
+  useEffect(() => {
+    if (showAll || totalChunks <= 1) return;
+    const timer = setTimeout(() => {
+      setChunkIdx((prev) => (prev + 1) % totalChunks);
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [chunkIdx, showAll, totalChunks]);
+
+  const goNext = () => setChunkIdx((prev) => Math.min(prev + 1, totalChunks - 1));
+  const goPrev = () => setChunkIdx((prev) => Math.max(prev - 1, 0));
+
+  if (showAll) {
+    return (
+      <Animated.View entering={FadeIn.duration(300)}>
+        <Text style={styles.forewordText}>{text}</Text>
+        <Pressable style={styles.showAllBtn} onPress={() => setShowAll(false)}>
+          <Text style={styles.showAllText}>접기</Text>
+        </Pressable>
+      </Animated.View>
+    );
+  }
+
+  const currentLines = lines.slice(chunkIdx * CHUNK_SIZE, chunkIdx * CHUNK_SIZE + CHUNK_SIZE);
+
   return (
-    <ScrollView contentContainerStyle={styles.entranceScroll}>
-      <Animated.View entering={FadeIn.delay(300).duration(600)} style={styles.entranceContent}>
-        {/* 전시 제목 */}
+    <View>
+      {/* 스와이프 영역 */}
+      <View
+        style={styles.karaokeWindow}
+        onStartShouldSetResponder={() => true}
+        onMoveShouldSetResponder={() => true}
+        onResponderGrant={(e) => { touchStartX.current = e.nativeEvent.pageX; }}
+        onResponderRelease={(e) => {
+          const dx = e.nativeEvent.pageX - touchStartX.current;
+          if (dx < -40) goNext();
+          else if (dx > 40) goPrev();
+        }}
+      >
+        {currentLines.map((line, i) => (
+          <Animated.Text
+            key={`${chunkIdx}-${i}`}
+            entering={FadeInUp.delay(i * 400).duration(500).springify()}
+            exiting={FadeOutUp.duration(300)}
+            style={styles.karaokeLine}
+          >
+            {line}
+          </Animated.Text>
+        ))}
+      </View>
+
+      {/* 프로그레스 + 전체보기 */}
+      <View style={styles.karaokeFooter}>
+        {totalChunks > 1 && (
+          <View style={styles.karaokeDots}>
+            {Array.from({ length: totalChunks }).map((_, i) => (
+              <Pressable key={i} onPress={() => setChunkIdx(i)}>
+                <View style={[styles.karaokeDot, i === chunkIdx && styles.karaokeDotActive]} />
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <Pressable style={styles.showAllBtn} onPress={() => setShowAll(true)}>
+          <Text style={styles.showAllText}>전체보기</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/* ── 1. 입구 화면 (서문 + 포스터) ── */
+function EntranceView({ exhibition, onEnter }: { exhibition: Exhibition; onEnter: () => void }) {
+  const { width: sw } = useWindowDimensions();
+  const posterW = sw - 80;
+  const hasForeword = !!exhibition.foreword?.trim();
+
+  return (
+    <ScrollView contentContainerStyle={styles.entranceScroll} showsVerticalScrollIndicator={false}>
+      {/* 전시 제목 */}
+      <Animated.View entering={FadeIn.delay(200).duration(600)} style={styles.entranceContent}>
         <View style={styles.entranceDiamond} />
         <Text style={styles.entranceTitle}>{exhibition.title}</Text>
         <View style={styles.entranceLine} />
         <Text style={styles.entranceAuthor}>
           {exhibition.profiles?.name || exhibition.profiles?.username || '작가'}
         </Text>
+      </Animated.View>
 
-        {exhibition.description && (
-          <Text style={styles.entranceDesc}>{exhibition.description}</Text>
-        )}
-
-        {/* 서문 */}
-        {exhibition.foreword && (
-          <Animated.View entering={FadeInUp.delay(600).duration(500)} style={styles.forewordBox}>
-            <Text style={styles.forewordLabel}>전시 서문</Text>
-            <View style={styles.forewordDivider} />
-            <Text style={styles.forewordText}>{exhibition.foreword}</Text>
-          </Animated.View>
-        )}
-
-        {/* 전시 정보 */}
-        <View style={styles.entranceInfo}>
-          <Text style={styles.entranceInfoText}>
-            {ROOM_SIZES[exhibition.room_type].ns / 100}m × {ROOM_SIZES[exhibition.room_type].ew / 100}m 전시 공간
-          </Text>
-        </View>
-
-        {/* 입장 버튼 */}
-        <Animated.View entering={FadeInUp.delay(800).duration(400)}>
-          <Pressable style={styles.enterBtn} onPress={onEnter}>
-            <Text style={styles.enterBtnText}>전시관 입장</Text>
-            <Text style={styles.enterBtnArrow}>→</Text>
-          </Pressable>
+      {/* 포스터 이미지 */}
+      {exhibition.poster_image_url && (
+        <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.posterWrap}>
+          <Image
+            source={{ uri: exhibition.poster_image_url }}
+            style={{ width: posterW, height: posterW * 1.4, borderRadius: 6 }}
+            contentFit="cover"
+            transition={300}
+          />
         </Animated.View>
+      )}
+
+      {/* 전시 설명 */}
+      {exhibition.description && (
+        <Animated.View entering={FadeInDown.delay(500).duration(500)}>
+          <Text style={styles.entranceDesc}>{exhibition.description}</Text>
+        </Animated.View>
+      )}
+
+      {/* 전시 정보 */}
+      <Animated.View entering={FadeInDown.delay(600).duration(400)} style={styles.entranceInfo}>
+        <Text style={styles.entranceInfoText}>
+          {ROOM_SIZES[exhibition.room_type].ns / 100}m × {ROOM_SIZES[exhibition.room_type].ew / 100}m 전시 공간
+        </Text>
+      </Animated.View>
+
+      {/* 서문 — 노래방 스타일 */}
+      {hasForeword && (
+        <Animated.View entering={FadeIn.delay(700).duration(500)} style={styles.forewordBox}>
+          <Text style={styles.forewordLabel}>전시 서문</Text>
+          <View style={styles.forewordDivider} />
+          <KaraokeForeword text={exhibition.foreword!} />
+        </Animated.View>
+      )}
+
+      {/* 입장 버튼 */}
+      <Animated.View entering={FadeInUp.delay(hasForeword ? 1000 : 800).duration(400)}>
+        <Pressable style={styles.enterBtn} onPress={onEnter}>
+          <Text style={styles.enterBtnText}>전시관 입장</Text>
+          <Text style={styles.enterBtnArrow}>→</Text>
+        </Pressable>
       </Animated.View>
     </ScrollView>
   );
@@ -431,8 +550,17 @@ const styles = StyleSheet.create({
   entranceTitle: { fontSize: 28, fontWeight: '900', color: C.fg, letterSpacing: 3, textAlign: 'center' },
   entranceLine: { width: 32, height: 1, backgroundColor: C.gold, marginVertical: 8 },
   entranceAuthor: { fontSize: 14, color: C.gold, fontWeight: '600', letterSpacing: 1 },
-  entranceDesc: { fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 20, marginTop: 8 },
+  entranceDesc: { fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 20, marginTop: 8, paddingHorizontal: 8 },
+  posterWrap: { alignItems: 'center', marginTop: 16 },
   forewordBox: { width: '100%', borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 24, marginTop: 20, gap: 10 },
+  karaokeWindow: { minHeight: 90, justifyContent: 'center', gap: 8, marginVertical: 8 },
+  karaokeLine: { fontSize: 14, color: '#ddd', lineHeight: 24, textAlign: 'center' },
+  karaokeFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 8 },
+  karaokeDots: { flexDirection: 'row', gap: 6 },
+  karaokeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.border },
+  karaokeDotActive: { backgroundColor: C.gold, width: 16, borderRadius: 3 },
+  showAllBtn: { paddingVertical: 6, paddingHorizontal: 16, borderWidth: 1, borderColor: C.border, borderRadius: 12 },
+  showAllText: { fontSize: 10, color: C.gold, fontWeight: '600', letterSpacing: 1 },
   forewordLabel: { fontSize: 11, color: C.gold, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
   forewordDivider: { height: 1, backgroundColor: C.border },
   forewordText: { fontSize: 14, color: '#ccc', lineHeight: 24 },
