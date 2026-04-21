@@ -38,6 +38,7 @@ export type GallerySceneProps = {
   roomType: RoomType;
   wallColors: WallColors;
   floorColor: string;
+  ceilingColor: string;
   placements: Placement3D[];
   onClose: () => void;
 };

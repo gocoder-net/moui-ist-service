@@ -42,7 +42,7 @@ type Exhibition = {
   room_type: RoomType;
   wall_color_north: string; wall_color_south: string;
   wall_color_east: string; wall_color_west: string;
-  floor_color: string; user_id: string;
+  floor_color: string; ceiling_color: string; user_id: string;
   profiles: { name: string | null; username: string } | null;
 };
 
@@ -322,6 +322,7 @@ export default function ExhibitionViewer() {
             east: exhibition.wall_color_east, west: exhibition.wall_color_west,
           }}
           floorColor={exhibition.floor_color}
+          ceilingColor={exhibition.ceiling_color ?? '#F5F5F0'}
           placements={placements}
           onClose={() => setMode('entrance')}
         />

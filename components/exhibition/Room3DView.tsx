@@ -15,6 +15,7 @@ const C = {
 type Props = {
   roomType: RoomType;
   wallColors: Record<Wall, string>;
+  floorColor?: string;
   artworks: PlacedArtwork[];
   selectedWall: Wall | null;
   onWallSelect: (wall: Wall) => void;
@@ -28,7 +29,7 @@ type Props = {
  * 각 벽면에 작품 썸네일이 보이고, 벽을 터치하면 선택됨.
  */
 export default function Room3DView({
-  roomType, wallColors, artworks, selectedWall, onWallSelect,
+  roomType, wallColors, floorColor, artworks, selectedWall, onWallSelect,
   viewerMode, onArtworkSelect,
 }: Props) {
   const room = ROOM_TEMPLATES[roomType];
@@ -107,7 +108,7 @@ export default function Room3DView({
           </Pressable>
 
           {/* 바닥 (평면도) */}
-          <View style={[styles.floor, { width: floorW, height: floorH }]}>
+          <View style={[styles.floor, { width: floorW, height: floorH, backgroundColor: floorColor || '#F5F0E6' }]}>
             <Text style={styles.floorLabel}>{room.label}</Text>
             <Text style={styles.floorDim}>
               {(room.northSouth / 100)}m × {(room.eastWest / 100)}m

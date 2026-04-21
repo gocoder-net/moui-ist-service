@@ -11,6 +11,7 @@ export function buildRoom(
   dims: RoomDimensions,
   wallColors: WallColors,
   floorColor: string,
+  ceilingColor: string,
 ): void {
   const transforms = getWallTransforms(dims);
   const walls: Array<{ key: keyof typeof transforms; color: string }> = [
@@ -58,7 +59,7 @@ export function buildRoom(
     const t = transforms.ceiling;
     const geo = new THREE.PlaneGeometry(t.size[0], t.size[1]);
     const mat = new THREE.MeshStandardMaterial({
-      color: '#f5f5f0',
+      color: ceilingColor,
       side: THREE.FrontSide,
       roughness: 0.95,
       metalness: 0.0,

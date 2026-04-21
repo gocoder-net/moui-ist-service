@@ -41,6 +41,10 @@ export default function CreateExhibitionScreen() {
   const [wallColors, setWallColors] = useState<Record<Wall, string>>({
     north: '#F5F5F0', south: '#F5F5F0', east: '#F5F5F0', west: '#F5F5F0',
   });
+  const [floorColor, setFloorColor] = useState('#8B7355');
+  const [ceilingColor, setCeilingColor] = useState('#F5F5F0');
+  const [colorTarget, setColorTarget] = useState<'wall' | 'floor' | 'ceiling'>('wall');
+  const [customHex, setCustomHex] = useState('');
   const [selectedWall, setSelectedWall] = useState<Wall | null>(null);
   const [artworks, setArtworks] = useState<PlacedArtwork[]>([]);
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
@@ -151,6 +155,7 @@ export default function CreateExhibitionScreen() {
         room_type: roomType,
         wall_color_north: wallColors.north, wall_color_south: wallColors.south,
         wall_color_east: wallColors.east, wall_color_west: wallColors.west,
+        floor_color: floorColor, ceiling_color: ceilingColor,
         is_published: true,
       })
       .select('id').single();
@@ -280,34 +285,133 @@ export default function CreateExhibitionScreen() {
           </Animated.View>
         )}
 
-        {/* ── STEP 3: 벽면 색상 ── */}
-        {step === 3 && (
+        {/* ── STEP 3: 공간 색상 ── */}
+        {step === 3 && (() => {
+          const isHexValid = /^#[0-9A-Fa-f]{6}$/.test(customHex);
+
+          const activeColor = colorTarget === 'wall'
+            ? (selectedWall ? wallColors[selectedWall] : null)
+            : colorTarget === 'floor' ? floorColor : ceilingColor;
+
+          const applyColor = (color: string) => {
+            if (colorTarget === 'wall' && selectedWall) {
+              setWallColors(prev => ({ ...prev, [selectedWall]: color }));
+            } else if (colorTarget === 'floor') {
+              setFloorColor(color);
+            } else if (colorTarget === 'ceiling') {
+              setCeilingColor(color);
+            }
+          };
+
+          const applyAllWalls = (color: string) => {
+            setWallColors({ north: color, south: color, east: color, west: color });
+          };
+
+          const applyAllSurfaces = (color: string) => {
+            applyAllWalls(color);
+            setFloorColor(color);
+            setCeilingColor(color);
+          };
+
+          return (
           <Animated.View entering={FadeInDown.duration(400).springify()}>
-            <Text style={styles.title}>벽면 설정</Text>
-            <Text style={styles.sub}>3D 전시관을 돌려보고 벽을 선택해 색상을 변경하세요</Text>
+            <Text style={styles.title}>공간 색상</Text>
+            <Text style={styles.sub}>벽면, 바닥, 천장의 색상을 설정하세요</Text>
 
             <Room3DView
-              roomType={roomType} wallColors={wallColors} artworks={[]}
-              selectedWall={selectedWall}
-              onWallSelect={(w) => setSelectedWall(w)}
+              roomType={roomType} wallColors={wallColors} floorColor={floorColor} artworks={[]}
+              selectedWall={colorTarget === 'wall' ? selectedWall : null}
+              onWallSelect={(w) => { setColorTarget('wall'); setSelectedWall(w); }}
             />
 
-            {selectedWall && (
-              <Animated.View entering={FadeIn.duration(200)} style={{ marginTop: 16 }}>
+            {/* 세그먼트 탭 */}
+            <View style={styles.segmentRow}>
+              {([
+                { key: 'wall' as const, label: '벽면' },
+                { key: 'floor' as const, label: '바닥' },
+                { key: 'ceiling' as const, label: '천장' },
+              ]).map(({ key, label }) => (
+                <Pressable key={key}
+                  style={[styles.segmentBtn, colorTarget === key && styles.segmentBtnActive]}
+                  onPress={() => setColorTarget(key)}>
+                  <Text style={[styles.segmentText, colorTarget === key && styles.segmentTextActive]}>
+                    {label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* 타겟별 라벨 */}
+            {colorTarget === 'wall' && !selectedWall && (
+              <Text style={[styles.hint, { marginTop: 8 }]}>벽면을 터치해서 선택하세요</Text>
+            )}
+            {colorTarget === 'wall' && selectedWall && (
+              <View style={styles.colorLabelRow}>
                 <Text style={styles.label}>{WALL_LABELS[selectedWall]} 색상</Text>
+                <Pressable style={styles.applyAllBtn}
+                  onPress={() => applyAllWalls(wallColors[selectedWall])}>
+                  <Text style={styles.applyAllText}>전체 벽면 적용</Text>
+                </Pressable>
+              </View>
+            )}
+            {colorTarget === 'floor' && (
+              <Text style={[styles.label, { marginTop: 12 }]}>바닥 색상</Text>
+            )}
+            {colorTarget === 'ceiling' && (
+              <Text style={[styles.label, { marginTop: 12 }]}>천장 색상</Text>
+            )}
+
+            {/* 프리셋 컬러칩 (벽 미선택 시 wall 타겟이면 숨김) */}
+            {(colorTarget !== 'wall' || selectedWall) && (
+              <Animated.View entering={FadeIn.duration(200)}>
                 <View style={styles.colorRow}>
                   {WALL_COLORS.map(color => (
                     <Pressable key={color}
                       style={[styles.colorChip, { backgroundColor: color },
-                        wallColors[selectedWall] === color && styles.colorChipSel]}
-                      onPress={() => setWallColors(prev => ({ ...prev, [selectedWall]: color }))}>
-                      {wallColors[selectedWall] === color && (
+                        activeColor === color && styles.colorChipSel]}
+                      onPress={() => applyColor(color)}>
+                      {activeColor === color && (
                         <Text style={[styles.colorCheck,
                           ['#333333','#1B2A4A','#4A1B2A','#1B3A2A'].includes(color) && { color: '#fff' }]}>✓</Text>
                       )}
                     </Pressable>
                   ))}
                 </View>
+
+                {/* 커스텀 hex 입력 */}
+                <View style={styles.hexRow}>
+                  <Text style={styles.hexHash}>#</Text>
+                  <TextInput
+                    style={styles.hexInput}
+                    placeholder="FF5500"
+                    placeholderTextColor={C.mutedLight}
+                    value={customHex.replace('#', '')}
+                    onChangeText={(t) => {
+                      const clean = t.replace(/[^0-9A-Fa-f]/g, '').slice(0, 6);
+                      setCustomHex(`#${clean}`);
+                    }}
+                    maxLength={6}
+                    autoCapitalize="characters"
+                  />
+                  <View style={[styles.hexPreview, {
+                    backgroundColor: isHexValid ? customHex : '#DDD',
+                  }]} />
+                  <Pressable
+                    style={[styles.hexApplyBtn, !isHexValid && { opacity: 0.3 }]}
+                    disabled={!isHexValid}
+                    onPress={() => { if (isHexValid) applyColor(customHex); }}>
+                    <Text style={styles.hexApplyText}>적용</Text>
+                  </Pressable>
+                </View>
+
+                {/* 전체 공간 통일 */}
+                {activeColor && (
+                  <Pressable style={styles.unifyBtn}
+                    onPress={() => applyAllSurfaces(activeColor)}>
+                    <Text style={styles.unifyBtnText}>전체 공간 통일</Text>
+                    <Text style={styles.unifyBtnSub}>벽 4면 + 바닥 + 천장</Text>
+                  </Pressable>
+                )}
               </Animated.View>
             )}
 
@@ -315,7 +419,8 @@ export default function CreateExhibitionScreen() {
               <Text style={styles.nextBtnText}>다음: 작품 배치</Text><Text style={styles.nextBtnArrow}>→</Text>
             </Pressable>
           </Animated.View>
-        )}
+          );
+        })()}
 
         {/* ── STEP 4: 작품 배치 ── */}
         {step === 4 && (
@@ -331,7 +436,7 @@ export default function CreateExhibitionScreen() {
               <>
                 {/* 3D 룸 뷰 */}
                 <Room3DView
-                  roomType={roomType} wallColors={wallColors} artworks={artworks}
+                  roomType={roomType} wallColors={wallColors} floorColor={floorColor} artworks={artworks}
                   selectedWall={selectedWall}
                   onWallSelect={(w) => { setSelectedWall(w); setWallEditorOpen(w); }}
                 />
@@ -606,6 +711,27 @@ const styles = StyleSheet.create({
   colorChip: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, borderColor: 'transparent', justifyContent: 'center', alignItems: 'center' },
   colorChipSel: { borderColor: C.gold, borderWidth: 3 },
   colorCheck: { fontSize: 14, fontWeight: '800', color: C.fg },
+
+  segmentRow: { flexDirection: 'row', gap: 0, marginTop: 16, borderWidth: 1.5, borderColor: C.border, borderRadius: 12, overflow: 'hidden' },
+  segmentBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: C.inputBg },
+  segmentBtnActive: { backgroundColor: C.fg },
+  segmentText: { fontSize: 12, fontWeight: '700', color: C.muted, letterSpacing: 1 },
+  segmentTextActive: { color: C.white },
+
+  colorLabelRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, marginBottom: 0 },
+  applyAllBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.08)' },
+  applyAllText: { fontSize: 10, fontWeight: '700', color: C.gold, letterSpacing: 1 },
+
+  hexRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14 },
+  hexHash: { fontSize: 16, fontWeight: '700', color: C.muted },
+  hexInput: { flex: 1, borderWidth: 1.5, borderColor: C.border, borderRadius: 10, backgroundColor: C.inputBg, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: C.fg, fontWeight: '600', letterSpacing: 2 },
+  hexPreview: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: C.border },
+  hexApplyBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: C.fg },
+  hexApplyText: { fontSize: 12, fontWeight: '700', color: C.white },
+
+  unifyBtn: { marginTop: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: C.gold, alignItems: 'center', backgroundColor: 'rgba(200,169,110,0.06)' },
+  unifyBtnText: { fontSize: 13, fontWeight: '700', color: C.gold, letterSpacing: 1 },
+  unifyBtnSub: { fontSize: 9, color: C.muted, marginTop: 2 },
 
   artItem: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, borderWidth: 1, borderColor: C.border, borderRadius: 14, padding: 12, marginBottom: 10, backgroundColor: C.inputBg },
   artItemSel: { borderColor: C.gold },

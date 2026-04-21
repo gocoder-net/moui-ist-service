@@ -25,7 +25,7 @@ const DIR_LABELS: Record<Wall, string> = { north: 'N', east: 'E', south: 'S', we
 type ViewAngle = 'front' | 'top' | 'bottom' | 'left' | 'right';
 
 export default function GalleryScene({
-  roomType, wallColors, floorColor, placements, onClose
+  roomType, wallColors, floorColor, ceilingColor, placements, onClose
 }: GallerySceneProps) {
   const dims = useMemo(() => getRoomDimensions(roomType), [roomType]);
   const { width: sw } = useWindowDimensions();
@@ -80,7 +80,7 @@ export default function GalleryScene({
 
     scene.background = new THREE.Color(C.bg);
 
-    buildRoom(scene, dims, wallColors, floorColor);
+    buildRoom(scene, dims, wallColors, floorColor, ceilingColor);
     buildLighting(scene, placements, dims);
     buildArtworks(scene, placements, dims, wallColors).then((meshes) => {
       artworkMeshesRef.current = meshes;
@@ -100,7 +100,7 @@ export default function GalleryScene({
       handle.endFrame?.();
     };
     animate();
-  }, [dims, wallColors, floorColor, placements]);
+  }, [dims, wallColors, floorColor, ceilingColor, placements]);
 
   useEffect(() => {
     return () => {
