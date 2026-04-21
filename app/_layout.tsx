@@ -26,10 +26,11 @@ function RootNavigator() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[0] === '(onboarding)';
+    const inPublic = segments[0] === 'exhibition';
 
     if (!session) {
-      // 미인증 → auth 그룹으로
-      if (!inAuthGroup) {
+      // 공개 경로(전시관 뷰어)는 인증 없이 접근 허용
+      if (!inAuthGroup && !inPublic) {
         router.replace('/(auth)');
       }
     } else if (!profile?.user_type || profile.user_type === 'audience') {
@@ -135,6 +136,7 @@ function RootNavigator() {
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="(onboarding)" />
       <Stack.Screen name="(tabs)" />
+      <Stack.Screen name="exhibition/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
     </Stack>
   );
