@@ -15,7 +15,7 @@ import { buildArtworks } from './GalleryArtwork';
 import { buildLighting } from './GalleryLighting';
 import useGalleryControls from './use-gallery-controls';
 import { WALL_LABELS } from '../room-geometry';
-import type { GallerySceneProps, Placement3D, Wall } from './types';
+import type { GallerySceneProps, Placement3D, Wall, RoomDimensions } from './types';
 
 const C = {
   bg: '#0A0A0A', fg: '#FFFFFF', gold: '#C8A96E',
@@ -277,6 +277,19 @@ export default function GalleryScene({
           onResponderMove={controls.onTouchMove}
           onResponderRelease={controls.onTouchEnd}
         />
+        {/* Minimap overlay */}
+        {!introPhase && (
+          <View style={styles.minimapWrap} pointerEvents="none">
+            <Minimap
+              cameraRef={cameraRef}
+              yawRef={controls.yawRef}
+              dims={dims}
+              wallColors={{ north: wallColors.north, south: wallColors.south,
+                east: wallColors.east, west: wallColors.west }}
+              placements={placements}
+            />
+          </View>
+        )}
       </View>
 
       {/* HUD — hidden during intro */}
@@ -344,6 +357,90 @@ function AngleBtn({ k, icon, label, cur, has, set }: {
       <Text style={[styles.angleBtnIcon, active && { color: C.gold }]}>{icon}</Text>
       <Text style={[styles.angleBtnLabel, active && { color: C.gold }]}>{label}</Text>
     </Pressable>
+  );
+}
+
+/* ── Minimap ── */
+const MINIMAP_MAX = 100;
+const WALL_T = 4;
+
+function Minimap({ cameraRef, yawRef, dims, wallColors, placements }: {
+  cameraRef: React.MutableRefObject<THREE.PerspectiveCamera>;
+  yawRef: React.MutableRefObject<number>;
+  dims: RoomDimensions;
+  wallColors: Record<Wall, string>;
+  placements: Placement3D[];
+}) {
+  const [pos, setPos] = useState({ x: 0, z: 0, yaw: 0 });
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      const cam = cameraRef.current;
+      if (cam) setPos({ x: cam.position.x, z: cam.position.z, yaw: yawRef.current });
+    }, 50);
+    return () => clearInterval(id);
+  }, []);
+
+  const aspect = dims.widthM / dims.depthM;
+  const mapW = aspect >= 1 ? MINIMAP_MAX : MINIMAP_MAX * aspect;
+  const mapH = aspect >= 1 ? MINIMAP_MAX / aspect : MINIMAP_MAX;
+  const innerW = mapW - WALL_T * 2;
+  const innerH = mapH - WALL_T * 2;
+
+  // Camera position on minimap
+  const cx = (pos.x / dims.widthM + 0.5) * innerW + WALL_T;
+  const cy = (pos.z / dims.depthM + 0.5) * innerH + WALL_T;
+
+  // Artwork dots on walls
+  const artDots = useMemo(() => {
+    const nsLen = dims.widthM * 100;
+    const ewLen = dims.depthM * 100;
+    return placements.map((p) => {
+      let dx = 0, dy = 0;
+      const wallLen = (p.wall === 'north' || p.wall === 'south') ? nsLen : ewLen;
+      const ratio = p.position_x / wallLen;
+      switch (p.wall) {
+        case 'north': dx = WALL_T + ratio * innerW; dy = WALL_T / 2; break;
+        case 'south': dx = WALL_T + (1 - ratio) * innerW; dy = mapH - WALL_T / 2; break;
+        case 'east':  dx = mapW - WALL_T / 2; dy = WALL_T + ratio * innerH; break;
+        case 'west':  dx = WALL_T / 2; dy = WALL_T + (1 - ratio) * innerH; break;
+      }
+      return { id: p.id, x: dx, y: dy };
+    });
+  }, [placements, dims, innerW, innerH, mapW, mapH]);
+
+  return (
+    <View style={[styles.minimap, { width: mapW, height: mapH }]}>
+      {/* Floor */}
+      <View style={[styles.minimapFloor, {
+        top: WALL_T, left: WALL_T, width: innerW, height: innerH,
+      }]} />
+      {/* Walls */}
+      <View style={[styles.minimapEdge, { top: 0, left: 0, right: 0, height: WALL_T, backgroundColor: wallColors.north }]} />
+      <View style={[styles.minimapEdge, { bottom: 0, left: 0, right: 0, height: WALL_T, backgroundColor: wallColors.south }]} />
+      <View style={[styles.minimapEdge, { left: 0, top: 0, bottom: 0, width: WALL_T, backgroundColor: wallColors.west }]} />
+      <View style={[styles.minimapEdge, { right: 0, top: 0, bottom: 0, width: WALL_T, backgroundColor: wallColors.east }]} />
+      {/* Entrance gap on south wall */}
+      <View style={[styles.minimapEntrance, { bottom: 0, left: mapW / 2 - 6 }]} />
+
+      {/* Artwork dots */}
+      {artDots.map((d) => (
+        <View key={d.id} style={[styles.minimapArtDot, { left: d.x - 2, top: d.y - 2 }]} />
+      ))}
+
+      {/* Camera indicator */}
+      <View style={{
+        position: 'absolute', left: cx - 7, top: cy - 7,
+        width: 14, height: 14,
+        justifyContent: 'center', alignItems: 'center',
+        transform: [{ rotate: `${-pos.yaw}rad` }],
+      }}>
+        {/* FOV cone */}
+        <View style={styles.minimapFov} />
+        {/* Dot */}
+        <View style={styles.minimapCamDot} />
+      </View>
+    </View>
   );
 }
 
@@ -649,6 +746,38 @@ const styles = StyleSheet.create({
 
   exitBtn: { marginTop: 4 },
   exitText: { color: C.mutedDark, fontSize: 11 },
+
+  // Minimap
+  minimapWrap: {
+    position: 'absolute', top: 12, right: 12,
+  },
+  minimap: {
+    backgroundColor: 'rgba(10,10,10,0.75)',
+    borderRadius: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
+    overflow: 'hidden',
+  },
+  minimapFloor: { position: 'absolute', backgroundColor: 'rgba(255,255,255,0.04)' },
+  minimapEdge: { position: 'absolute', borderRadius: 1 },
+  minimapEntrance: {
+    position: 'absolute', width: 12, height: WALL_T,
+    backgroundColor: 'rgba(10,10,10,0.75)',
+  },
+  minimapArtDot: {
+    position: 'absolute', width: 4, height: 4, borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+  },
+  minimapFov: {
+    position: 'absolute', top: -6,
+    width: 0, height: 0,
+    borderLeftWidth: 5, borderRightWidth: 5, borderBottomWidth: 8,
+    borderLeftColor: 'transparent', borderRightColor: 'transparent',
+    borderBottomColor: 'rgba(200,169,110,0.45)',
+  },
+  minimapCamDot: {
+    width: 6, height: 6, borderRadius: 3, backgroundColor: C.gold,
+    shadowColor: C.gold, shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8, shadowRadius: 4,
+  },
 
   // Foreword overlay
   forewordRoot: {
