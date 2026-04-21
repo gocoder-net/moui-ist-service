@@ -21,8 +21,8 @@ export default function useGalleryControls({
   const joystickRef = useRef({ x: 0, y: 0 });
   // Look joystick input: x = yaw, y = pitch (-1..1)
   const lookRef = useRef({ x: 0, y: 0 });
-  const speedMultRef = useRef(1);
-  const lookSpeedRef = useRef(1);
+  const speedMultRef = useRef(0.5);   // default level 2 (= SPEED_MULTS[1])
+  const lookSpeedRef = useRef(0.5);
   const autoNavRef = useRef<{ targetYaw: number; targetX: number; targetZ: number } | null>(null);
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
   const isDraggingRef = useRef(false);

@@ -54,7 +54,7 @@ export default function GalleryScene({
   const lastDirRef = useRef<Wall>('north');
 
   // Intro: doors open → null
-  const [introPhase, setIntroPhase] = useState<'doors' | null>('doors');
+  const [introPhase, setIntroPhase] = useState<'doors' | 'lookaround' | null>('doors');
   const [sceneReady, setSceneReady] = useState(false);
   const doorStartRef = useRef(0);
 
@@ -99,9 +99,9 @@ export default function GalleryScene({
     camera.aspect = handle.width / handle.height;
     camera.updateProjectionMatrix();
 
-    // Start camera at entrance (outside south wall, looking north)
-    const startZ = dims.depthM / 2 + 0.5;
-    camera.position.set(0, 1.6, startZ);
+    // Start camera at entrance (just inside south wall), looking north
+    const entranceZ = dims.depthM / 2 - 0.5;
+    camera.position.set(0, 1.6, entranceZ);
     camera.rotation.set(0, 0, 0, 'YXZ');
 
     scene.background = new THREE.Color(C.bg);
@@ -114,21 +114,25 @@ export default function GalleryScene({
 
     setSceneReady(true);
 
-    const WALK_START = 800;
-    const WALK_DUR = 2000;
-    const INTRO_END = 3200;
+    const LOOK_START = 2200;  // after doors fully open
+    const LOOK_DUR = 2500;    // 2.5s for full 360° survey
+    const INTRO_END = LOOK_START + LOOK_DUR + 300; // 5000
 
     const animate = () => {
       animRef.current = requestAnimationFrame(animate);
 
-      // Door opening + camera walk-in
+      // Door opening + 360° look-around
       if (doorStartRef.current > 0) {
         const elapsed = Date.now() - doorStartRef.current;
         if (elapsed < INTRO_END) {
-          const t = Math.max(0, Math.min((elapsed - WALK_START) / WALK_DUR, 1));
-          const ease = 1 - Math.pow(1 - t, 3);
-          camera.position.set(0, 1.6, startZ * (1 - ease));
-          camera.rotation.set(0, 0, 0, 'YXZ');
+          // Full 360° rotation from entrance
+          const lt = Math.max(0, Math.min((elapsed - LOOK_START) / LOOK_DUR, 1));
+          const t = lt * lt * (3 - 2 * lt);
+          const yaw = t * Math.PI * 2;
+          const pitch = -0.1 * Math.sin(t * Math.PI);
+          camera.position.set(0, 1.6, entranceZ);
+          camera.rotation.set(pitch, yaw, 0, 'YXZ');
+          controls.yawRef.current = yaw >= Math.PI * 2 ? 0 : yaw;
         } else {
           if (!pausedRef.current) controls.updateCamera();
         }
@@ -165,8 +169,10 @@ export default function GalleryScene({
   useEffect(() => {
     if (sceneReady && introPhase === 'doors') {
       doorStartRef.current = Date.now();
-      const timer = setTimeout(() => setIntroPhase(null), 3200);
-      return () => clearTimeout(timer);
+      // Doors finish at ~3200ms, then 360° look-around until ~7500ms
+      const timer1 = setTimeout(() => setIntroPhase('lookaround'), 3200);
+      const timer2 = setTimeout(() => setIntroPhase(null), 5000);
+      return () => { clearTimeout(timer1); clearTimeout(timer2); };
     }
   }, [sceneReady]);
 
@@ -270,9 +276,9 @@ export default function GalleryScene({
 
       {/* Artwork detail overlay */}
       {detailInfo && selectedPlacement && (
-        <View style={styles.detailOverlay}>
-          <ScrollView contentContainerStyle={[styles.detailWall, { backgroundColor: detailInfo.wc }]}>
-            <View style={styles.detailSpotlight} />
+        <View style={[styles.detailOverlay, { backgroundColor: detailInfo.wc }]}>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.detailWall}>
+            <SpotlightBeam wallColor={detailInfo.wc} />
 
             <View style={[styles.detailFrame, {
               borderColor: detailInfo.frameColor,
@@ -326,7 +332,10 @@ export default function GalleryScene({
               </View>
             )}
 
-            <View style={styles.detailPlate}>
+            <View style={[styles.detailPlate, {
+              backgroundColor: detailInfo.isDark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.45)',
+              borderColor: detailInfo.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+            }]}>
               <Text style={[styles.plateTitle, { color: detailInfo.isDark ? '#eee' : '#333' }]}>
                 {detailInfo.art.title}{detailInfo.art.year ? `, ${detailInfo.art.year}` : ''}
               </Text>
@@ -362,6 +371,33 @@ export default function GalleryScene({
   );
 }
 
+
+/* ── Spotlight Beam (detail overlay lighting) ── */
+function SpotlightBeam({ wallColor }: { wallColor: string }) {
+  return (
+    <>
+      {/* Top vignette */}
+      <View style={styles.vignetteTop} />
+      {/* Bottom vignette */}
+      <View style={styles.vignetteBottom} />
+
+      {/* Wall glow — bright circle behind artwork */}
+      <View style={styles.wallGlow} />
+
+      {/* Ceiling track light fixture */}
+      <View style={styles.trackLight}>
+        <View style={styles.trackBar} />
+        <View style={styles.lightHead} />
+        <View style={styles.lightHeadGlow} />
+      </View>
+
+      {/* Beam cone — 3 layers widening from top to artwork */}
+      <View style={[styles.beamCone, styles.beamCone1]} />
+      <View style={[styles.beamCone, styles.beamCone2]} />
+      <View style={[styles.beamCone, styles.beamCone3]} />
+    </>
+  );
+}
 
 /* ── Minimap ── */
 const MINIMAP_MAX = 100;
@@ -626,7 +662,7 @@ function Joystick({ setJoystick, label }: { setJoystick: (x: number, y: number) 
 const SPEED_MULTS = [0.2, 0.5, 1, 1.8, 3];
 
 function SpeedControl({ onChange, label = '이동속도' }: { onChange: (m: number) => void; label?: string }) {
-  const [level, setLevel] = useState(2); // 0-4, default 2 (= speed 3)
+  const [level, setLevel] = useState(1); // 0-4, default 1 (= speed 2)
   const dec = () => { if (level > 0) { const n = level - 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
   const inc = () => { if (level < 4) { const n = level + 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
   return (
@@ -797,31 +833,89 @@ const styles = StyleSheet.create({
   detailOverlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 50,
-    backgroundColor: C.bg,
   },
   detailWall: {
     flexGrow: 1, justifyContent: 'center', alignItems: 'center',
-    gap: 16, paddingVertical: 24,
+    gap: 16, paddingVertical: 24, paddingTop: 60,
   },
-  detailSpotlight: {
-    position: 'absolute', top: 0, left: '15%', right: '15%', height: 100,
-    backgroundColor: 'rgba(255,255,230,0.05)',
-    borderBottomLeftRadius: 120, borderBottomRightRadius: 120,
+
+  // Vignetting — dark edges for depth
+  vignetteTop: {
+    position: 'absolute', top: 0, left: 0, right: 0, height: 120,
+    backgroundColor: 'rgba(0,0,0,0.25)',
   },
+  vignetteBottom: {
+    position: 'absolute', bottom: 0, left: 0, right: 0, height: 80,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+
+  // Wall glow — bright circle behind artwork
+  wallGlow: {
+    position: 'absolute', top: '20%', alignSelf: 'center',
+    width: 280, height: 280, borderRadius: 140,
+    backgroundColor: 'rgba(255,250,235,0.08)',
+  },
+
+  // Ceiling track light fixture
+  trackLight: {
+    alignItems: 'center', marginBottom: -8, zIndex: 2,
+  },
+  trackBar: {
+    width: 48, height: 6, borderRadius: 2,
+    backgroundColor: '#2A2A2A',
+  },
+  lightHead: {
+    width: 16, height: 10, borderRadius: 2,
+    backgroundColor: '#444',
+    marginTop: -1,
+  },
+  lightHeadGlow: {
+    width: 8, height: 4, borderRadius: 4,
+    backgroundColor: 'rgba(255,248,220,0.6)',
+    marginTop: 1,
+    shadowColor: 'rgba(255,248,220,1)', shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8, shadowRadius: 8,
+  },
+
+  // Beam cone layers — widening from track light toward artwork
+  beamCone: {
+    position: 'absolute', alignSelf: 'center',
+  },
+  beamCone1: {
+    top: 40, width: 60, height: 160,
+    backgroundColor: 'rgba(255,250,220,0.12)',
+    borderBottomLeftRadius: 60, borderBottomRightRadius: 60,
+  },
+  beamCone2: {
+    top: 60, width: 120, height: 200,
+    backgroundColor: 'rgba(255,250,220,0.06)',
+    borderBottomLeftRadius: 100, borderBottomRightRadius: 100,
+  },
+  beamCone3: {
+    top: 80, width: 200, height: 260,
+    backgroundColor: 'rgba(255,250,220,0.03)',
+    borderBottomLeftRadius: 140, borderBottomRightRadius: 140,
+  },
+
+  // Frame — enhanced shadow for wall-mounted feel
   detailFrame: {
     borderWidth: 5, backgroundColor: '#fff',
     justifyContent: 'center', alignItems: 'center', padding: 4,
-    shadowColor: '#000', shadowOffset: { width: 3, height: 8 },
-    shadowOpacity: 0.4, shadowRadius: 12,
+    shadowColor: '#000', shadowOffset: { width: 2, height: 6 },
+    shadowOpacity: 0.5, shadowRadius: 20,
+    zIndex: 1,
   },
+
+  // Info plate — gallery wall caption style
   detailPlate: {
-    alignItems: 'center', gap: 3,
-    paddingHorizontal: 20, paddingVertical: 10,
-    backgroundColor: 'rgba(0,0,0,0.25)', borderRadius: 4,
+    alignItems: 'center', gap: 4,
+    paddingHorizontal: 24, paddingVertical: 12,
+    borderRadius: 6, borderWidth: 1,
+    zIndex: 1,
   },
-  plateTitle: { fontSize: 16, fontWeight: '700', letterSpacing: 1 },
-  plateMeta: { fontSize: 11 },
-  plateDesc: { fontSize: 11, marginTop: 2, textAlign: 'center' },
+  plateTitle: { fontSize: 15, fontWeight: '700', letterSpacing: 0.5 },
+  plateMeta: { fontSize: 10, letterSpacing: 0.3 },
+  plateDesc: { fontSize: 10, marginTop: 3, textAlign: 'center', lineHeight: 15 },
 
   edgeIcon: {
     position: 'absolute', width: 32, height: 32, borderRadius: 16,
