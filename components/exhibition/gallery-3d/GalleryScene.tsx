@@ -8,11 +8,11 @@ import Animated, {
 import * as THREE from 'three';
 import { Image } from 'expo-image';
 import GalleryCanvas, { type CanvasHandle } from './GalleryCanvas';
-import { getRoomDimensions } from './gallery-math';
+import { getRoomDimensions, clamp } from './gallery-math';
 import { buildRoom } from './GalleryRoom';
 import { buildArtworks } from './GalleryArtwork';
 import { buildLighting } from './GalleryLighting';
-import useGalleryControls from './use-gallery-controls';
+import useGalleryControls, { type TourWaypoint } from './use-gallery-controls';
 import { WALL_LABELS } from '../room-geometry';
 import type { GallerySceneProps, Placement3D, Wall, RoomDimensions } from './types';
 
@@ -22,6 +22,7 @@ const C = {
 };
 
 const DARK_WALLS = ['#333333', '#1B2A4A', '#4A1B2A', '#1B3A2A'];
+const TOUR_PACES = [0.5, 0.75, 1, 1.5, 2];
 const WALL_ORDER: Wall[] = ['north', 'east', 'south', 'west'];
 const DIR_LABELS: Record<Wall, string> = { north: 'N', east: 'E', south: 'S', west: 'W' };
 
@@ -52,6 +53,7 @@ export default function GalleryScene({
   // HUD state
   const [currentDir, setCurrentDir] = useState<Wall>('north');
   const lastDirRef = useRef<Wall>('north');
+  const [autoTour, setAutoTour] = useState(false);
 
   // Intro: doors open → null
   const [introPhase, setIntroPhase] = useState<'doors' | 'lookaround' | null>('doors');
@@ -79,6 +81,48 @@ export default function GalleryScene({
     canvasSize: canvasSizeRef,
     onArtworkTap: handleArtworkTap,
   });
+  const wasTouringRef = useRef(false);
+
+  // Compute tour waypoints: clockwise circuit (N→E→S→W), each artwork
+  const tourWaypoints = useMemo((): TourWaypoint[] => {
+    const EYE_Y = 1.6;
+    const hw = dims.widthM / 2;
+    const hd = dims.depthM / 2;
+    const margin = 0.3;
+    const sorted = [...placements].sort((a, b) => {
+      const wi = WALL_ORDER.indexOf(a.wall) - WALL_ORDER.indexOf(b.wall);
+      return wi !== 0 ? wi : a.position_x - b.position_x;
+    });
+    return sorted.map((p): TourWaypoint => {
+      // View distance based on artwork size (bigger → farther)
+      const maxDim = Math.max(p.width_cm, p.height_cm) / 100;
+      const vd = clamp(maxDim * 1.5, 1.5, 4.0);
+      // Pitch: tilt to look at artwork center
+      const artY = p.position_y / 100;
+      const pitch = Math.atan2(artY - EYE_Y, vd);
+
+      const nsLen = dims.widthM * 100;
+      const ewLen = dims.depthM * 100;
+      switch (p.wall) {
+        case 'north': {
+          const ax = (p.position_x / nsLen - 0.5) * dims.widthM;
+          return { x: clamp(ax, -hw + margin, hw - margin), z: clamp(-hd + vd, -hd + margin, hd - margin), yaw: 0, pitch };
+        }
+        case 'east': {
+          const az = (p.position_x / ewLen - 0.5) * dims.depthM;
+          return { x: clamp(hw - vd, -hw + margin, hw - margin), z: clamp(az, -hd + margin, hd - margin), yaw: -Math.PI / 2, pitch };
+        }
+        case 'south': {
+          const ax = (0.5 - p.position_x / nsLen) * dims.widthM;
+          return { x: clamp(ax, -hw + margin, hw - margin), z: clamp(hd - vd, -hd + margin, hd - margin), yaw: Math.PI, pitch };
+        }
+        case 'west': {
+          const az = (0.5 - p.position_x / ewLen) * dims.depthM;
+          return { x: clamp(-hw + vd, -hw + margin, hw - margin), z: clamp(az, -hd + margin, hd - margin), yaw: Math.PI / 2, pitch };
+        }
+      }
+    });
+  }, [placements, dims]);
 
   // Pause camera & reset inputs when viewing artwork detail
   useEffect(() => {
@@ -143,6 +187,11 @@ export default function GalleryScene({
         lastDirRef.current = dir;
         setCurrentDir(dir);
       }
+
+      // Sync auto tour ref → state (detect manual cancel)
+      const touring = !!controls.autoTourRef.current;
+      if (wasTouringRef.current && !touring) setAutoTour(false);
+      wasTouringRef.current = touring;
 
       handle.renderer.render(scene, camera);
       handle.endFrame?.();
@@ -239,7 +288,38 @@ export default function GalleryScene({
       {/* HUD — hidden during intro & detail */}
       {!introPhase && !selectedPlacement && (
         <View style={styles.hud}>
-          <View style={styles.hudTop}>
+          {/* Top bar: auto tour (left) — compass (center) — exit (right) */}
+          <View style={styles.hudTopBar}>
+            <View style={styles.hudTopCol}>
+              <Pressable
+                style={[styles.tourBtn, autoTour && styles.tourBtnActive]}
+                onPress={() => {
+                  if (!autoTour) {
+                    controls.startTour(tourWaypoints);
+                    setAutoTour(true);
+                  } else {
+                    controls.stopTour();
+                    setAutoTour(false);
+                  }
+                }}
+              >
+                <Text style={styles.hudBtnIcon}>👀</Text>
+                <Text style={[styles.hudBtnText, autoTour && { color: C.gold }]}>
+                  {autoTour ? '관람 중' : '자동 관람'}
+                </Text>
+              </Pressable>
+              {autoTour && (
+                <View style={styles.tourSpeedFloat}>
+                  <SpeedControl
+                    onChange={controls.setTourPace}
+                    label="속도"
+                    defaultLevel={0}
+                    speeds={TOUR_PACES}
+                  />
+                </View>
+              )}
+            </View>
+
             <View style={styles.compass}>
               {WALL_ORDER.map((w) => (
                 <Pressable
@@ -253,6 +333,11 @@ export default function GalleryScene({
                 </Pressable>
               ))}
             </View>
+
+            <Pressable style={styles.exitBtn} onPress={onClose}>
+              <Text style={styles.hudBtnIcon}>🚪</Text>
+              <Text style={styles.hudBtnText}>나가기</Text>
+            </Pressable>
           </View>
 
           <Text style={styles.dirLabel}>{WALL_LABELS[currentDir]}</Text>
@@ -266,11 +351,6 @@ export default function GalleryScene({
             </View>
             <Joystick setJoystick={controls.setLook} label="시선" />
           </View>
-
-          <Pressable style={styles.exitBtn} onPress={onClose}>
-            <Text style={styles.exitIcon}>🚪</Text>
-            <Text style={styles.exitText}>나가기</Text>
-          </Pressable>
         </View>
       )}
 
@@ -661,10 +741,12 @@ function Joystick({ setJoystick, label }: { setJoystick: (x: number, y: number) 
 /* ── Speed Control ── */
 const SPEED_MULTS = [0.2, 0.5, 1, 1.8, 3];
 
-function SpeedControl({ onChange, label = '이동속도', defaultLevel = 1 }: { onChange: (m: number) => void; label?: string; defaultLevel?: number }) {
+function SpeedControl({ onChange, label = '이동속도', defaultLevel = 1, speeds }: { onChange: (m: number) => void; label?: string; defaultLevel?: number; speeds?: number[] }) {
+  const mults = speeds || SPEED_MULTS;
+  const maxLvl = mults.length - 1;
   const [level, setLevel] = useState(defaultLevel);
-  const dec = () => { if (level > 0) { const n = level - 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
-  const inc = () => { if (level < 4) { const n = level + 1; setLevel(n); onChange(SPEED_MULTS[n]); } };
+  const dec = () => { if (level > 0) { const n = level - 1; setLevel(n); onChange(mults[n]); } };
+  const inc = () => { if (level < maxLvl) { const n = level + 1; setLevel(n); onChange(mults[n]); } };
   return (
     <View style={styles.speedWrap}>
       <View style={styles.speedPanel}>
@@ -672,7 +754,7 @@ function SpeedControl({ onChange, label = '이동속도', defaultLevel = 1 }: { 
           <Text style={styles.speedPmText}>−</Text>
         </Pressable>
         <Text style={styles.speedLevel}>{level + 1}</Text>
-        <Pressable onPress={inc} style={[styles.speedPm, level === 4 && { opacity: 0.25 }]}>
+        <Pressable onPress={inc} style={[styles.speedPm, level === maxLvl && { opacity: 0.25 }]}>
           <Text style={styles.speedPmText}>+</Text>
         </Pressable>
       </View>
@@ -688,14 +770,21 @@ const styles = StyleSheet.create({
   // HUD
   hud: {
     backgroundColor: 'rgba(8,8,8,0.75)',
-    paddingVertical: 10,
-    paddingHorizontal: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
     borderTopWidth: 1,
     borderTopColor: C.border,
     alignItems: 'center',
-    gap: 4,
+    gap: 2,
   },
-  hudTop: { flexDirection: 'row', justifyContent: 'center' },
+  hudTopBar: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between',
+    width: '100%', marginBottom: 2,
+  },
+  hudTopCol: { alignItems: 'flex-start' },
+  tourSpeedFloat: {
+    position: 'absolute', top: '100%', left: 0, marginTop: 2,
+  },
 
   compass: { flexDirection: 'row', gap: 2 },
   compassItem: {
@@ -745,14 +834,22 @@ const styles = StyleSheet.create({
   speedLevel: { fontSize: 11, color: C.gold, fontWeight: '800', minWidth: 12, textAlign: 'center' },
   speedLabel: { fontSize: 8, color: C.muted, letterSpacing: 1 },
 
-  exitBtn: {
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    marginTop: 6, paddingVertical: 6, paddingHorizontal: 14,
-    borderRadius: 12, borderWidth: 1, borderColor: C.border,
+  tourBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingVertical: 4, paddingHorizontal: 8,
+    borderRadius: 10, borderWidth: 1, borderColor: C.border,
     backgroundColor: 'rgba(255,255,255,0.04)',
   },
-  exitIcon: { fontSize: 12 },
-  exitText: { color: C.mutedDark, fontSize: 10 },
+  tourBtnActive: { borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.15)' },
+
+  exitBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    paddingVertical: 4, paddingHorizontal: 8,
+    borderRadius: 10, borderWidth: 1, borderColor: C.border,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  hudBtnIcon: { fontSize: 10 },
+  hudBtnText: { color: C.mutedDark, fontSize: 9 },
 
   // Minimap
   minimapWrap: {

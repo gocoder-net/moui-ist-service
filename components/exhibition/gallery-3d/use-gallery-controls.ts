@@ -4,6 +4,14 @@ import { clamp, yawToDirection } from './gallery-math';
 import type { RoomDimensions, Wall } from './types';
 import type { GestureResponderEvent } from 'react-native';
 
+export type TourWaypoint = { x: number; z: number; yaw: number; pitch: number };
+type TourState = {
+  waypoints: TourWaypoint[];
+  index: number;
+  phase: 'walk' | 'view';
+  phaseStart: number;
+};
+
 type Params = {
   cameraRef: React.MutableRefObject<THREE.PerspectiveCamera>;
   dims: RoomDimensions;
@@ -24,6 +32,8 @@ export default function useGalleryControls({
   const speedMultRef = useRef(0.5);   // default level 2 (= SPEED_MULTS[1])
   const lookSpeedRef = useRef(0.2);   // default level 1 (= SPEED_MULTS[0])
   const autoNavRef = useRef<{ targetYaw: number; targetX: number; targetZ: number } | null>(null);
+  const autoTourRef = useRef<TourState | null>(null);
+  const tourPaceRef = useRef(0.5);  // pace multiplier, default level 1 (TOUR_PACES[0])
   const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
   const isDraggingRef = useRef(false);
 
@@ -44,6 +54,7 @@ export default function useGalleryControls({
     }
 
     if (isDraggingRef.current) {
+      autoTourRef.current = null;  // drag → auto tour off
       yawRef.current += dx * 0.004;
       pitchRef.current = clamp(pitchRef.current + dy * 0.004, -Math.PI / 3, Math.PI / 3);
       touchStartRef.current = { ...touchStartRef.current, x: pageX, y: pageY };
@@ -82,6 +93,15 @@ export default function useGalleryControls({
   /* ── Speed control ── */
   const setSpeedMult = useCallback((m: number) => { speedMultRef.current = m; }, []);
   const setLookSpeed = useCallback((m: number) => { lookSpeedRef.current = m; }, []);
+
+  /* ── Auto tour (walk to each artwork) ── */
+  const startTour = useCallback((waypoints: TourWaypoint[]) => {
+    if (waypoints.length === 0) return;
+    autoNavRef.current = null;
+    autoTourRef.current = { waypoints, index: 0, phase: 'walk', phaseStart: Date.now() };
+  }, []);
+  const stopTour = useCallback(() => { autoTourRef.current = null; }, []);
+  const setTourPace = useCallback((p: number) => { tourPaceRef.current = p; }, []);
 
   /* ── Auto-navigate to wall ── */
   const navigateToWall = useCallback((wall: Wall) => {
@@ -132,11 +152,76 @@ export default function useGalleryControls({
       }
     }
 
+    // Auto tour — walk between artworks (constant speed)
+    const tour = autoTourRef.current;
+    if (tour) {
+      const wp = tour.waypoints[tour.index];
+      const pace = tourPaceRef.current;
+      const walkSpeed = 0.025 * pace;   // ~1.5 m/s at 60fps
+      const turnSpeed = 0.03 * pace;    // rad/frame
+
+      if (tour.phase === 'walk') {
+        const tdx = wp.x - camera.position.x;
+        const tdz = wp.z - camera.position.z;
+        const dist = Math.sqrt(tdx * tdx + tdz * tdz);
+
+        // Constant-speed movement
+        if (dist > walkSpeed) {
+          camera.position.x += (tdx / dist) * walkSpeed;
+          camera.position.z += (tdz / dist) * walkSpeed;
+        } else {
+          camera.position.x = wp.x;
+          camera.position.z = wp.z;
+        }
+
+        // Yaw: look toward walk direction, blend to artwork when within 1.5m
+        const walkYaw = Math.atan2(-tdx, -tdz);
+        const blend = clamp(1 - dist / 1.5, 0, 1);  // 0=far, 1=arrived
+        let artDiff = wp.yaw - walkYaw;
+        while (artDiff > Math.PI) artDiff -= 2 * Math.PI;
+        while (artDiff < -Math.PI) artDiff += 2 * Math.PI;
+        const targetYaw = walkYaw + artDiff * blend;
+
+        let yawDiff = targetYaw - yawRef.current;
+        while (yawDiff > Math.PI) yawDiff -= 2 * Math.PI;
+        while (yawDiff < -Math.PI) yawDiff += 2 * Math.PI;
+        if (Math.abs(yawDiff) > turnSpeed) {
+          yawRef.current += Math.sign(yawDiff) * turnSpeed;
+        } else {
+          yawRef.current += yawDiff;
+        }
+
+        // Pitch: level while walking, ease toward artwork pitch near arrival
+        const targetPitch = wp.pitch * blend;
+        pitchRef.current += (targetPitch - pitchRef.current) * 0.05;
+
+        if (dist < 0.1) {
+          tour.phase = 'view';
+          tour.phaseStart = Date.now();
+        }
+      } else {
+        // Viewing — settle yaw & pitch onto artwork
+        let yawDiff = wp.yaw - yawRef.current;
+        while (yawDiff > Math.PI) yawDiff -= 2 * Math.PI;
+        while (yawDiff < -Math.PI) yawDiff += 2 * Math.PI;
+        if (Math.abs(yawDiff) > 0.005) yawRef.current += yawDiff * 0.1;
+        pitchRef.current += (wp.pitch - pitchRef.current) * 0.1;
+
+        const viewMs = 3000 / pace;
+        if (Date.now() - tour.phaseStart > viewMs) {
+          tour.index = (tour.index + 1) % tour.waypoints.length;
+          tour.phase = 'walk';
+          tour.phaseStart = Date.now();
+        }
+      }
+    }
+
     // Look joystick → yaw/pitch
     const { x: lx, y: ly } = lookRef.current;
     const lookMag = Math.sqrt(lx * lx + ly * ly);
     if (lookMag > 0.05) {
       autoNavRef.current = null;
+      autoTourRef.current = null;  // look joystick → auto tour off
       const ls = lookSpeedRef.current;
       yawRef.current -= lx * 0.04 * ls;
       pitchRef.current = clamp(pitchRef.current - ly * 0.03 * ls, -Math.PI / 3, Math.PI / 3);
@@ -148,6 +233,7 @@ export default function useGalleryControls({
     const mag = Math.min(Math.sqrt(jx * jx + jy * jy), 1);
     if (mag > 0.05) {
       autoNavRef.current = null;
+      autoTourRef.current = null;  // movement → auto tour off
       const speed = maxSpeed * mag;
       const sinY = Math.sin(yawRef.current);
       const cosY = Math.cos(yawRef.current);
@@ -189,6 +275,10 @@ export default function useGalleryControls({
     setLook,
     setSpeedMult,
     setLookSpeed,
+    startTour,
+    stopTour,
+    setTourPace,
+    autoTourRef,
     navigateToWall,
     navigateTo,
     updateCamera,
