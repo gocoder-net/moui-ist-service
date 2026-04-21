@@ -186,7 +186,7 @@ export default function GalleryScene({
         <ScrollView contentContainerStyle={[styles.detailWall, { backgroundColor: wc }]}>
           <View style={styles.detailSpotlight} />
 
-          {/* Frame + Image */}
+          {/* Frame + Image with edge eye icons */}
           <View style={[styles.detailFrame, {
             borderColor: frameColor, width: imgW + 16, height: imgH + 16,
           }]}>
@@ -197,7 +197,49 @@ export default function GalleryScene({
               contentFit="cover"
               transition={250}
             />
+
+            {/* Tap image to return to front when viewing alt angle */}
+            {viewAngle !== 'front' && (
+              <Pressable
+                style={StyleSheet.absoluteFill}
+                onPress={() => setViewAngle('front')}
+              />
+            )}
+
+            {/* Edge eye icons — only shown on front view */}
+            {viewAngle === 'front' && angles.top && (
+              <Pressable style={[styles.edgeIcon, styles.edgeTop]} onPress={() => setViewAngle('top')}>
+                <Text style={styles.edgeIconText}>👁</Text>
+              </Pressable>
+            )}
+            {viewAngle === 'front' && angles.bottom && (
+              <Pressable style={[styles.edgeIcon, styles.edgeBottom]} onPress={() => setViewAngle('bottom')}>
+                <Text style={styles.edgeIconText}>👁</Text>
+              </Pressable>
+            )}
+            {viewAngle === 'front' && angles.left && (
+              <Pressable style={[styles.edgeIcon, styles.edgeLeft]} onPress={() => setViewAngle('left')}>
+                <Text style={styles.edgeIconText}>👁</Text>
+              </Pressable>
+            )}
+            {viewAngle === 'front' && angles.right && (
+              <Pressable style={[styles.edgeIcon, styles.edgeRight]} onPress={() => setViewAngle('right')}>
+                <Text style={styles.edgeIconText}>👁</Text>
+              </Pressable>
+            )}
           </View>
+
+          {/* Angle label when viewing alt */}
+          {viewAngle !== 'front' && (
+            <View style={styles.angleLabelBadge}>
+              <Text style={styles.angleLabelText}>
+                {{ top: '위에서 본 모습', bottom: '아래에서 본 모습', left: '왼쪽에서 본 모습', right: '오른쪽에서 본 모습' }[viewAngle]}
+              </Text>
+              <Pressable onPress={() => setViewAngle('front')}>
+                <Text style={styles.angleLabelBack}>정면으로 ✕</Text>
+              </Pressable>
+            </View>
+          )}
 
           {/* Info plate */}
           <View style={styles.detailPlate}>
@@ -218,27 +260,6 @@ export default function GalleryScene({
             )}
           </View>
         </ScrollView>
-
-        {/* Angle controls */}
-        <View style={styles.anglePanel}>
-          <View style={styles.angleCross}>
-            <View style={styles.angleRow}>
-              <View style={{ width: 50 }} />
-              <AngleBtn k="top" icon="↑" label="위" cur={viewAngle} has={!!angles.top} set={setViewAngle} />
-              <View style={{ width: 50 }} />
-            </View>
-            <View style={styles.angleRow}>
-              <AngleBtn k="left" icon="←" label="좌" cur={viewAngle} has={!!angles.left} set={setViewAngle} />
-              <AngleBtn k="front" icon="◉" label="정면" cur={viewAngle} has set={setViewAngle} />
-              <AngleBtn k="right" icon="→" label="우" cur={viewAngle} has={!!angles.right} set={setViewAngle} />
-            </View>
-            <View style={styles.angleRow}>
-              <View style={{ width: 50 }} />
-              <AngleBtn k="bottom" icon="↓" label="아래" cur={viewAngle} has={!!angles.bottom} set={setViewAngle} />
-              <View style={{ width: 50 }} />
-            </View>
-          </View>
-        </View>
 
         <Pressable
           style={styles.backBar}
@@ -319,22 +340,6 @@ export default function GalleryScene({
   );
 }
 
-/* ── Angle button ── */
-function AngleBtn({ k, icon, label, cur, has, set }: {
-  k: ViewAngle; icon: string; label: string;
-  cur: ViewAngle; has: boolean; set: (v: ViewAngle) => void;
-}) {
-  const active = cur === k;
-  return (
-    <Pressable
-      style={[styles.angleBtn, active && styles.angleBtnActive, !has && { opacity: 0.2 }]}
-      onPress={() => has && set(k)} disabled={!has}
-    >
-      <Text style={[styles.angleBtnIcon, active && { color: C.gold }]}>{icon}</Text>
-      <Text style={[styles.angleBtnLabel, active && { color: C.gold }]}>{label}</Text>
-    </Pressable>
-  );
-}
 
 /* ── Minimap ── */
 const MINIMAP_MAX = 100;
@@ -767,21 +772,24 @@ const styles = StyleSheet.create({
   plateMeta: { fontSize: 11 },
   plateDesc: { fontSize: 11, marginTop: 2, textAlign: 'center' },
 
-  anglePanel: {
-    backgroundColor: 'rgba(8,8,8,0.97)', padding: 12,
-    borderTopWidth: 1, borderTopColor: C.border, alignItems: 'center',
-  },
-  angleCross: { gap: 3 },
-  angleRow: { flexDirection: 'row', justifyContent: 'center', gap: 3 },
-  angleBtn: {
-    width: 50, height: 40, borderRadius: 10,
-    borderWidth: 1, borderColor: C.border,
+  edgeIcon: {
+    position: 'absolute', width: 32, height: 32, borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'center', alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
   },
-  angleBtnActive: { borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.12)' },
-  angleBtnIcon: { fontSize: 14, color: C.muted },
-  angleBtnLabel: { fontSize: 7, color: C.muted },
+  edgeIconText: { fontSize: 14 },
+  edgeTop: { top: 6, alignSelf: 'center', left: '50%', marginLeft: -16 },
+  edgeBottom: { bottom: 6, alignSelf: 'center', left: '50%', marginLeft: -16 },
+  edgeLeft: { left: 6, top: '50%', marginTop: -16 },
+  edgeRight: { right: 6, top: '50%', marginTop: -16 },
+  angleLabelBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 14, paddingVertical: 6,
+    borderRadius: 16,
+  },
+  angleLabelText: { color: '#ddd', fontSize: 12 },
+  angleLabelBack: { color: C.gold, fontSize: 12, fontWeight: '600' },
 
   backBar: {
     backgroundColor: C.bg, paddingVertical: 12,
