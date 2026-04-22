@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, TextInput, Pressable, ScrollView,
   ActivityIndicator, Alert, useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
@@ -34,6 +34,8 @@ export default function CreateExhibitionScreen() {
   const { width: screenWidth } = useWindowDimensions();
   const router = useRouter();
   const { user } = useAuth();
+  const { editId } = useLocalSearchParams<{ editId?: string }>();
+  const isEditMode = !!editId;
 
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
   const [title, setTitle] = useState('');
@@ -62,6 +64,95 @@ export default function CreateExhibitionScreen() {
   const [bgmLocalUri, setBgmLocalUri] = useState<string | null>(null);
   const [bgmFileName, setBgmFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [editLoading, setEditLoading] = useState(!!editId);
+
+  // 수정 모드: 기존 데이터 로드
+  useEffect(() => {
+    if (!editId || !user) return;
+    (async () => {
+      try {
+        // 전시관 데이터 로드
+        const { data: ex, error: exErr } = await supabase
+          .from('exhibitions')
+          .select('*')
+          .eq('id', editId)
+          .single();
+        if (exErr || !ex) { Alert.alert('오류', '전시관 데이터를 불러올 수 없습니다.'); router.back(); return; }
+
+        setTitle(ex.title || '');
+        setDescription(ex.description || '');
+        setForeword(ex.foreword || '');
+        setRoomType(ex.room_type as RoomType);
+        setWallColors({
+          north: ex.wall_color_north || '#F5F5F0',
+          south: ex.wall_color_south || '#F5F5F0',
+          east: ex.wall_color_east || '#F5F5F0',
+          west: ex.wall_color_west || '#F5F5F0',
+        });
+        setFloorColor(ex.floor_color || '#8B7355');
+        setCeilingColor(ex.ceiling_color || '#F5F5F0');
+
+        if (ex.poster_image_url) setPosterUri(ex.poster_image_url);
+        if (ex.bgm_url) {
+          setBgmLocalUri(ex.bgm_url);
+          setBgmFileName(ex.bgm_url.split('/').pop() || 'BGM');
+        }
+
+        // 벽면 이미지 로드
+        if (ex.wall_images) {
+          const wi = ex.wall_images as Record<string, { url: string; mode: WallImageMode } | null>;
+          const newWallImages: WallImages = { north: null, south: null, east: null, west: null };
+          const newWallImageLocalUris: Record<Wall, string | null> = { north: null, south: null, east: null, west: null };
+          for (const w of ['north', 'south', 'east', 'west'] as Wall[]) {
+            if (wi[w]) {
+              newWallImages[w] = { url: wi[w]!.url, mode: wi[w]!.mode };
+              newWallImageLocalUris[w] = wi[w]!.url; // 기존 URL을 그대로 사용
+            }
+          }
+          setWallImages(newWallImages);
+          setWallImageLocalUris(newWallImageLocalUris);
+          // 벽면 이미지가 하나라도 있으면 이미지 모드로 설정
+          if (Object.values(wi).some(v => v !== null)) {
+            setWallSurfaceMode('image');
+          }
+        }
+
+        // 배치된 작품 로드
+        const { data: placements } = await supabase
+          .from('exhibition_artworks')
+          .select('*, artworks(*)')
+          .eq('exhibition_id', editId);
+
+        if (placements && placements.length > 0) {
+          const loadedArtworks: PlacedArtwork[] = placements.map((p: any) => ({
+            localId: p.artwork_id || Date.now().toString() + Math.random(),
+            uri: p.artworks?.image_url || '',
+            title: p.artworks?.title || '',
+            year: p.artworks?.year || undefined,
+            medium: p.artworks?.medium || undefined,
+            edition: p.artworks?.edition || undefined,
+            description: p.artworks?.description || undefined,
+            wall: p.wall as Wall,
+            positionX: p.position_x,
+            positionY: p.position_y,
+            widthCm: p.width_cm,
+            heightCm: p.height_cm,
+            topUri: p.artworks?.image_top_url || undefined,
+            bottomUri: p.artworks?.image_bottom_url || undefined,
+            leftUri: p.artworks?.image_left_url || undefined,
+            rightUri: p.artworks?.image_right_url || undefined,
+            existingArtworkId: p.artwork_id,
+            existingImageUrl: p.artworks?.image_url || undefined,
+          }));
+          setArtworks(loadedArtworks);
+        }
+      } catch (e: any) {
+        Alert.alert('오류', '데이터 로드 중 오류가 발생했습니다.');
+      } finally {
+        setEditLoading(false);
+      }
+    })();
+  }, [editId, user]);
 
   const mapWidth = Math.min(screenWidth - 48, 360);
   const editorWidth = screenWidth - 48;
@@ -143,7 +234,9 @@ export default function CreateExhibitionScreen() {
     if (selectedArtworkId === id) setSelectedArtworkId(null);
   };
 
-  const handleCreate = async () => {
+  const isExistingUrl = (uri: string | null | undefined) => !!uri && uri.startsWith('http');
+
+  const handleSave = async () => {
     if (!title.trim()) { Alert.alert('알림', '전시관 이름을 입력해주세요.'); return; }
     if (artworks.length === 0) { Alert.alert('알림', '작품을 배치해주세요.'); return; }
     if (!user) { Alert.alert('알림', '로그인이 필요합니다.'); return; }
@@ -151,6 +244,8 @@ export default function CreateExhibitionScreen() {
     setLoading(true);
     try {
       const uploadImage = async (uri: string): Promise<string | null> => {
+        // 이미 업로드된 URL이면 그대로 반환
+        if (isExistingUrl(uri)) return uri;
         const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
         const response = await fetch(uri);
         const blob = await response.blob();
@@ -162,18 +257,22 @@ export default function CreateExhibitionScreen() {
       // Upload poster if present
       let posterImageUrl: string | null = null;
       if (posterUri) {
-        posterImageUrl = await uploadImage(posterUri);
+        posterImageUrl = isExistingUrl(posterUri) ? posterUri : await uploadImage(posterUri);
       }
 
       // Upload BGM if present
       let bgmUrl: string | null = null;
       if (bgmLocalUri) {
-        const bgmFileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`;
-        const bgmResponse = await fetch(bgmLocalUri);
-        const bgmBlob = await bgmResponse.blob();
-        const { error: bgmErr } = await supabase.storage.from('bgm').upload(bgmFileName, bgmBlob, { contentType: 'audio/mpeg' });
-        if (!bgmErr) {
-          bgmUrl = supabase.storage.from('bgm').getPublicUrl(bgmFileName).data.publicUrl;
+        if (isExistingUrl(bgmLocalUri)) {
+          bgmUrl = bgmLocalUri;
+        } else {
+          const bgmFn = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`;
+          const bgmResponse = await fetch(bgmLocalUri);
+          const bgmBlob = await bgmResponse.blob();
+          const { error: bgmErr } = await supabase.storage.from('bgm').upload(bgmFn, bgmBlob, { contentType: 'audio/mpeg' });
+          if (!bgmErr) {
+            bgmUrl = supabase.storage.from('bgm').getPublicUrl(bgmFn).data.publicUrl;
+          }
         }
       }
 
@@ -183,30 +282,51 @@ export default function CreateExhibitionScreen() {
         const localUri = wallImageLocalUris[w];
         const info = wallImages[w];
         if (localUri && info) {
-          const uploadedUrl = await uploadImage(localUri);
-          wallImagesJson[w] = uploadedUrl ? { url: uploadedUrl, mode: info.mode } : null;
+          if (isExistingUrl(localUri)) {
+            wallImagesJson[w] = { url: localUri, mode: info.mode };
+          } else {
+            const uploadedUrl = await uploadImage(localUri);
+            wallImagesJson[w] = uploadedUrl ? { url: uploadedUrl, mode: info.mode } : null;
+          }
         } else {
           wallImagesJson[w] = null;
         }
       }
 
-      const { data: exhibition, error: exErr } = await supabase.from('exhibitions')
-        .insert({
-          user_id: user.id, title: title.trim(),
-          description: description.trim() || null,
-          foreword: foreword.trim() || null,
-          room_type: roomType,
-          wall_color_north: wallColors.north, wall_color_south: wallColors.south,
-          wall_color_east: wallColors.east, wall_color_west: wallColors.west,
-          floor_color: floorColor, ceiling_color: ceilingColor,
-          poster_image_url: posterImageUrl,
-          wall_images: wallImagesJson,
-          bgm_url: bgmUrl,
-          is_published: true,
-        })
-        .select('id').single();
+      const exhibitionData = {
+        title: title.trim(),
+        description: description.trim() || null,
+        foreword: foreword.trim() || null,
+        room_type: roomType,
+        wall_color_north: wallColors.north, wall_color_south: wallColors.south,
+        wall_color_east: wallColors.east, wall_color_west: wallColors.west,
+        floor_color: floorColor, ceiling_color: ceilingColor,
+        poster_image_url: posterImageUrl,
+        wall_images: wallImagesJson,
+        bgm_url: bgmUrl,
+        is_published: true,
+      };
 
-      if (exErr || !exhibition) { Alert.alert('오류', `전시관 생성 실패: ${exErr?.message || '알 수 없는 오류'}`); setLoading(false); return; }
+      let exhibitionId: string;
+
+      if (isEditMode && editId) {
+        // 수정 모드: UPDATE
+        const { error: updateErr } = await supabase.from('exhibitions')
+          .update(exhibitionData)
+          .eq('id', editId);
+        if (updateErr) { Alert.alert('오류', `전시관 수정 실패: ${updateErr.message}`); setLoading(false); return; }
+        exhibitionId = editId;
+
+        // 기존 exhibition_artworks 삭제
+        await supabase.from('exhibition_artworks').delete().eq('exhibition_id', editId);
+      } else {
+        // 생성 모드: INSERT
+        const { data: exhibition, error: exErr } = await supabase.from('exhibitions')
+          .insert({ user_id: user.id, ...exhibitionData })
+          .select('id').single();
+        if (exErr || !exhibition) { Alert.alert('오류', `전시관 생성 실패: ${exErr?.message || '알 수 없는 오류'}`); setLoading(false); return; }
+        exhibitionId = exhibition.id;
+      }
 
       for (const art of artworks) {
         const imageUrl = await uploadImage(art.uri);
@@ -216,33 +336,58 @@ export default function CreateExhibitionScreen() {
         const leftUrl = art.leftUri ? await uploadImage(art.leftUri) : null;
         const rightUrl = art.rightUri ? await uploadImage(art.rightUri) : null;
 
-        const { data: artData } = await supabase.from('artworks')
-          .insert({
-            user_id: user.id, title: art.title, image_url: imageUrl,
-            year: art.year || null,
-            medium: art.medium || null,
-            width_cm: art.widthCm,
-            height_cm: art.heightCm,
-            edition: art.edition || null,
-            description: art.description || null,
-            image_top_url: topUrl, image_bottom_url: bottomUrl,
-            image_left_url: leftUrl, image_right_url: rightUrl,
-          })
-          .select('id').single();
-        if (!artData) continue;
+        let artworkId: string | null = null;
+
+        if (art.existingArtworkId) {
+          // 기존 작품 업데이트
+          const { error: artUpdateErr } = await supabase.from('artworks')
+            .update({
+              title: art.title, image_url: imageUrl,
+              year: art.year || null,
+              medium: art.medium || null,
+              width_cm: art.widthCm,
+              height_cm: art.heightCm,
+              edition: art.edition || null,
+              description: art.description || null,
+              image_top_url: topUrl, image_bottom_url: bottomUrl,
+              image_left_url: leftUrl, image_right_url: rightUrl,
+            })
+            .eq('id', art.existingArtworkId);
+          if (!artUpdateErr) artworkId = art.existingArtworkId;
+        }
+
+        if (!artworkId) {
+          // 새 작품 삽입
+          const { data: artData } = await supabase.from('artworks')
+            .insert({
+              user_id: user.id, title: art.title, image_url: imageUrl,
+              year: art.year || null,
+              medium: art.medium || null,
+              width_cm: art.widthCm,
+              height_cm: art.heightCm,
+              edition: art.edition || null,
+              description: art.description || null,
+              image_top_url: topUrl, image_bottom_url: bottomUrl,
+              image_left_url: leftUrl, image_right_url: rightUrl,
+            })
+            .select('id').single();
+          if (artData) artworkId = artData.id;
+        }
+
+        if (!artworkId) continue;
 
         await supabase.from('exhibition_artworks').insert({
-          exhibition_id: exhibition.id, artwork_id: artData.id,
+          exhibition_id: exhibitionId, artwork_id: artworkId,
           wall: art.wall, position_x: art.positionX, position_y: art.positionY,
           width_cm: art.widthCm, height_cm: art.heightCm,
         });
       }
 
       setLoading(false);
-      router.replace(`/exhibition/${exhibition.id}`);
+      router.replace(`/exhibition/${exhibitionId}`);
     } catch (e: any) {
       setLoading(false);
-      Alert.alert('오류', e?.message || '전시관 생성 중 오류가 발생했습니다.');
+      Alert.alert('오류', e?.message || `전시관 ${isEditMode ? '수정' : '생성'} 중 오류가 발생했습니다.`);
     }
   };
 
@@ -250,6 +395,12 @@ export default function CreateExhibitionScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+      {editLoading ? (
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={C.gold} />
+          <Text style={{ marginTop: 12, color: C.muted, fontSize: 13 }}>데이터 불러오는 중...</Text>
+        </View>
+      ) : (
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 네비 */}
         <View style={styles.nav}>
@@ -277,7 +428,7 @@ export default function CreateExhibitionScreen() {
         {/* ── STEP 1: 기본 정보 ── */}
         {step === 1 && (
           <Animated.View entering={FadeInDown.duration(400).springify()}>
-            <Text style={styles.title}>전시 정보</Text>
+            <Text style={styles.title}>{isEditMode ? '전시 수정' : '전시 정보'}</Text>
 
             <Text style={styles.label}>전시 이름 *</Text>
             <TextInput style={styles.input} placeholder="예: 봄의 기억" placeholderTextColor={C.mutedLight}
@@ -661,10 +812,14 @@ export default function CreateExhibitionScreen() {
                 )}
 
                 {/* 공개 버튼 */}
-                <Pressable onPress={handleCreate} disabled={loading} style={{ marginTop: 28 }}>
+                <Pressable onPress={handleSave} disabled={loading} style={{ marginTop: 28 }}>
                   <View style={[styles.createBtn, loading && { opacity: 0.5 }]}>
                     {loading && <ActivityIndicator color={C.white} size="small" />}
-                    <Text style={styles.createBtnText}>{loading ? '생성 중...' : '전시관 공개하기'}</Text>
+                    <Text style={styles.createBtnText}>
+                      {loading
+                        ? (isEditMode ? '수정 중...' : '생성 중...')
+                        : (isEditMode ? '수정 완료' : '전시관 공개하기')}
+                    </Text>
                     {!loading && <Text style={styles.createBtnArrow}>→</Text>}
                   </View>
                 </Pressable>
@@ -857,6 +1012,7 @@ export default function CreateExhibitionScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      )}
     </View>
   );
 }

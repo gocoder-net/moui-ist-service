@@ -181,7 +181,7 @@ const ROOM_LABEL: Record<string, string> = {
 };
 
 /* ── 전시관 카드 ── */
-function ExhibitionCard({ item, onPress }: { item: Exhibition; onPress: () => void }) {
+function ExhibitionCard({ item, onPress, onEdit }: { item: Exhibition; onPress: () => void; onEdit: () => void }) {
   return (
     <Pressable
       style={({ pressed }) => [styles.exCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
@@ -202,6 +202,13 @@ function ExhibitionCard({ item, onPress }: { item: Exhibition; onPress: () => vo
           <Text style={[styles.exPublish, item.is_published && { color: C.gold }]}>
             {item.is_published ? '공개' : '비공개'}
           </Text>
+          <Pressable
+            style={styles.exEditBtn}
+            onPress={(e) => { e.stopPropagation(); onEdit(); }}
+            hitSlop={6}
+          >
+            <Text style={styles.exEditText}>수정</Text>
+          </Pressable>
         </View>
       </View>
     </Pressable>
@@ -312,6 +319,7 @@ export default function HomeScreen() {
                 <ExhibitionCard
                   item={item}
                   onPress={() => router.push(`/exhibition/${item.id}`)}
+                  onEdit={() => router.push(`/exhibition/create?editId=${item.id}`)}
                 />
               )}
             />
@@ -629,5 +637,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: C.muted,
     fontWeight: '600',
+  },
+  exEditBtn: {
+    marginLeft: 'auto',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: C.gold,
+    backgroundColor: 'rgba(200,169,110,0.08)',
+  },
+  exEditText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: C.gold,
+    letterSpacing: 0.5,
   },
 });

@@ -65,6 +65,8 @@ export type PlacedArtwork = {
   bottomUri?: string;
   leftUri?: string;
   rightUri?: string;
+  existingArtworkId?: string;   // 이미 DB에 있는 작품 ID (수정 모드)
+  existingImageUrl?: string;    // 이미 업로드된 이미지 URL (수정 모드)
 };
 
 // 자주 쓰이는 재료/기법 목록
