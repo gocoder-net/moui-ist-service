@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 
@@ -58,6 +59,8 @@ export default function CreateExhibitionScreen() {
     north: null, south: null, east: null, west: null,
   });
   const [wallSurfaceMode, setWallSurfaceMode] = useState<'color' | 'image'>('color');
+  const [bgmLocalUri, setBgmLocalUri] = useState<string | null>(null);
+  const [bgmFileName, setBgmFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const mapWidth = Math.min(screenWidth - 48, 360);
@@ -162,6 +165,18 @@ export default function CreateExhibitionScreen() {
         posterImageUrl = await uploadImage(posterUri);
       }
 
+      // Upload BGM if present
+      let bgmUrl: string | null = null;
+      if (bgmLocalUri) {
+        const bgmFileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`;
+        const bgmResponse = await fetch(bgmLocalUri);
+        const bgmBlob = await bgmResponse.blob();
+        const { error: bgmErr } = await supabase.storage.from('bgm').upload(bgmFileName, bgmBlob, { contentType: 'audio/mpeg' });
+        if (!bgmErr) {
+          bgmUrl = supabase.storage.from('bgm').getPublicUrl(bgmFileName).data.publicUrl;
+        }
+      }
+
       // Upload wall images
       const wallImagesJson: Record<string, { url: string; mode: WallImageMode } | null> = {};
       for (const w of ['north', 'south', 'east', 'west'] as Wall[]) {
@@ -186,6 +201,7 @@ export default function CreateExhibitionScreen() {
           floor_color: floorColor, ceiling_color: ceilingColor,
           poster_image_url: posterImageUrl,
           wall_images: wallImagesJson,
+          bgm_url: bgmUrl,
           is_published: true,
         })
         .select('id').single();
@@ -303,6 +319,34 @@ export default function CreateExhibitionScreen() {
             {posterUri && (
               <Pressable onPress={() => setPosterUri(null)} style={{ alignSelf: 'flex-end', marginTop: 4 }}>
                 <Text style={{ fontSize: 11, color: C.muted }}>삭제</Text>
+              </Pressable>
+            )}
+
+            <Text style={[styles.label, { marginTop: 20 }]}>배경음악 (선택)</Text>
+            <Text style={styles.hint}>전시관 3D 뷰어에서 재생됩니다 (MP3)</Text>
+            {bgmLocalUri ? (
+              <View style={styles.bgmRow}>
+                <View style={styles.bgmInfo}>
+                  <Text style={styles.bgmIcon}>♪</Text>
+                  <Text style={styles.bgmFileName} numberOfLines={1}>{bgmFileName}</Text>
+                </View>
+                <Pressable onPress={() => { setBgmLocalUri(null); setBgmFileName(null); }}>
+                  <Text style={{ fontSize: 11, color: C.muted }}>삭제</Text>
+                </Pressable>
+              </View>
+            ) : (
+              <Pressable
+                style={styles.bgmPicker}
+                onPress={async () => {
+                  const result = await DocumentPicker.getDocumentAsync({ type: 'audio/mpeg' });
+                  if (!result.canceled && result.assets[0]) {
+                    setBgmLocalUri(result.assets[0].uri);
+                    setBgmFileName(result.assets[0].name);
+                  }
+                }}
+              >
+                <Text style={{ fontSize: 22, color: C.mutedLight }}>♪</Text>
+                <Text style={{ fontSize: 11, color: C.muted }}>MP3 파일 선택</Text>
               </Pressable>
             )}
 
@@ -965,4 +1009,21 @@ const styles = StyleSheet.create({
   inlineEditRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   inlineEditInput: { fontSize: 13, color: C.fg, fontWeight: '600', flex: 1, paddingVertical: 0 },
   inlineEditHint: { fontSize: 10, color: C.mutedLight },
+
+  // BGM picker
+  bgmPicker: {
+    width: '100%', height: 70, borderRadius: 10,
+    borderWidth: 1.5, borderColor: C.border, borderStyle: 'dashed',
+    justifyContent: 'center', alignItems: 'center', gap: 4,
+    backgroundColor: C.inputBg,
+  },
+  bgmRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 14, paddingVertical: 12,
+    borderWidth: 1.5, borderColor: C.gold, borderRadius: 10,
+    backgroundColor: 'rgba(200,169,110,0.06)',
+  },
+  bgmInfo: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  bgmIcon: { fontSize: 18, color: C.gold },
+  bgmFileName: { fontSize: 13, color: C.fg, fontWeight: '600', flex: 1 },
 });

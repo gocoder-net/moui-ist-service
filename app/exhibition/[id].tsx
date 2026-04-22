@@ -46,6 +46,7 @@ type Exhibition = {
   wall_color_east: string; wall_color_west: string;
   floor_color: string; ceiling_color: string; poster_image_url: string | null;
   wall_images: Record<string, { url: string; mode: string } | null> | null;
+  bgm_url: string | null;
   user_id: string;
   profiles: { name: string | null; username: string } | null;
 };
@@ -544,6 +545,7 @@ export default function ExhibitionViewer() {
           title={exhibition.title}
           foreword={exhibition.foreword}
           posterUrl={exhibition.poster_image_url}
+          bgmUrl={exhibition.bgm_url}
         />
       </View>
     );

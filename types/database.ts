@@ -138,6 +138,7 @@ export type Database = {
           ceiling_color: string;
           poster_image_url: string | null;
           wall_images: Json;
+          bgm_url: string | null;
           is_published: boolean;
           created_at: string;
           updated_at: string;
@@ -156,6 +157,7 @@ export type Database = {
           ceiling_color?: string;
           poster_image_url?: string | null;
           wall_images?: Json;
+          bgm_url?: string | null;
           is_published?: boolean;
         };
         Update: {
@@ -171,6 +173,7 @@ export type Database = {
           ceiling_color?: string;
           poster_image_url?: string | null;
           wall_images?: Json;
+          bgm_url?: string | null;
           is_published?: boolean;
         };
         Relationships: [

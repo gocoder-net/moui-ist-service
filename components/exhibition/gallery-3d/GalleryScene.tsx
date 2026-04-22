@@ -6,6 +6,7 @@ import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing,
 } from 'react-native-reanimated';
 import * as THREE from 'three';
+import { useAudioPlayer } from 'expo-audio';
 import { Image } from 'expo-image';
 import GalleryCanvas, { type CanvasHandle } from './GalleryCanvas';
 import { getRoomDimensions, clamp } from './gallery-math';
@@ -30,7 +31,7 @@ type ViewAngle = 'front' | 'top' | 'bottom' | 'left' | 'right';
 
 export default function GalleryScene({
   roomType, wallColors, wallImages, floorColor, ceilingColor, placements, onClose,
-  title, foreword, posterUrl,
+  title, foreword, posterUrl, bgmUrl,
 }: GallerySceneProps) {
   const dims = useMemo(() => getRoomDimensions(roomType), [roomType]);
   const { width: sw } = useWindowDimensions();
@@ -59,6 +60,10 @@ export default function GalleryScene({
   const [introPhase, setIntroPhase] = useState<'doors' | 'lookaround' | null>('doors');
   const [sceneReady, setSceneReady] = useState(false);
   const doorStartRef = useRef(0);
+
+  // BGM
+  const bgmPlayer = useAudioPlayer(bgmUrl || undefined);
+  const [bgmMuted, setBgmMuted] = useState(false);
 
   // Artwork detail overlay state
   const [selectedPlacement, setSelectedPlacement] = useState<Placement3D | null>(null);
@@ -227,6 +232,25 @@ export default function GalleryScene({
     }
   }, [sceneReady]);
 
+  // BGM: configure player
+  useEffect(() => {
+    if (!bgmUrl) return;
+    bgmPlayer.loop = true;
+    bgmPlayer.volume = 0.5;
+  }, [bgmUrl, bgmPlayer]);
+
+  // BGM: play when intro ends
+  useEffect(() => {
+    if (!bgmUrl || introPhase !== null) return;
+    bgmPlayer.play();
+  }, [bgmUrl, introPhase, bgmPlayer]);
+
+  // BGM: toggle mute
+  useEffect(() => {
+    if (!bgmUrl) return;
+    bgmPlayer.muted = bgmMuted;
+  }, [bgmMuted, bgmUrl, bgmPlayer]);
+
   const artCountOnWall = useMemo(
     () => placements.filter((p) => p.wall === currentDir).length,
     [placements, currentDir],
@@ -340,10 +364,23 @@ export default function GalleryScene({
               ))}
             </View>
 
-            <Pressable style={styles.exitBtn} onPress={onClose}>
-              <Text style={styles.hudBtnIcon}>🚪</Text>
-              <Text style={styles.hudBtnText}>나가기</Text>
-            </Pressable>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
+              {bgmUrl && (
+                <Pressable
+                  style={[styles.exitBtn, !bgmMuted && styles.tourBtnActive]}
+                  onPress={() => setBgmMuted((v) => !v)}
+                >
+                  <Text style={styles.hudBtnIcon}>{bgmMuted ? '🔇' : '🔊'}</Text>
+                  <Text style={[styles.hudBtnText, !bgmMuted && { color: C.gold }]}>
+                    {bgmMuted ? '음소거' : '음악'}
+                  </Text>
+                </Pressable>
+              )}
+              <Pressable style={styles.exitBtn} onPress={onClose}>
+                <Text style={styles.hudBtnIcon}>🚪</Text>
+                <Text style={styles.hudBtnText}>나가기</Text>
+              </Pressable>
+            </View>
           </View>
 
           <Text style={styles.dirLabel}>{WALL_LABELS[currentDir]}</Text>

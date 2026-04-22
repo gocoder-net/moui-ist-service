@@ -46,4 +46,6 @@ export type GallerySceneProps = {
   title?: string;
   foreword?: string | null;
   posterUrl?: string | null;
+  // BGM
+  bgmUrl?: string | null;
 };
