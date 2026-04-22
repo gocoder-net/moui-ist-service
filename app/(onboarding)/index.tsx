@@ -28,16 +28,16 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const C = {
-  bg: '#17171B',
-  fg: '#EEEEF0',
+  bg: '#191f28',
+  fg: '#f2f4f6',
   gold: '#C8A96E',
   goldLight: '#E0C992',
   goldDim: 'rgba(200,169,110,0.12)',
-  muted: '#6B6B7B',
-  mutedLight: '#4A4A58',
-  border: '#1E1F2E',
-  white: '#EEEEF0',
-  inputBg: '#12131E',
+  muted: '#8b95a1',
+  mutedLight: '#4e5968',
+  border: '#333d4b',
+  white: '#f2f4f6',
+  inputBg: '#212a35',
 };
 
 type UserType = 'creator' | 'aspiring' | 'audience';
@@ -228,7 +228,7 @@ function SelectionCard({
 
   const cardAnim = useAnimatedStyle(() => ({
     borderColor: interpolateColor(borderProgress.value, [0, 1], [C.border, C.gold]),
-    backgroundColor: interpolateColor(borderProgress.value, [0, 1], [C.bg, '#13141F']),
+    backgroundColor: interpolateColor(borderProgress.value, [0, 1], [C.bg, '#212a35']),
     transform: [{ scale: cardScale.value }],
   }));
 
@@ -453,7 +453,7 @@ export default function OnboardingScreen() {
             ]}
           >
             {loading ? (
-              <ActivityIndicator color="#17171B" size="small" />
+              <ActivityIndicator color="#191f28" size="small" />
             ) : null}
             <Text style={styles.btnMainText}>
               {loading ? '설정 중...' : step === 1 ? '다음' : '시작하기'}
@@ -593,13 +593,13 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   btnMainText: {
-    color: '#17171B',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 2,
   },
   btnArrow: {
-    color: '#17171B',
+    color: '#191f28',
     fontSize: 18,
     fontWeight: '300',
   },

@@ -53,7 +53,7 @@ export default function useGalleryControls({
     const dx = pageX - touchStartRef.current.x;
     const dy = pageY - touchStartRef.current.y;
 
-    if (!isDraggingRef.current && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) {
+    if (!isDraggingRef.current && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
       isDraggingRef.current = true;
     }
 

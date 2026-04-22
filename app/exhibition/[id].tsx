@@ -15,8 +15,8 @@ import { ROOM_TEMPLATES, WALL_LABELS as WALL_LABELS_SHARED } from '@/components/
 import type { WallImages, WallImageInfo } from '@/components/exhibition/room-geometry';
 
 const C = {
-  bg: '#0A0A0A', fg: '#FFFFFF', gold: '#C8A96E', goldLight: '#E0C992',
-  muted: '#888', mutedDark: '#555', border: '#333',
+  bg: '#191f28', fg: '#f2f4f6', gold: '#C8A96E', goldLight: '#E0C992',
+  muted: '#8b95a1', mutedDark: '#4e5968', border: '#333d4b',
 };
 
 type Wall = 'north' | 'south' | 'east' | 'west';

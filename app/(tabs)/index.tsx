@@ -26,15 +26,15 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const C = {
-  bg: '#17171B',
-  fg: '#EEEEF0',
+  bg: '#191f28',
+  fg: '#f2f4f6',
   gold: '#C8A96E',
   goldLight: '#E0C992',
   goldDim: 'rgba(200,169,110,0.12)',
-  muted: '#6B6B7B',
-  mutedLight: '#4A4A58',
-  border: '#1E1F2E',
-  white: '#EEEEF0',
+  muted: '#8b95a1',
+  mutedLight: '#4e5968',
+  border: '#333d4b',
+  white: '#f2f4f6',
 };
 
 /* ── 배경 떠다니는 도형 ── */
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#13141F',
+    backgroundColor: '#212a35',
     borderWidth: 1.5,
     borderColor: C.gold,
     justifyContent: 'center',
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   badge: {
-    backgroundColor: '#13141F',
+    backgroundColor: '#212a35',
     borderWidth: 1,
     borderColor: C.gold,
     borderRadius: 20,
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 18,
     gap: 14,
-    backgroundColor: '#13141F',
+    backgroundColor: '#212a35',
   },
   quickIcon: {
     fontSize: 28,
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
     padding: 28,
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#13141F',
+    backgroundColor: '#212a35',
   },
   infoIconWrap: {
     marginBottom: 4,
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 5,
     borderRadius: 12,
-    backgroundColor: '#1E1F2E',
+    backgroundColor: '#333d4b',
   },
   infoBadgeText: {
     fontSize: 11,
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     borderRadius: 16,
-    backgroundColor: '#13141F',
+    backgroundColor: '#212a35',
     overflow: 'hidden',
   },
   exPoster: {
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
   exPosterPlaceholder: {
     width: '100%',
     height: 110,
-    backgroundColor: '#13141F',
+    backgroundColor: '#212a35',
     justifyContent: 'center',
     alignItems: 'center',
   },

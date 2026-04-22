@@ -29,17 +29,17 @@ import Animated, {
 import { useAuth } from '@/contexts/auth-context';
 
 const C = {
-  bg: '#17171B',
-  fg: '#EEEEF0',
+  bg: '#191f28',
+  fg: '#f2f4f6',
   gold: '#C8A96E',
   goldLight: '#E0C992',
   goldDim: 'rgba(200,169,110,0.12)',
-  muted: '#6B6B7B',
-  mutedLight: '#4A4A58',
-  border: '#1E1F2E',
+  muted: '#8b95a1',
+  mutedLight: '#4e5968',
+  border: '#333d4b',
   error: '#D94040',
-  white: '#EEEEF0',
-  inputBg: '#12131E',
+  white: '#f2f4f6',
+  inputBg: '#212a35',
 };
 
 /* ── 배경 떠다니는 도형 (랜딩 화면과 동일) ── */
@@ -422,7 +422,7 @@ export default function SignUpScreen() {
                   ]}
                 >
                   {loading ? (
-                    <ActivityIndicator color="#17171B" size="small" />
+                    <ActivityIndicator color="#191f28" size="small" />
                   ) : null}
                   <Text style={styles.btnMainText}>
                     {loading ? '가입 중...' : '가입하기'}
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#12131E',
+    backgroundColor: '#212a35',
     borderWidth: 1,
     borderColor: C.border,
     justifyContent: 'center',
@@ -568,13 +568,13 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   btnMainText: {
-    color: '#17171B',
+    color: '#191f28',
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 2,
   },
   btnArrow: {
-    color: '#17171B',
+    color: '#191f28',
     fontSize: 18,
     fontWeight: '300',
   },

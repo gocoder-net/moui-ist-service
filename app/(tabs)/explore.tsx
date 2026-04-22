@@ -21,14 +21,14 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const C = {
-  bg: '#17171B',
-  fg: '#EEEEF0',
+  bg: '#191f28',
+  fg: '#f2f4f6',
   gold: '#C8A96E',
   goldLight: '#E0C992',
-  muted: '#6B6B7B',
-  mutedLight: '#4A4A58',
-  border: '#1E1F2E',
-  white: '#EEEEF0',
+  muted: '#8b95a1',
+  mutedLight: '#4e5968',
+  border: '#333d4b',
+  white: '#f2f4f6',
 };
 
 /* ── 배경 떠다니는 도형 ── */
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 10,
     marginBottom: 28,
-    backgroundColor: '#12131E',
+    backgroundColor: '#212a35',
   },
   searchIcon: {
     fontSize: 16,
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     padding: 24,
     alignItems: 'center',
     gap: 12,
-    backgroundColor: '#13141F',
+    backgroundColor: '#212a35',
   },
   trendingHeader: {
     flexDirection: 'row',
@@ -355,7 +355,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 8,
-    backgroundColor: '#1E1F2E',
+    backgroundColor: '#333d4b',
   },
   trendingBadgeText: {
     fontSize: 9,

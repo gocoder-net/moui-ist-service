@@ -62,21 +62,21 @@ function RootNavigator() {
 
   useEffect(() => {
     // 다이아몬드 등장
-    diamondOpacity.value = withDelay(100, withTiming(1, { duration: 200 }));
-    diamondRotate.value = withDelay(100, withTiming(360, { duration: 400, easing: Easing.out(Easing.cubic) }));
+    diamondOpacity.value = withDelay(50, withTiming(1, { duration: 100 }));
+    diamondRotate.value = withDelay(50, withTiming(360, { duration: 200, easing: Easing.out(Easing.cubic) }));
 
     // 로고 등장
-    logoOpacity.value = withDelay(250, withTiming(1, { duration: 300, easing: Easing.out(Easing.cubic) }));
-    logoScale.value = withDelay(250, withTiming(1, { duration: 300, easing: Easing.out(Easing.back(1.5)) }));
+    logoOpacity.value = withDelay(125, withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) }));
+    logoScale.value = withDelay(125, withTiming(1, { duration: 150, easing: Easing.out(Easing.back(1.5)) }));
 
     // 대시 등장
-    dashOpacity.value = withDelay(450, withTiming(1, { duration: 200 }));
+    dashOpacity.value = withDelay(225, withTiming(1, { duration: 100 }));
 
     // 태그라인 등장
-    taglineOpacity.value = withDelay(600, withTiming(1, { duration: 250 }));
+    taglineOpacity.value = withDelay(300, withTiming(1, { duration: 125 }));
 
     // 페이드 아웃
-    splashOpacity.value = withDelay(1100, withTiming(0, { duration: 250 }, () => {
+    splashOpacity.value = withDelay(550, withTiming(0, { duration: 125 }, () => {
       runOnJS(setSplashDone)(true);
     }));
   }, []);
@@ -104,8 +104,8 @@ function RootNavigator() {
   }));
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#17171B' }}>
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#17171B' } }}>
+    <View style={{ flex: 1, backgroundColor: '#191f28' }}>
+      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#191f28' } }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
@@ -145,7 +145,7 @@ function RootNavigator() {
 const splash = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#17171B',
+    backgroundColor: '#191f28',
     justifyContent: 'center',
     alignItems: 'center',
   },

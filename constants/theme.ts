@@ -5,12 +5,12 @@ export const Brand = {
   gold: '#C8A96E',
   goldLight: '#E0C992',
   goldDim: 'rgba(200,169,110,0.12)',
-  black: '#17171B',
-  white: '#EEEEF0',
-  cream: '#13141F',
-  gray: '#6B6B7B',
-  grayLight: '#4A4A58',
-  border: '#1E1F2E',
+  black: '#191f28',
+  white: '#f2f4f6',
+  cream: '#212a35',
+  gray: '#8b95a1',
+  grayLight: '#4e5968',
+  border: '#333d4b',
 };
 
 const tintColor = Brand.gold;
