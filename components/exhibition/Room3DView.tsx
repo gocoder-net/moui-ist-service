@@ -8,8 +8,8 @@ import {
 } from './room-geometry';
 
 const C = {
-  gold: '#C8A96E', muted: '#999', mutedLight: '#CCC', border: '#E8E5DF',
-  fg: '#0A0A0A', white: '#FFF',
+  gold: '#C8A96E', muted: '#6B6B7B', mutedLight: '#4A4A58', border: '#1E1F2E',
+  fg: '#EEEEF0', white: '#EEEEF0',
 };
 
 type Props = {

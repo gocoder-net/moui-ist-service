@@ -26,15 +26,15 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const C = {
-  bg: '#FFFFFF',
-  fg: '#0A0A0A',
+  bg: '#17171B',
+  fg: '#EEEEF0',
   gold: '#C8A96E',
   goldLight: '#E0C992',
-  goldDim: 'rgba(200,169,110,0.06)',
-  muted: '#999999',
-  mutedLight: '#CCCCCC',
-  border: '#E8E5DF',
-  white: '#FFFFFF',
+  goldDim: 'rgba(200,169,110,0.12)',
+  muted: '#6B6B7B',
+  mutedLight: '#4A4A58',
+  border: '#1E1F2E',
+  white: '#EEEEF0',
 };
 
 /* ── 배경 떠다니는 도형 ── */
@@ -342,9 +342,9 @@ export default function HomeScreen() {
 
         <View style={styles.quickGrid}>
           <QuickCard icon="🏛️" title="전시관 만들기" desc="나만의 가상 전시 공간을 만드세요" delay={500} onPress={() => router.push('/exhibition/create')} />
-          <QuickCard icon="🖼️" title="전시관 둘러보기" desc="다양한 온라인 전시를 감상하세요" delay={580} />
+          {/* <QuickCard icon="🖼️" title="전시관 둘러보기" desc="다양한 온라인 전시를 감상하세요" delay={580} />
           <QuickCard icon="👥" title="작가 팔로우" desc="좋아하는 작가를 팔로우하세요" delay={660} />
-          <QuickCard icon="💬" title="커뮤니티" desc="창작자들과 소통하세요" delay={740} />
+          <QuickCard icon="💬" title="커뮤니티" desc="창작자들과 소통하세요" delay={740} /> */}
         </View>
 
         {/* 안내 카드 */}
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#FDFBF7',
+    backgroundColor: '#13141F',
     borderWidth: 1.5,
     borderColor: C.gold,
     justifyContent: 'center',
@@ -446,7 +446,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   badge: {
-    backgroundColor: '#FDFBF7',
+    backgroundColor: '#13141F',
     borderWidth: 1,
     borderColor: C.gold,
     borderRadius: 20,
@@ -506,7 +506,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 18,
     gap: 14,
-    backgroundColor: C.white,
+    backgroundColor: '#13141F',
   },
   quickIcon: {
     fontSize: 28,
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
     padding: 28,
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#FDFBF7',
+    backgroundColor: '#13141F',
   },
   infoIconWrap: {
     marginBottom: 4,
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 5,
     borderRadius: 12,
-    backgroundColor: C.fg,
+    backgroundColor: '#1E1F2E',
   },
   infoBadgeText: {
     fontSize: 11,
@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.border,
     borderRadius: 16,
-    backgroundColor: C.white,
+    backgroundColor: '#13141F',
     overflow: 'hidden',
   },
   exPoster: {
@@ -602,7 +602,7 @@ const styles = StyleSheet.create({
   exPosterPlaceholder: {
     width: '100%',
     height: 110,
-    backgroundColor: '#FDFBF7',
+    backgroundColor: '#13141F',
     justifyContent: 'center',
     alignItems: 'center',
   },

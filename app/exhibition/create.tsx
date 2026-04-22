@@ -21,8 +21,8 @@ import Room3DView from '@/components/exhibition/Room3DView';
 import WallFaceEditor from '@/components/exhibition/WallFaceEditor';
 
 const C = {
-  bg: '#FFFFFF', fg: '#0A0A0A', gold: '#C8A96E', goldLight: '#E0C992',
-  muted: '#999', mutedLight: '#CCC', border: '#E8E5DF', white: '#FFF', inputBg: '#F8F7F4',
+  bg: '#17171B', fg: '#EEEEF0', gold: '#C8A96E', goldLight: '#E0C992',
+  muted: '#6B6B7B', mutedLight: '#4A4A58', border: '#1E1F2E', white: '#EEEEF0', inputBg: '#12131E',
 };
 
 const WALL_COLORS = [
@@ -1050,12 +1050,12 @@ const styles = StyleSheet.create({
   },
   input: { borderWidth: 1.5, borderColor: C.border, borderRadius: 14, backgroundColor: C.inputBg, paddingHorizontal: 16, paddingVertical: 13, fontSize: 15, color: C.fg },
 
-  nextBtn: { backgroundColor: C.fg, paddingVertical: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 24 },
-  nextBtnText: { color: C.white, fontSize: 15, fontWeight: '700', letterSpacing: 1 },
-  nextBtnArrow: { color: C.gold, fontSize: 16 },
+  nextBtn: { backgroundColor: C.gold, paddingVertical: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 24 },
+  nextBtnText: { color: '#17171B', fontSize: 15, fontWeight: '700', letterSpacing: 1 },
+  nextBtnArrow: { color: '#17171B', fontSize: 16 },
 
   roomCard: { borderWidth: 1.5, borderColor: C.border, borderRadius: 16, padding: 18, marginBottom: 12 },
-  roomCardSel: { borderColor: C.gold, backgroundColor: '#FDFBF7' },
+  roomCardSel: { borderColor: C.gold, backgroundColor: '#13141F' },
   roomCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   roomCardTitle: { fontSize: 16, fontWeight: '800', color: C.fg },
   roomCardDesc: { fontSize: 12, color: C.muted, marginTop: 4 },
@@ -1071,7 +1071,7 @@ const styles = StyleSheet.create({
 
   segmentRow: { flexDirection: 'row', gap: 0, marginTop: 16, borderWidth: 1.5, borderColor: C.border, borderRadius: 12, overflow: 'hidden' },
   segmentBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: C.inputBg },
-  segmentBtnActive: { backgroundColor: C.fg },
+  segmentBtnActive: { backgroundColor: '#1E1F2E' },
   segmentText: { fontSize: 12, fontWeight: '700', color: C.muted, letterSpacing: 1 },
   segmentTextActive: { color: C.white },
 
@@ -1083,8 +1083,8 @@ const styles = StyleSheet.create({
   hexHash: { fontSize: 16, fontWeight: '700', color: C.muted },
   hexInput: { flex: 1, borderWidth: 1.5, borderColor: C.border, borderRadius: 10, backgroundColor: C.inputBg, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: C.fg, fontWeight: '600', letterSpacing: 2 },
   hexPreview: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: C.border },
-  hexApplyBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: C.fg },
-  hexApplyText: { fontSize: 12, fontWeight: '700', color: C.white },
+  hexApplyBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: C.gold },
+  hexApplyText: { fontSize: 12, fontWeight: '700', color: '#17171B' },
 
   unifyBtn: { marginTop: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: C.gold, alignItems: 'center', backgroundColor: 'rgba(200,169,110,0.06)' },
   unifyBtnText: { fontSize: 13, fontWeight: '700', color: C.gold, letterSpacing: 1 },
@@ -1099,8 +1099,8 @@ const styles = StyleSheet.create({
 
   fieldRow: { marginBottom: 8 },
   fieldLabel: { fontSize: 11, color: C.muted, fontWeight: '600', marginBottom: 4 },
-  fieldInput: { borderWidth: 1, borderColor: C.border, borderRadius: 10, backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: C.fg },
-  mediumChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: C.border, backgroundColor: '#fff' },
+  fieldInput: { borderWidth: 1, borderColor: C.border, borderRadius: 10, backgroundColor: C.inputBg, paddingHorizontal: 12, paddingVertical: 8, fontSize: 13, color: C.fg },
+  mediumChip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: C.border, backgroundColor: C.inputBg },
   mediumChipSel: { borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.1)' },
   mediumChipText: { fontSize: 11, color: C.muted },
   mediumChipTextSel: { color: C.gold, fontWeight: '600' },
@@ -1119,9 +1119,9 @@ const styles = StyleSheet.create({
   anglePlus: { fontSize: 18, color: C.mutedLight },
   angleLabel: { position: 'absolute', bottom: -14, fontSize: 8, color: C.muted },
 
-  createBtn: { backgroundColor: C.fg, paddingVertical: 18, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: C.gold, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 },
-  createBtnText: { color: C.white, fontSize: 16, fontWeight: '700', letterSpacing: 2 },
-  createBtnArrow: { color: C.gold, fontSize: 18 },
+  createBtn: { backgroundColor: C.gold, paddingVertical: 18, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: C.gold, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 },
+  createBtnText: { color: '#17171B', fontSize: 16, fontWeight: '700', letterSpacing: 2 },
+  createBtnArrow: { color: '#17171B', fontSize: 18 },
 
   wallSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4 },
   wallSectionTitle: { fontSize: 13, fontWeight: '700', color: C.fg, letterSpacing: 1 },
@@ -1146,7 +1146,7 @@ const styles = StyleSheet.create({
   // Wall surface mode toggle (color/image)
   surfaceToggleRow: { flexDirection: 'row', gap: 0, marginTop: 8, marginBottom: 8, borderWidth: 1.5, borderColor: C.border, borderRadius: 10, overflow: 'hidden' },
   surfaceToggleBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: C.inputBg },
-  surfaceToggleBtnActive: { backgroundColor: C.fg },
+  surfaceToggleBtnActive: { backgroundColor: '#1E1F2E' },
   surfaceToggleText: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 1 },
   surfaceToggleTextActive: { color: C.white },
 

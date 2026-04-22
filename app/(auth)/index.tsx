@@ -20,12 +20,12 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const C = {
-  bg: '#FFFFFF',
-  fg: '#0A0A0A',
+  bg: '#17171B',
+  fg: '#EEEEF0',
   gold: '#C8A96E',
   goldLight: '#E0C992',
-  muted: '#999999',
-  mutedLight: '#CCCCCC',
+  muted: '#6B6B7B',
+  mutedLight: '#4A4A58',
 };
 
 function FloatingShape({
@@ -434,7 +434,7 @@ const styles = StyleSheet.create({
   btnMain: {
     width: '100%',
     maxWidth: 360,
-    backgroundColor: C.fg,
+    backgroundColor: C.gold,
     paddingVertical: 17,
     borderRadius: 14,
     flexDirection: 'row',
@@ -447,13 +447,13 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.985 }],
   },
   btnMainText: {
-    color: '#FFFFFF',
+    color: '#17171B',
     fontSize: 15,
     fontWeight: '600',
     letterSpacing: 1,
   },
   btnArrow: {
-    color: C.gold,
+    color: '#17171B',
     fontSize: 16,
     fontWeight: '300',
   },
