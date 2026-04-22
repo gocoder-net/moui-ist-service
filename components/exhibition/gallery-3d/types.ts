@@ -1,6 +1,6 @@
-import type { Wall, RoomType } from '../room-geometry';
+import type { Wall, RoomType, WallImageMode, WallImageInfo, WallImages } from '../room-geometry';
 
-export type { Wall, RoomType };
+export type { Wall, RoomType, WallImageMode, WallImageInfo, WallImages };
 
 export type RoomDimensions = {
   widthM: number;   // meters (northSouth / 100) — X axis extent
@@ -37,6 +37,7 @@ export type Placement3D = {
 export type GallerySceneProps = {
   roomType: RoomType;
   wallColors: WallColors;
+  wallImages?: WallImages;
   floorColor: string;
   ceilingColor: string;
   placements: Placement3D[];

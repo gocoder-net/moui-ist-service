@@ -1,20 +1,23 @@
 import * as THREE from 'three';
 import { getWallTransforms } from './gallery-math';
-import type { RoomDimensions, WallColors } from './types';
+import { loadTexture } from './texture-loader';
+import type { RoomDimensions, WallColors, WallImages, Wall } from './types';
 
 /**
  * Build room walls, floor, and ceiling and add them to the scene.
  * Walls use MeshStandardMaterial with the exhibition's wall colors.
+ * If wallImages is provided, walls with images get textured materials.
  */
-export function buildRoom(
+export async function buildRoom(
   scene: THREE.Scene,
   dims: RoomDimensions,
   wallColors: WallColors,
   floorColor: string,
   ceilingColor: string,
-): void {
+  wallImages?: WallImages,
+): Promise<void> {
   const transforms = getWallTransforms(dims);
-  const walls: Array<{ key: keyof typeof transforms; color: string }> = [
+  const walls: Array<{ key: Wall; color: string }> = [
     { key: 'north', color: wallColors.north },
     { key: 'south', color: wallColors.south },
     { key: 'east', color: wallColors.east },
@@ -35,6 +38,28 @@ export function buildRoom(
     mesh.rotation.copy(t.rotation);
     mesh.name = `wall_${key}`;
     scene.add(mesh);
+
+    // Load wall image texture if available
+    const wallImg = wallImages?.[key];
+    if (wallImg?.url) {
+      try {
+        const tex = await loadTexture(wallImg.url);
+        if (wallImg.mode === 'tile') {
+          tex.wrapS = THREE.RepeatWrapping;
+          tex.wrapT = THREE.RepeatWrapping;
+          // Repeat every 2 meters
+          tex.repeat.set(t.size[0] / 2, t.size[1] / 2);
+        }
+        mesh.material = new THREE.MeshStandardMaterial({
+          map: tex,
+          side: THREE.FrontSide,
+          roughness: 0.9,
+          metalness: 0.0,
+        });
+      } catch {
+        // Keep color fallback on load failure
+      }
+    }
   }
 
   // Floor

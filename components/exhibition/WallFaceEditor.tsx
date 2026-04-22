@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Pressable, ScrollView, PanResponder, Platform }
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import {
-  type Wall, type RoomType, type PlacedArtwork,
+  type Wall, type RoomType, type PlacedArtwork, type WallImageInfo,
   getWallLength, getWallHeight, cmToPx, pxToCm, WALL_LABELS,
 } from './room-geometry';
 
@@ -16,6 +16,7 @@ type Props = {
   wall: Wall;
   roomType: RoomType;
   wallColor: string;
+  wallImage?: WallImageInfo | null;
   artworks: PlacedArtwork[];
   selectedArtworkId: string | null;
   onPlaceArtwork: (wall: Wall, posXcm: number, posYcm: number) => void;
@@ -27,7 +28,7 @@ type Props = {
 };
 
 export default function WallFaceEditor({
-  wall, roomType, wallColor, artworks, selectedArtworkId,
+  wall, roomType, wallColor, wallImage, artworks, selectedArtworkId,
   onPlaceArtwork, onSelectArtwork, onMoveArtwork, onResizeArtwork, onClose, containerWidth,
 }: Props) {
   const wallLenCm = getWallLength(roomType, wall);
@@ -119,6 +120,12 @@ export default function WallFaceEditor({
         scrollEnabled={!selectedArtworkId}>
         <Pressable onPress={handleWallPress} style={{ position: 'relative' }}>
           <View style={[styles.wallSurface, { width: wallWidthPx, height: wallHeightPx, backgroundColor: wallColor }]}>
+            {wallImage?.url && (
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                <Image source={{ uri: wallImage.url }} style={{ width: '100%', height: '100%' }}
+                  contentFit="cover" />
+              </View>
+            )}
             {/* 세로 눈금 */}
             {Array.from({ length: Math.floor(wallLenCm / 100) }, (_, i) => {
               const x = cmToPx((i + 1) * 100, wallLenCm, wallWidthPx);

@@ -3,7 +3,7 @@ import { StyleSheet, View, Text, Pressable } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import {
-  type Wall, type RoomType, type PlacedArtwork,
+  type Wall, type RoomType, type PlacedArtwork, type WallImages,
   ROOM_TEMPLATES, WALL_LABELS, cmToPx,
 } from './room-geometry';
 
@@ -15,6 +15,7 @@ const C = {
 type Props = {
   roomType: RoomType;
   wallColors: Record<Wall, string>;
+  wallImages?: WallImages;
   floorColor?: string;
   artworks: PlacedArtwork[];
   selectedWall: Wall | null;
@@ -29,7 +30,7 @@ type Props = {
  * 각 벽면에 작품 썸네일이 보이고, 벽을 터치하면 선택됨.
  */
 export default function Room3DView({
-  roomType, wallColors, floorColor, artworks, selectedWall, onWallSelect,
+  roomType, wallColors, wallImages, floorColor, artworks, selectedWall, onWallSelect,
   viewerMode, onArtworkSelect,
 }: Props) {
   const room = ROOM_TEMPLATES[roomType];
@@ -93,6 +94,12 @@ export default function Room3DView({
           borderColor: selectedWall === 'north' ? C.gold : C.border,
           borderBottomWidth: 0,
         }]}>
+          {wallImages?.north?.url && (
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <Image source={{ uri: wallImages.north.url }} style={{ width: '100%', height: '100%' }}
+                contentFit="cover" />
+            </View>
+          )}
           {renderThumbs('north', floorW)}
           <Text style={[styles.wallText, { color: labelColor(wallColors.north) }]}>
             북 ({getWallArtworks('north').length})
@@ -109,6 +116,12 @@ export default function Room3DView({
             borderColor: selectedWall === 'west' ? C.gold : C.border,
             borderRightWidth: 0,
           }]}>
+            {wallImages?.west?.url && (
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                <Image source={{ uri: wallImages.west.url }} style={{ width: '100%', height: '100%' }}
+                  contentFit="cover" />
+              </View>
+            )}
             {renderThumbs('west', floorH)}
             <Text style={[styles.wallText, { color: labelColor(wallColors.west), transform: [{ rotate: '-90deg' }] }]}>
               서 ({getWallArtworks('west').length})
@@ -135,6 +148,12 @@ export default function Room3DView({
             borderColor: selectedWall === 'east' ? C.gold : C.border,
             borderLeftWidth: 0,
           }]}>
+            {wallImages?.east?.url && (
+              <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                <Image source={{ uri: wallImages.east.url }} style={{ width: '100%', height: '100%' }}
+                  contentFit="cover" />
+              </View>
+            )}
             {renderThumbs('east', floorH)}
             <Text style={[styles.wallText, { color: labelColor(wallColors.east), transform: [{ rotate: '90deg' }] }]}>
               동 ({getWallArtworks('east').length})
@@ -150,6 +169,12 @@ export default function Room3DView({
           borderColor: selectedWall === 'south' ? C.gold : C.border,
           borderTopWidth: 0,
         }]}>
+          {wallImages?.south?.url && (
+            <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+              <Image source={{ uri: wallImages.south.url }} style={{ width: '100%', height: '100%' }}
+                contentFit="cover" />
+            </View>
+          )}
           {renderThumbs('south', floorW)}
           <Text style={[styles.wallText, { color: labelColor(wallColors.south) }]}>
             남 · 입구 ({getWallArtworks('south').length})

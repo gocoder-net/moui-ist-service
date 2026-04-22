@@ -1,6 +1,10 @@
 export type Wall = 'north' | 'south' | 'east' | 'west';
 export type RoomType = 'small' | 'medium' | 'large' | 'wide';
 
+export type WallImageMode = 'stretch' | 'tile';
+export type WallImageInfo = { url: string; mode: WallImageMode };
+export type WallImages = Record<Wall, WallImageInfo | null>;
+
 export const WALL_LABELS: Record<Wall, string> = {
   north: '북쪽 벽',
   south: '남쪽 벽',

@@ -13,6 +13,7 @@ import { Image } from 'expo-image';
 
 import {
   type Wall, type RoomType, type PlacedArtwork,
+  type WallImageInfo, type WallImageMode, type WallImages,
   ROOM_TEMPLATES, WALL_LABELS, MEDIUM_OPTIONS,
 } from '@/components/exhibition/room-geometry';
 import Room3DView from '@/components/exhibition/Room3DView';
@@ -50,6 +51,13 @@ export default function CreateExhibitionScreen() {
   const [posterUri, setPosterUri] = useState<string | null>(null);
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
   const [wallEditorOpen, setWallEditorOpen] = useState<Wall | null>(null);
+  const [wallImages, setWallImages] = useState<WallImages>({
+    north: null, south: null, east: null, west: null,
+  });
+  const [wallImageLocalUris, setWallImageLocalUris] = useState<Record<Wall, string | null>>({
+    north: null, south: null, east: null, west: null,
+  });
+  const [wallSurfaceMode, setWallSurfaceMode] = useState<'color' | 'image'>('color');
   const [loading, setLoading] = useState(false);
 
   const mapWidth = Math.min(screenWidth - 48, 360);
@@ -154,6 +162,19 @@ export default function CreateExhibitionScreen() {
         posterImageUrl = await uploadImage(posterUri);
       }
 
+      // Upload wall images
+      const wallImagesJson: Record<string, { url: string; mode: WallImageMode } | null> = {};
+      for (const w of ['north', 'south', 'east', 'west'] as Wall[]) {
+        const localUri = wallImageLocalUris[w];
+        const info = wallImages[w];
+        if (localUri && info) {
+          const uploadedUrl = await uploadImage(localUri);
+          wallImagesJson[w] = uploadedUrl ? { url: uploadedUrl, mode: info.mode } : null;
+        } else {
+          wallImagesJson[w] = null;
+        }
+      }
+
       const { data: exhibition, error: exErr } = await supabase.from('exhibitions')
         .insert({
           user_id: user.id, title: title.trim(),
@@ -164,6 +185,7 @@ export default function CreateExhibitionScreen() {
           wall_color_east: wallColors.east, wall_color_west: wallColors.west,
           floor_color: floorColor, ceiling_color: ceilingColor,
           poster_image_url: posterImageUrl,
+          wall_images: wallImagesJson,
           is_published: true,
         })
         .select('id').single();
@@ -359,7 +381,7 @@ export default function CreateExhibitionScreen() {
             <Text style={styles.sub}>벽면, 바닥, 천장의 색상을 설정하세요</Text>
 
             <Room3DView
-              roomType={roomType} wallColors={wallColors} floorColor={floorColor} artworks={[]}
+              roomType={roomType} wallColors={wallColors} wallImages={wallImages} floorColor={floorColor} artworks={[]}
               selectedWall={colorTarget === 'wall' ? selectedWall : null}
               onWallSelect={(w) => { setColorTarget('wall'); setSelectedWall(w); }}
             />
@@ -386,13 +408,37 @@ export default function CreateExhibitionScreen() {
               <Text style={[styles.hint, { marginTop: 8 }]}>벽면을 터치해서 선택하세요</Text>
             )}
             {colorTarget === 'wall' && selectedWall && (
-              <View style={styles.colorLabelRow}>
-                <Text style={styles.label}>{WALL_LABELS[selectedWall]} 색상</Text>
-                <Pressable style={styles.applyAllBtn}
-                  onPress={() => applyAllWalls(wallColors[selectedWall])}>
-                  <Text style={styles.applyAllText}>전체 벽면 적용</Text>
-                </Pressable>
-              </View>
+              <>
+                <View style={styles.colorLabelRow}>
+                  <Text style={styles.label}>{WALL_LABELS[selectedWall]}</Text>
+                  <Pressable style={styles.applyAllBtn}
+                    onPress={() => {
+                      applyAllWalls(wallColors[selectedWall]);
+                      if (wallSurfaceMode === 'image' && wallImages[selectedWall]) {
+                        const img = wallImages[selectedWall];
+                        const localUri = wallImageLocalUris[selectedWall];
+                        setWallImages({ north: img, south: img, east: img, west: img });
+                        setWallImageLocalUris({ north: localUri, south: localUri, east: localUri, west: localUri });
+                      }
+                    }}>
+                    <Text style={styles.applyAllText}>전체 벽면 적용</Text>
+                  </Pressable>
+                </View>
+
+                {/* 색상/이미지 토글 */}
+                <View style={styles.surfaceToggleRow}>
+                  <Pressable
+                    style={[styles.surfaceToggleBtn, wallSurfaceMode === 'color' && styles.surfaceToggleBtnActive]}
+                    onPress={() => setWallSurfaceMode('color')}>
+                    <Text style={[styles.surfaceToggleText, wallSurfaceMode === 'color' && styles.surfaceToggleTextActive]}>색상</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.surfaceToggleBtn, wallSurfaceMode === 'image' && styles.surfaceToggleBtnActive]}
+                    onPress={() => setWallSurfaceMode('image')}>
+                    <Text style={[styles.surfaceToggleText, wallSurfaceMode === 'image' && styles.surfaceToggleTextActive]}>이미지</Text>
+                  </Pressable>
+                </View>
+              </>
             )}
             {colorTarget === 'floor' && (
               <Text style={[styles.label, { marginTop: 12 }]}>바닥 색상</Text>
@@ -404,48 +450,98 @@ export default function CreateExhibitionScreen() {
             {/* 프리셋 컬러칩 (벽 미선택 시 wall 타겟이면 숨김) */}
             {(colorTarget !== 'wall' || selectedWall) && (
               <Animated.View entering={FadeIn.duration(200)}>
-                <View style={styles.colorRow}>
-                  {WALL_COLORS.map(color => (
-                    <Pressable key={color}
-                      style={[styles.colorChip, { backgroundColor: color },
-                        activeColor === color && styles.colorChipSel]}
-                      onPress={() => applyColor(color)}>
-                      {activeColor === color && (
-                        <Text style={[styles.colorCheck,
-                          ['#333333','#1B2A4A','#4A1B2A','#1B3A2A'].includes(color) && { color: '#fff' }]}>✓</Text>
-                      )}
-                    </Pressable>
-                  ))}
-                </View>
+                {/* 이미지 모드 — 벽면 타겟에서만 */}
+                {colorTarget === 'wall' && selectedWall && wallSurfaceMode === 'image' && (
+                  <View style={{ gap: 10, marginBottom: 12 }}>
+                    {wallImages[selectedWall]?.url ? (
+                      <>
+                        <Image source={{ uri: wallImages[selectedWall]!.url }} style={styles.wallImgPreview} contentFit="cover" />
+                        {/* 채우기/반복 토글 */}
+                        <View style={styles.surfaceToggleRow}>
+                          <Pressable
+                            style={[styles.surfaceToggleBtn, wallImages[selectedWall]!.mode === 'stretch' && styles.surfaceToggleBtnActive]}
+                            onPress={() => setWallImages(prev => ({ ...prev, [selectedWall]: { ...prev[selectedWall]!, mode: 'stretch' as WallImageMode } }))}>
+                            <Text style={[styles.surfaceToggleText, wallImages[selectedWall]!.mode === 'stretch' && styles.surfaceToggleTextActive]}>채우기</Text>
+                          </Pressable>
+                          <Pressable
+                            style={[styles.surfaceToggleBtn, wallImages[selectedWall]!.mode === 'tile' && styles.surfaceToggleBtnActive]}
+                            onPress={() => setWallImages(prev => ({ ...prev, [selectedWall]: { ...prev[selectedWall]!, mode: 'tile' as WallImageMode } }))}>
+                            <Text style={[styles.surfaceToggleText, wallImages[selectedWall]!.mode === 'tile' && styles.surfaceToggleTextActive]}>반복 패턴</Text>
+                          </Pressable>
+                        </View>
+                        <Pressable style={styles.wallImgDeleteBtn}
+                          onPress={() => {
+                            setWallImages(prev => ({ ...prev, [selectedWall]: null }));
+                            setWallImageLocalUris(prev => ({ ...prev, [selectedWall]: null }));
+                          }}>
+                          <Text style={styles.wallImgDeleteText}>이미지 삭제</Text>
+                        </Pressable>
+                      </>
+                    ) : (
+                      <Pressable
+                        style={styles.wallImgPicker}
+                        onPress={async () => {
+                          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
+                          if (!result.canceled && result.assets[0]) {
+                            const uri = result.assets[0].uri;
+                            setWallImages(prev => ({ ...prev, [selectedWall]: { url: uri, mode: 'stretch' as WallImageMode } }));
+                            setWallImageLocalUris(prev => ({ ...prev, [selectedWall]: uri }));
+                          }
+                        }}>
+                        <Text style={{ fontSize: 28, color: C.mutedLight }}>+</Text>
+                        <Text style={{ fontSize: 11, color: C.muted }}>벽면 이미지 선택</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                )}
 
-                {/* 커스텀 hex 입력 */}
-                <View style={styles.hexRow}>
-                  <Text style={styles.hexHash}>#</Text>
-                  <TextInput
-                    style={styles.hexInput}
-                    placeholder="FF5500"
-                    placeholderTextColor={C.mutedLight}
-                    value={customHex.replace('#', '')}
-                    onChangeText={(t) => {
-                      const clean = t.replace(/[^0-9A-Fa-f]/g, '').slice(0, 6);
-                      setCustomHex(`#${clean}`);
-                    }}
-                    maxLength={6}
-                    autoCapitalize="characters"
-                  />
-                  <View style={[styles.hexPreview, {
-                    backgroundColor: isHexValid ? customHex : '#DDD',
-                  }]} />
-                  <Pressable
-                    style={[styles.hexApplyBtn, !isHexValid && { opacity: 0.3 }]}
-                    disabled={!isHexValid}
-                    onPress={() => { if (isHexValid) applyColor(customHex); }}>
-                    <Text style={styles.hexApplyText}>적용</Text>
-                  </Pressable>
-                </View>
+                {/* 색상 모드 (바닥/천장은 항상 표시, 벽면은 색상 모드일 때만) */}
+                {(colorTarget !== 'wall' || wallSurfaceMode === 'color') && (
+                  <>
+                    <View style={styles.colorRow}>
+                      {WALL_COLORS.map(color => (
+                        <Pressable key={color}
+                          style={[styles.colorChip, { backgroundColor: color },
+                            activeColor === color && styles.colorChipSel]}
+                          onPress={() => applyColor(color)}>
+                          {activeColor === color && (
+                            <Text style={[styles.colorCheck,
+                              ['#333333','#1B2A4A','#4A1B2A','#1B3A2A'].includes(color) && { color: '#fff' }]}>✓</Text>
+                          )}
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    {/* 커스텀 hex 입력 */}
+                    <View style={styles.hexRow}>
+                      <Text style={styles.hexHash}>#</Text>
+                      <TextInput
+                        style={styles.hexInput}
+                        placeholder="FF5500"
+                        placeholderTextColor={C.mutedLight}
+                        value={customHex.replace('#', '')}
+                        onChangeText={(t) => {
+                          const clean = t.replace(/[^0-9A-Fa-f]/g, '').slice(0, 6);
+                          setCustomHex(`#${clean}`);
+                        }}
+                        maxLength={6}
+                        autoCapitalize="characters"
+                      />
+                      <View style={[styles.hexPreview, {
+                        backgroundColor: isHexValid ? customHex : '#DDD',
+                      }]} />
+                      <Pressable
+                        style={[styles.hexApplyBtn, !isHexValid && { opacity: 0.3 }]}
+                        disabled={!isHexValid}
+                        onPress={() => { if (isHexValid) applyColor(customHex); }}>
+                        <Text style={styles.hexApplyText}>적용</Text>
+                      </Pressable>
+                    </View>
+                  </>
+                )}
 
                 {/* 전체 공간 통일 */}
-                {activeColor && (
+                {activeColor && (colorTarget !== 'wall' || wallSurfaceMode === 'color') && (
                   <Pressable style={styles.unifyBtn}
                     onPress={() => applyAllSurfaces(activeColor)}>
                     <Text style={styles.unifyBtnText}>전체 공간 통일</Text>
@@ -476,7 +572,7 @@ export default function CreateExhibitionScreen() {
               <>
                 {/* 3D 룸 뷰 */}
                 <Room3DView
-                  roomType={roomType} wallColors={wallColors} floorColor={floorColor} artworks={artworks}
+                  roomType={roomType} wallColors={wallColors} wallImages={wallImages} floorColor={floorColor} artworks={artworks}
                   selectedWall={selectedWall}
                   onWallSelect={(w) => { setSelectedWall(w); setWallEditorOpen(w); }}
                 />
@@ -500,7 +596,16 @@ export default function CreateExhibitionScreen() {
                             <View key={art.localId} style={styles.artItemCompact}>
                               <Image source={{ uri: art.uri }} style={styles.artThumbSmall} contentFit="cover" />
                               <View style={{ flex: 1 }}>
-                                <Text style={styles.artTitleCompact} numberOfLines={1}>{art.title}</Text>
+                                <View style={styles.inlineEditRow}>
+                                  <TextInput
+                                    style={styles.inlineEditInput}
+                                    value={art.title}
+                                    onChangeText={(t) => setArtworks(prev => prev.map(a => a.localId === art.localId ? { ...a, title: t } : a))}
+                                    placeholder="작품 제목"
+                                    placeholderTextColor={C.mutedLight}
+                                  />
+                                  <Text style={styles.inlineEditHint}>✎</Text>
+                                </View>
                                 <Text style={styles.artMeta}>{art.widthCm}×{art.heightCm}cm</Text>
                               </View>
                             </View>
@@ -527,6 +632,7 @@ export default function CreateExhibitionScreen() {
                   wall={wallEditorOpen}
                   roomType={roomType}
                   wallColor={wallColors[wallEditorOpen]}
+                  wallImage={wallImages[wallEditorOpen]}
                   artworks={artworks.filter(a => a.wall === wallEditorOpen)}
                   selectedArtworkId={selectedArtworkId}
                   onPlaceArtwork={handlePlaceArtwork}
@@ -836,4 +942,27 @@ const styles = StyleSheet.create({
 
   overviewBtn: { marginTop: 12, paddingVertical: 14, borderRadius: 12, borderWidth: 1.5, borderColor: C.border, alignItems: 'center' },
   overviewBtnText: { fontSize: 13, color: C.muted, fontWeight: '600', letterSpacing: 1 },
+
+  // Wall surface mode toggle (color/image)
+  surfaceToggleRow: { flexDirection: 'row', gap: 0, marginTop: 8, marginBottom: 8, borderWidth: 1.5, borderColor: C.border, borderRadius: 10, overflow: 'hidden' },
+  surfaceToggleBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: C.inputBg },
+  surfaceToggleBtnActive: { backgroundColor: C.fg },
+  surfaceToggleText: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 1 },
+  surfaceToggleTextActive: { color: C.white },
+
+  // Wall image picker/preview
+  wallImgPicker: {
+    width: '100%', height: 100, borderRadius: 10,
+    borderWidth: 1.5, borderColor: C.border, borderStyle: 'dashed',
+    justifyContent: 'center', alignItems: 'center', gap: 4,
+    backgroundColor: C.inputBg,
+  },
+  wallImgPreview: { width: '100%', height: 120, borderRadius: 10 },
+  wallImgDeleteBtn: { alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 4 },
+  wallImgDeleteText: { fontSize: 11, color: C.muted },
+
+  // Inline edit in overview list
+  inlineEditRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  inlineEditInput: { fontSize: 13, color: C.fg, fontWeight: '600', flex: 1, paddingVertical: 0 },
+  inlineEditHint: { fontSize: 10, color: C.mutedLight },
 });

@@ -12,6 +12,7 @@ import * as Speech from 'expo-speech';
 import Room3DView from '@/components/exhibition/Room3DView';
 import GalleryScene from '@/components/exhibition/gallery-3d/GalleryScene';
 import { ROOM_TEMPLATES, WALL_LABELS as WALL_LABELS_SHARED } from '@/components/exhibition/room-geometry';
+import type { WallImages, WallImageInfo } from '@/components/exhibition/room-geometry';
 
 const C = {
   bg: '#0A0A0A', fg: '#FFFFFF', gold: '#C8A96E', goldLight: '#E0C992',
@@ -43,7 +44,9 @@ type Exhibition = {
   room_type: RoomType;
   wall_color_north: string; wall_color_south: string;
   wall_color_east: string; wall_color_west: string;
-  floor_color: string; ceiling_color: string; poster_image_url: string | null; user_id: string;
+  floor_color: string; ceiling_color: string; poster_image_url: string | null;
+  wall_images: Record<string, { url: string; mode: string } | null> | null;
+  user_id: string;
   profiles: { name: string | null; username: string } | null;
 };
 
@@ -509,6 +512,20 @@ export default function ExhibitionViewer() {
     east: exhibition.wall_color_east, west: exhibition.wall_color_west,
   }[w]);
 
+  // Parse wall_images from DB JSON
+  const parsedWallImages: WallImages | undefined = (() => {
+    const raw = exhibition.wall_images;
+    if (!raw || typeof raw !== 'object') return undefined;
+    const result: Record<string, WallImageInfo | null> = { north: null, south: null, east: null, west: null };
+    for (const w of ['north', 'south', 'east', 'west'] as Wall[]) {
+      const entry = (raw as any)[w];
+      if (entry && typeof entry === 'object' && entry.url && (entry.mode === 'stretch' || entry.mode === 'tile')) {
+        result[w] = { url: entry.url, mode: entry.mode };
+      }
+    }
+    return result as WallImages;
+  })();
+
   // 3D 몰입형 관람 모드
   if (mode === 'map') {
     return (
@@ -519,6 +536,7 @@ export default function ExhibitionViewer() {
             north: exhibition.wall_color_north, south: exhibition.wall_color_south,
             east: exhibition.wall_color_east, west: exhibition.wall_color_west,
           }}
+          wallImages={parsedWallImages}
           floorColor={exhibition.floor_color}
           ceilingColor={exhibition.ceiling_color ?? '#F5F5F0'}
           placements={placements}
@@ -569,6 +587,7 @@ export default function ExhibitionViewer() {
             north: exhibition.wall_color_north, south: exhibition.wall_color_south,
             east: exhibition.wall_color_east, west: exhibition.wall_color_west,
           }}
+          wallImages={parsedWallImages}
           artworks={placements.map(p => ({
             localId: p.id, uri: p.artwork.image_url, title: p.artwork.title,
             wall: p.wall, positionX: p.position_x, positionY: p.position_y,
