@@ -42,7 +42,7 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 type Artwork = Database['public']['Tables']['artworks']['Row'];
 
 const MAX_CONTENT_W = 680;
-const MAX_HERO_H = 320;
+const MAX_HERO_H = 280;
 
 const Fonts = {
   serif: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
@@ -50,6 +50,7 @@ const Fonts = {
 
 const TAB_ITEMS = [
   { name: '/(tabs)', icon: 'house.fill' as const, label: '홈' },
+  { name: '/(tabs)/moui', icon: 'bubble.left.and.bubble.right.fill' as const, label: '작당모의' },
   { name: '/(tabs)/explore', icon: 'paperplane.fill' as const, label: '탐색' },
   { name: '/(tabs)/profile', icon: 'person.fill' as const, label: '내 정보' },
 ];
@@ -456,6 +457,7 @@ export default function ArtistPortfolioScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [followerCount, setFollowerCount] = useState(0);
+  const [exhibitionCount, setExhibitionCount] = useState(0);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -483,15 +485,17 @@ export default function ArtistPortfolioScreen() {
 
   const loadData = async () => {
     setLoading(true);
-    const [profileRes, artworksRes, followCountRes] = await Promise.all([
+    const [profileRes, artworksRes, followCountRes, exhibitionCountRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', id).single(),
       supabase.from('artworks').select('*').eq('user_id', id).order('created_at', { ascending: false }),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', id),
+      supabase.from('exhibitions').select('*', { count: 'exact', head: true }).eq('user_id', id),
     ]);
 
     if (profileRes.data) setProfile(profileRes.data);
     if (artworksRes.data) setArtworks(artworksRes.data);
     setFollowerCount(followCountRes.count ?? 0);
+    setExhibitionCount(exhibitionCountRes.count ?? 0);
 
     if (user?.id && user.id !== id) {
       const { count } = await supabase
@@ -669,61 +673,70 @@ export default function ArtistPortfolioScreen() {
               style={[styles.heroPanel, { borderColor: 'rgba(200,169,110,0.22)' }]}
             >
               <View style={styles.heroPanelShine} />
-              <Animated.View style={[styles.heroDiamond, { borderColor: C.gold }, diamondSpinStyle]} />
-              <View style={[styles.heroAvatarWrap, { borderColor: 'rgba(200,169,110,0.45)', backgroundColor: 'rgba(12,18,26,0.75)' }]}>
-                {profile.avatar_url ? (
-                  <Image source={{ uri: profile.avatar_url }} style={styles.heroAvatar} resizeMode="cover" />
-                ) : (
-                  <View style={[styles.heroAvatarFallback, { backgroundColor: 'rgba(200,169,110,0.16)' }]}>
-                    <Text style={[styles.heroAvatarInitial, { color: C.gold }]}>{avatarInitial}</Text>
+              <View style={styles.heroRow}>
+                {/* ── Left: Avatar + Name + Badges ── */}
+                <View style={styles.heroLeft}>
+                  <View style={[styles.heroAvatarWrap, { borderColor: 'rgba(200,169,110,0.45)', backgroundColor: 'rgba(12,18,26,0.75)' }]}>
+                    {profile.avatar_url ? (
+                      <Image source={{ uri: profile.avatar_url }} style={styles.heroAvatar} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.heroAvatarFallback, { backgroundColor: 'rgba(200,169,110,0.16)' }]}>
+                        <Text style={[styles.heroAvatarInitial, { color: C.gold }]}>{avatarInitial}</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-
-              <Text style={[styles.heroName, { color: C.fg }]}>{artistName}</Text>
-
-              {isCreator && (
-                <View style={styles.heroBadgeRow}>
-                  <View style={[styles.heroBadge, styles.heroTypeBadge, { borderColor: C.gold }]}>
-                    <Text style={[styles.heroBadgeText, { color: C.gold }]}>작가</Text>
-                  </View>
-                  <View
-                    style={[
-                      styles.heroBadge,
-                      styles.heroVerifyBadge,
-                      {
-                        borderColor: isVerifiedCreator ? '#22c55e' : '#ff4d4f',
-                        backgroundColor: isVerifiedCreator ? 'rgba(34,197,94,0.1)' : 'rgba(255,77,79,0.1)',
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.heroBadgeText, { color: isVerifiedCreator ? '#22c55e' : '#ff4d4f' }]}>
-                      {isVerifiedCreator ? '인증' : '미인증'}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {fieldItems.length > 0 && (
-                <View style={styles.heroFieldRow}>
-                  {fieldItems.map((field) => (
-                    <View key={field} style={[styles.heroFieldChip, { borderColor: 'rgba(200,169,110,0.28)' }]}>
-                      <Text style={styles.heroFieldEmoji}>{FIELD_ICON_MAP[field] ?? '🎯'}</Text>
-                      <Text style={[styles.heroFieldChipText, { color: C.gold }]}>{field}</Text>
+                  <Text style={[styles.heroName, { color: C.fg }]} numberOfLines={1}>{artistName}</Text>
+                  {isCreator && (
+                    <View style={styles.heroBadgeRow}>
+                      <View style={[styles.heroBadge, styles.heroTypeBadge, { borderColor: C.gold }]}>
+                        <Text style={[styles.heroBadgeText, { color: C.gold }]}>작가</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.heroBadge,
+                          styles.heroVerifyBadge,
+                          {
+                            borderColor: isVerifiedCreator ? '#22c55e' : '#ff4d4f',
+                            backgroundColor: isVerifiedCreator ? 'rgba(34,197,94,0.1)' : 'rgba(255,77,79,0.1)',
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.heroBadgeText, { color: isVerifiedCreator ? '#22c55e' : '#ff4d4f' }]}>
+                          {isVerifiedCreator ? '인증' : '미인증'}
+                        </Text>
+                      </View>
                     </View>
-                  ))}
+                  )}
                 </View>
-              )}
 
-              <View style={styles.statsRow}>
-                <View style={styles.statItem}>
-                  <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: C.fg }]} />
-                  <Text style={[styles.statLabel, { color: C.muted }]}>작품</Text>
-                </View>
-                <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
-                <View style={styles.statItem}>
-                  <AnimatedCounter to={followerCount} style={[styles.statNumber, { color: C.fg }]} />
-                  <Text style={[styles.statLabel, { color: C.muted }]}>팔로워</Text>
+                {/* ── Right: Fields + Stats ── */}
+                <View style={styles.heroRight}>
+                  {fieldItems.length > 0 && (
+                    <View style={styles.heroFieldRow}>
+                      {fieldItems.map((field) => (
+                        <View key={field} style={[styles.heroFieldChip, { borderColor: 'rgba(200,169,110,0.28)' }]}>
+                          <Text style={styles.heroFieldEmoji}>{FIELD_ICON_MAP[field] ?? '🎯'}</Text>
+                          <Text style={[styles.heroFieldChipText, { color: C.gold }]}>{field}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  <View style={styles.statsRow}>
+                    <View style={styles.statItem}>
+                      <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: C.fg }]} />
+                      <Text style={[styles.statLabel, { color: C.muted }]}>작품</Text>
+                    </View>
+                    <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
+                    <View style={styles.statItem}>
+                      <AnimatedCounter to={exhibitionCount} style={[styles.statNumber, { color: C.fg }]} />
+                      <Text style={[styles.statLabel, { color: C.muted }]}>전시</Text>
+                    </View>
+                    <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
+                    <View style={styles.statItem}>
+                      <AnimatedCounter to={followerCount} style={[styles.statNumber, { color: C.fg }]} />
+                      <Text style={[styles.statLabel, { color: C.muted }]}>팔로워</Text>
+                    </View>
+                  </View>
                 </View>
               </View>
 
@@ -883,15 +896,14 @@ const styles = StyleSheet.create({
   heroContent: {
     width: '100%',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 16,
   },
   heroPanel: {
     width: '100%',
-    maxWidth: 420,
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 28,
-    borderRadius: 28,
+    maxWidth: 480,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 20,
     borderWidth: 1,
     overflow: 'hidden',
   },
@@ -903,25 +915,33 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.18)',
   },
-  heroDiamond: {
-    width: 14,
-    height: 14,
-    borderWidth: 1.5,
-    marginBottom: 8,
+  heroRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  heroLeft: {
+    alignItems: 'center',
+    gap: 6,
+    minWidth: 80,
+  },
+  heroRight: {
+    flex: 1,
+    alignItems: 'flex-start',
+    gap: 10,
   },
   heroAvatarWrap: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 2,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    marginBottom: 14,
     shadowColor: '#000',
     shadowOpacity: 0.28,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 10 },
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
   },
   heroAvatar: {
     width: '100%',
@@ -934,14 +954,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   heroAvatarInitial: {
-    fontSize: 34,
+    fontSize: 22,
     fontWeight: '800',
     letterSpacing: 1,
   },
   heroName: {
-    fontSize: 28,
+    fontSize: 15,
     fontWeight: '900',
-    letterSpacing: 6,
+    letterSpacing: 2,
     textAlign: 'center',
   },
   heroBadgeRow: {
@@ -949,12 +969,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
+    gap: 4,
+    marginTop: 2,
   },
   heroBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 999,
     borderWidth: 1,
   },
@@ -965,33 +985,31 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,77,79,0.1)',
   },
   heroBadgeText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
   heroFieldRow: {
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
+    gap: 6,
   },
   heroFieldChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
     backgroundColor: 'rgba(200,169,110,0.1)',
   },
   heroFieldEmoji: {
-    fontSize: 13,
+    fontSize: 12,
   },
   heroFieldChipText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
   },
@@ -1000,20 +1018,19 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    marginTop: 4,
+    gap: 12,
   },
   statItem: {
     alignItems: 'center',
     gap: 2,
   },
   statNumber: {
-    fontSize: 20,
+    fontSize: 16,
     fontWeight: '900',
     letterSpacing: 1,
   },
   statLabel: {
-    fontSize: 11,
+    fontSize: 10,
     letterSpacing: 1,
   },
   statDot: {
@@ -1024,14 +1041,15 @@ const styles = StyleSheet.create({
 
   /* Follow */
   followBtn: {
-    paddingHorizontal: 28,
-    paddingVertical: 10,
-    borderRadius: 24,
+    alignSelf: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
-    marginTop: 4,
+    marginTop: 10,
   },
   followBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1,
   },
