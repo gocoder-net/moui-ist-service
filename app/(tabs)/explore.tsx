@@ -32,6 +32,13 @@ const USER_TYPE_LABELS: Record<string, string> = {
   audience: '감상자',
 };
 
+type TabKey = 'creator' | 'aspiring' | 'audience';
+const TABS: { key: TabKey; label: string }[] = [
+  { key: 'creator', label: '작가' },
+  { key: 'aspiring', label: '지망생' },
+  { key: 'audience', label: '감상자' },
+];
+
 type ArtistCard = {
   id: string;
   name: string | null;
@@ -150,6 +157,7 @@ export default function ExploreScreen() {
   const { colors: C } = useThemeMode();
   const [artists, setArtists] = useState<ArtistCard[]>([]);
   const [search, setSearch] = useState('');
+  const [activeTab, setActiveTab] = useState<TabKey>('creator');
   const [loading, setLoading] = useState(true);
 
   const loadArtists = useCallback(async () => {
@@ -157,7 +165,7 @@ export default function ExploreScreen() {
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, name, username, field, avatar_url, user_type, verified')
-      .in('user_type', ['creator', 'aspiring']);
+      .in('user_type', ['creator', 'aspiring', 'audience']);
 
     if (!profiles || profiles.length === 0) {
       setArtists([]);
@@ -181,11 +189,12 @@ export default function ExploreScreen() {
 
     const result: ArtistCard[] = profiles
       .filter((p) => {
+        if (p.user_type === 'audience') return true;
         const info = artworkMap.get(p.id);
         return info && info.count > 0;
       })
       .map((p) => {
-        const info = artworkMap.get(p.id)!;
+        const info = artworkMap.get(p.id);
         return {
           id: p.id,
           name: p.name,
@@ -194,8 +203,8 @@ export default function ExploreScreen() {
           avatar_url: p.avatar_url,
           user_type: p.user_type,
           verified: !!(p as { verified?: boolean | null }).verified,
-          artworkCount: info.count,
-          coverImage: info.cover,
+          artworkCount: info?.count ?? 0,
+          coverImage: info?.cover ?? null,
         };
       });
 
@@ -207,19 +216,27 @@ export default function ExploreScreen() {
     loadArtists();
   }, []);
 
-  const filtered = (() => {
-    let list = search.trim()
-      ? artists.filter((a) => {
-          const q = search.toLowerCase();
-          return (
-            (a.name?.toLowerCase().includes(q)) ||
-            a.username.toLowerCase().includes(q) ||
-            (a.field?.toLowerCase().includes(q))
-          );
-        })
-      : artists;
+  const tabCounts = (() => {
+    const counts: Record<TabKey, number> = { creator: 0, aspiring: 0, audience: 0 };
+    artists.forEach((a) => {
+      if (a.user_type in counts) counts[a.user_type as TabKey]++;
+    });
+    return counts;
+  })();
 
-    // Pin current user first
+  const filtered = (() => {
+    let list = artists.filter((a) => a.user_type === activeTab);
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(
+        (a) =>
+          a.name?.toLowerCase().includes(q) ||
+          a.username.toLowerCase().includes(q) ||
+          a.field?.toLowerCase().includes(q),
+      );
+    }
+
     if (user?.id) {
       const meIdx = list.findIndex((a) => a.id === user.id);
       if (meIdx > 0) {
@@ -310,7 +327,9 @@ export default function ExploreScreen() {
               <Text style={[styles.artistField, { color: C.muted }]} numberOfLines={1}>{item.field}</Text>
             )}
 
-            <Text style={[styles.countText, { color: C.gold }]}>{item.artworkCount} 작품</Text>
+            {item.user_type !== 'audience' && (
+              <Text style={[styles.countText, { color: C.gold }]}>{item.artworkCount} 작품</Text>
+            )}
           </View>
         </Pressable>
       </Animated.View>
@@ -333,28 +352,48 @@ export default function ExploreScreen() {
         <FloatingShape shape="line" size={80} color={C.goldLight} opacity={0.07} top="65%" left="40%" duration={4500} delay={300} />
       </View>
 
-      {/* 상단 바 */}
-      <Animated.View entering={FadeIn.delay(100).duration(300)} style={styles.topBar}>
-        <Text style={[styles.enLogo, { color: C.fg }]}>
-          MOUI<Text style={{ color: C.gold }}>-</Text>IST
-        </Text>
+      {/* 상단 타이틀 */}
+      <Animated.View entering={FadeIn.delay(100).duration(300)} style={styles.topHeader}>
+        <View style={styles.topTitleRow}>
+          <PlayfulDiamond color={C.gold} />
+          <Text style={[styles.topTitle, { color: C.fg }]}>탐색모의</Text>
+        </View>
+        <Text style={[styles.topSubtitle, { color: C.muted }]}>다양한 작가들을 만나보세요</Text>
       </Animated.View>
 
-      {/* 헤더 */}
-      <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.header}>
-        <PlayfulDiamond color={C.gold} />
-        <Text style={[styles.title, { color: C.fg }]}>탐색모의</Text>
-        <Text style={[styles.subtitle, { color: C.muted }]}>다양한 작가들을 만나보세요</Text>
-        <View style={[styles.headerLine, { backgroundColor: C.gold }]} />
+      {/* 유형 탭 (작가 / 지망생 / 감상자) */}
+      <Animated.View entering={FadeInDown.delay(180).duration(400).springify()} style={styles.tabsRow}>
+        {TABS.map((t) => {
+          const active = activeTab === t.key;
+          return (
+            <Pressable
+              key={t.key}
+              onPress={() => setActiveTab(t.key)}
+              style={({ pressed }) => [
+                styles.tabItem,
+                pressed && { opacity: 0.7 },
+              ]}
+              hitSlop={8}
+            >
+              <Text style={[styles.tabLabel, { color: active ? C.fg : C.mutedLight }]} numberOfLines={1}>
+                {t.label}
+                {tabCounts[t.key] > 0 && (
+                  <Text style={[styles.tabCount, { color: active ? C.gold : C.mutedLight }]}> {tabCounts[t.key]}</Text>
+                )}
+              </Text>
+              {active && <View style={[styles.tabUnderline, { backgroundColor: C.gold }]} />}
+            </Pressable>
+          );
+        })}
       </Animated.View>
 
       {/* 검색 바 */}
-      <Animated.View entering={FadeInDown.delay(350).duration(400).springify()} style={styles.searchWrap}>
+      <Animated.View entering={FadeInDown.delay(260).duration(400).springify()} style={styles.searchWrap}>
         <View style={[styles.searchBar, { borderColor: C.border, backgroundColor: C.card }]}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={[styles.searchInput, { color: C.fg }]}
-            placeholder="작가, 분야 검색..."
+            placeholder="이름, 분야 검색..."
             placeholderTextColor={C.mutedLight}
             value={search}
             onChangeText={setSearch}
@@ -377,14 +416,14 @@ export default function ExploreScreen() {
         <View style={styles.emptyWrap}>
           <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
           <Text style={[styles.emptyText, { color: C.muted }]}>
-            {search.trim() ? '검색 결과가 없습니다' : '아직 등록된 작가가 없습니다'}
+            {search.trim()
+              ? '검색 결과가 없습니다'
+              : `아직 등록된 ${USER_TYPE_LABELS[activeTab]}가 없습니다`}
           </Text>
-          {!search.trim() && (
-            <Text style={[styles.emptySubtext, { color: C.mutedLight }]}>첫 번째 작품을 업로드해보세요!</Text>
-          )}
         </View>
       ) : (
         <FlatList
+          key={activeTab}
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={renderArtistCard}
@@ -403,42 +442,61 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  topBar: {
-    paddingVertical: 16,
-    alignItems: 'center',
+  topHeader: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 10,
+    gap: 4,
   },
-  enLogo: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 5,
-  },
-
-  header: {
+  topTitleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 8,
-    marginBottom: 20,
     gap: 10,
   },
-  title: {
-    fontSize: 28,
+  topTitle: {
+    fontSize: 26,
     fontWeight: '900',
-    letterSpacing: 3,
-    marginTop: 12,
-  },
-  subtitle: {
-    fontSize: 14,
-    fontWeight: '300',
     letterSpacing: 1,
   },
-  headerLine: {
-    width: 28,
-    height: 1,
-    marginTop: 4,
+  topSubtitle: {
+    fontSize: 12,
+    fontWeight: '400',
+    letterSpacing: 0.5,
+    marginLeft: 26,
+  },
+
+  tabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    gap: 18,
+  },
+  tabItem: {
+    paddingVertical: 8,
+    alignItems: 'flex-start',
+  },
+  tabLabel: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  tabCount: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  tabUnderline: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 2,
+    borderRadius: 1,
   },
 
   searchWrap: {
-    paddingHorizontal: 24,
-    marginBottom: 16,
+    paddingHorizontal: 20,
+    marginBottom: 14,
   },
   searchBar: {
     flexDirection: 'row',
