@@ -26,7 +26,7 @@ function RootNavigator() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[0] === '(onboarding)';
-    const inPublic = segments[0] === 'exhibition';
+    const inPublic = segments[0] === 'exhibition' || segments[0] === 'artist';
 
     if (!session) {
       // 공개 경로(전시관 뷰어)는 인증 없이 접근 허용
@@ -110,6 +110,8 @@ function RootNavigator() {
         <Stack.Screen name="(onboarding)" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="exhibition/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="artist/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="artwork/create" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
       </Stack>
 

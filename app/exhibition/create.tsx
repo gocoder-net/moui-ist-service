@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet, View, Text, TextInput, Pressable, ScrollView,
-  ActivityIndicator, Alert, useWindowDimensions,
+  ActivityIndicator, Alert, useWindowDimensions, Modal, FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -65,6 +65,22 @@ export default function CreateExhibitionScreen() {
   const [bgmFileName, setBgmFileName] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(!!editId);
+
+  // 포트폴리오 작품 선택
+  type PortfolioArtwork = { id: string; title: string; image_url: string; width_cm: number | null; height_cm: number | null; year: number | null; medium: string | null; edition: string | null; description: string | null };
+  const [portfolioArtworks, setPortfolioArtworks] = useState<PortfolioArtwork[]>([]);
+  const [portfolioPickerVisible, setPortfolioPickerVisible] = useState(false);
+  const [pendingPlacement, setPendingPlacement] = useState<{ wall: Wall; posXcm: number; posYcm: number } | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase
+      .from('artworks')
+      .select('id, title, image_url, width_cm, height_cm, year, medium, edition, description')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .then(({ data }) => { if (data) setPortfolioArtworks(data); });
+  }, [user]);
 
   // 수정 모드: 기존 데이터 로드
   useEffect(() => {

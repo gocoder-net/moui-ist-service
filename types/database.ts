@@ -20,6 +20,7 @@ export type Database = {
           field: string | null;
           sns_links: Json;
           avatar_url: string | null;
+          points: number;
           created_at: string;
           updated_at: string;
         };
@@ -33,6 +34,7 @@ export type Database = {
           field?: string | null;
           sns_links?: Json;
           avatar_url?: string | null;
+          points?: number;
         };
         Update: {
           user_type?: "creator" | "aspiring" | "audience";
@@ -42,6 +44,7 @@ export type Database = {
           field?: string | null;
           sns_links?: Json;
           avatar_url?: string | null;
+          points?: number;
         };
         Relationships: [];
       };

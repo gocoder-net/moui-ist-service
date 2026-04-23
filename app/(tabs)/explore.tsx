@@ -1,12 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Pressable,
-  ScrollView,
+  TextInput,
+  Image,
+  FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -19,6 +22,7 @@ import Animated, {
   FadeIn,
   FadeInDown,
 } from 'react-native-reanimated';
+import { supabase } from '@/lib/supabase';
 
 const C = {
   bg: '#191f28',
@@ -29,6 +33,17 @@ const C = {
   mutedLight: '#4e5968',
   border: '#333d4b',
   white: '#f2f4f6',
+};
+
+type ArtistCard = {
+  id: string;
+  name: string | null;
+  username: string;
+  field: string | null;
+  avatar_url: string | null;
+  user_type: string;
+  artworkCount: number;
+  coverImage: string | null;
 };
 
 /* ── 배경 떠다니는 도형 ── */
@@ -129,19 +144,125 @@ function PlayfulDiamond() {
   );
 }
 
-/* ── 카테고리 카드 ── */
-const categories = [
-  { emoji: '🎨', title: '회화', count: 'Coming Soon' },
-  { emoji: '📷', title: '사진', count: 'Coming Soon' },
-  { emoji: '✍️', title: '글', count: 'Coming Soon' },
-  { emoji: '🎵', title: '음악', count: 'Coming Soon' },
-  { emoji: '🎬', title: '영상', count: 'Coming Soon' },
-  { emoji: '🏗️', title: '디자인', count: 'Coming Soon' },
-];
-
 /* ── 메인 화면 ── */
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const [artists, setArtists] = useState<ArtistCard[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  const loadArtists = useCallback(async () => {
+    setLoading(true);
+
+    // Fetch all creators/aspirings with at least 1 artwork
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name, username, field, avatar_url, user_type')
+      .in('user_type', ['creator', 'aspiring']);
+
+    if (!profiles || profiles.length === 0) {
+      setArtists([]);
+      setLoading(false);
+      return;
+    }
+
+    // Fetch artwork counts per user
+    const { data: artworks } = await supabase
+      .from('artworks')
+      .select('user_id, image_url');
+
+    const artworkMap = new Map<string, { count: number; cover: string | null }>();
+    artworks?.forEach((aw) => {
+      const existing = artworkMap.get(aw.user_id);
+      if (existing) {
+        existing.count++;
+      } else {
+        artworkMap.set(aw.user_id, { count: 1, cover: aw.image_url });
+      }
+    });
+
+    const result: ArtistCard[] = profiles
+      .filter((p) => {
+        const info = artworkMap.get(p.id);
+        return info && info.count > 0;
+      })
+      .map((p) => {
+        const info = artworkMap.get(p.id)!;
+        return {
+          id: p.id,
+          name: p.name,
+          username: p.username,
+          field: p.field,
+          avatar_url: p.avatar_url,
+          user_type: p.user_type,
+          artworkCount: info.count,
+          coverImage: info.cover,
+        };
+      });
+
+    setArtists(result);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    loadArtists();
+  }, []);
+
+  const filtered = search.trim()
+    ? artists.filter((a) => {
+        const q = search.toLowerCase();
+        return (
+          (a.name?.toLowerCase().includes(q)) ||
+          a.username.toLowerCase().includes(q) ||
+          (a.field?.toLowerCase().includes(q))
+        );
+      })
+    : artists;
+
+  const renderArtistCard = ({ item, index }: { item: ArtistCard; index: number }) => (
+    <Animated.View entering={FadeInDown.delay(100 + index * 60).duration(400).springify()}>
+      <Pressable
+        style={({ pressed }) => [styles.artistCard, pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }]}
+        onPress={() => router.push(`/artist/${item.id}`)}
+      >
+        {/* cover background */}
+        {item.coverImage && (
+          <Image
+            source={{ uri: item.coverImage }}
+            style={styles.artistCover}
+            blurRadius={8}
+            resizeMode="cover"
+          />
+        )}
+        <View style={styles.artistCoverOverlay} />
+
+        <View style={styles.artistCardContent}>
+          {/* avatar */}
+          <View style={styles.artistAvatar}>
+            <Text style={styles.artistAvatarText}>
+              {item.user_type === 'creator' ? '🎨' : '✏️'}
+            </Text>
+          </View>
+
+          <View style={styles.artistInfo}>
+            <Text style={styles.artistName} numberOfLines={1}>
+              {item.name ?? item.username}
+            </Text>
+            {item.field && (
+              <Text style={styles.artistField} numberOfLines={1}>{item.field}</Text>
+            )}
+          </View>
+
+          {/* artwork count badge */}
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{item.artworkCount}</Text>
+            <Text style={styles.countBadgeLabel}>작품</Text>
+          </View>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
 
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
@@ -156,70 +277,65 @@ export default function ExploreScreen() {
         <FloatingShape shape="line" size={60} color={C.gold} opacity={0.10} top="18%" left="50%" duration={5000} delay={1500} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 상단 바 */}
-        <Animated.View entering={FadeIn.delay(100).duration(300)} style={styles.topBar}>
-          <Text style={styles.enLogo}>
-            MOUI<Text style={{ color: C.gold }}>-</Text>IST
-          </Text>
-        </Animated.View>
+      {/* 상단 바 */}
+      <Animated.View entering={FadeIn.delay(100).duration(300)} style={styles.topBar}>
+        <Text style={styles.enLogo}>
+          MOUI<Text style={{ color: C.gold }}>-</Text>IST
+        </Text>
+      </Animated.View>
 
-        {/* 헤더 */}
-        <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.header}>
-          <PlayfulDiamond />
-          <Text style={styles.title}>탐색</Text>
-          <Text style={styles.subtitle}>다양한 창작 분야를 둘러보세요</Text>
-          <View style={styles.headerLine} />
-        </Animated.View>
+      {/* 헤더 */}
+      <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.header}>
+        <PlayfulDiamond />
+        <Text style={styles.title}>탐색</Text>
+        <Text style={styles.subtitle}>다양한 작가들을 만나보세요</Text>
+        <View style={styles.headerLine} />
+      </Animated.View>
 
-        {/* 검색 바 (플레이스홀더) */}
-        <Animated.View entering={FadeInDown.delay(350).duration(400).springify()}>
-          <Pressable style={styles.searchBar}>
-            <Text style={styles.searchIcon}>🔍</Text>
-            <Text style={styles.searchPlaceholder}>작가, 작품 검색...</Text>
-          </Pressable>
-        </Animated.View>
-
-        {/* 카테고리 */}
-        <Animated.Text entering={FadeIn.delay(450).duration(300)} style={styles.sectionTitle}>
-          카테고리
-        </Animated.Text>
-
-        <View style={styles.categoryGrid}>
-          {categories.map((cat, i) => (
-            <Animated.View
-              key={cat.title}
-              entering={FadeInDown.delay(500 + i * 80).duration(400).springify()}
-            >
-              <Pressable style={({ pressed }) => [styles.categoryCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}>
-                <Text style={styles.categoryEmoji}>{cat.emoji}</Text>
-                <Text style={styles.categoryTitle}>{cat.title}</Text>
-                <Text style={styles.categoryCount}>{cat.count}</Text>
-              </Pressable>
-            </Animated.View>
-          ))}
+      {/* 검색 바 */}
+      <Animated.View entering={FadeInDown.delay(350).duration(400).springify()} style={styles.searchWrap}>
+        <View style={styles.searchBar}>
+          <Text style={styles.searchIcon}>🔍</Text>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="작가, 분야 검색..."
+            placeholderTextColor={C.mutedLight}
+            value={search}
+            onChangeText={setSearch}
+            returnKeyType="search"
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch('')}>
+              <Text style={{ color: C.muted, fontSize: 16 }}>✕</Text>
+            </Pressable>
+          )}
         </View>
+      </Animated.View>
 
-        {/* 트렌딩 */}
-        <Animated.View entering={FadeInDown.delay(900).duration(400).springify()} style={styles.trendingCard}>
-          <View style={styles.trendingHeader}>
-            <Text style={styles.trendingTitle}>트렌딩</Text>
-            <View style={styles.trendingBadge}>
-              <Text style={styles.trendingBadgeText}>LIVE</Text>
-            </View>
-          </View>
-          <Text style={styles.trendingDesc}>
-            아직 트렌딩 데이터가 없습니다.{'\n'}첫 번째 작품을 업로드해보세요!
+      {/* 작가 리스트 */}
+      {loading ? (
+        <View style={styles.loadingWrap}>
+          <View style={styles.loadingDiamond} />
+        </View>
+      ) : filtered.length === 0 ? (
+        <View style={styles.emptyWrap}>
+          <View style={styles.emptyDiamond} />
+          <Text style={styles.emptyText}>
+            {search.trim() ? '검색 결과가 없습니다' : '아직 등록된 작가가 없습니다'}
           </Text>
-          <View style={styles.trendingDivider}>
-            <View style={styles.dividerLine} />
-            <View style={styles.dividerDiamond} />
-            <View style={styles.dividerLine} />
-          </View>
-        </Animated.View>
-
-        <View style={{ height: 24 }} />
-      </ScrollView>
+          {!search.trim() && (
+            <Text style={styles.emptySubtext}>첫 번째 작품을 업로드해보세요!</Text>
+          )}
+        </View>
+      ) : (
+        <FlatList
+          data={filtered}
+          keyExtractor={(item) => item.id}
+          renderItem={renderArtistCard}
+          contentContainerStyle={styles.listContent}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
     </View>
   );
 }
@@ -228,10 +344,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: C.bg,
-  },
-  scroll: {
-    paddingHorizontal: 24,
-    paddingBottom: 90,
   },
 
   topBar: {
@@ -248,7 +360,7 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginTop: 8,
-    marginBottom: 28,
+    marginBottom: 20,
     gap: 10,
   },
   title: {
@@ -271,6 +383,10 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
 
+  searchWrap: {
+    paddingHorizontal: 24,
+    marginBottom: 16,
+  },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -278,114 +394,135 @@ const styles = StyleSheet.create({
     borderColor: C.border,
     borderRadius: 16,
     paddingHorizontal: 18,
-    paddingVertical: 14,
+    paddingVertical: 12,
     gap: 10,
-    marginBottom: 28,
     backgroundColor: '#212a35',
   },
   searchIcon: {
     fontSize: 16,
   },
-  searchPlaceholder: {
+  searchInput: {
+    flex: 1,
     fontSize: 14,
-    color: C.mutedLight,
+    color: C.fg,
+    padding: 0,
   },
 
-  sectionTitle: {
+  listContent: {
+    paddingHorizontal: 24,
+    paddingBottom: 90,
+  },
+
+  /* Artist Card */
+  artistCard: {
+    height: 88,
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: C.border,
+    backgroundColor: '#212a35',
+  },
+  artistCover: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
+  artistCoverOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(25,31,40,0.75)',
+  },
+  artistCardContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    gap: 14,
+  },
+  artistAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: C.bg,
+    borderWidth: 1,
+    borderColor: C.gold,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  artistAvatarText: {
+    fontSize: 22,
+  },
+  artistInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  artistName: {
     fontSize: 16,
     fontWeight: '800',
     color: C.fg,
-    letterSpacing: 2,
-    marginBottom: 16,
+    letterSpacing: 0.5,
   },
-
-  categoryGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 28,
-  },
-  categoryCard: {
-    width: 100,
-    borderWidth: 1,
-    borderColor: C.border,
-    borderRadius: 18,
-    padding: 16,
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: C.white,
-  },
-  categoryEmoji: {
-    fontSize: 28,
-  },
-  categoryTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: C.fg,
+  artistField: {
+    fontSize: 12,
+    color: C.gold,
+    fontWeight: '600',
     letterSpacing: 1,
   },
-  categoryCount: {
+  countBadge: {
+    alignItems: 'center',
+    backgroundColor: 'rgba(200,169,110,0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 1,
+  },
+  countBadgeText: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: C.gold,
+  },
+  countBadgeLabel: {
     fontSize: 9,
-    color: C.mutedLight,
+    color: C.muted,
     fontWeight: '600',
     letterSpacing: 1,
   },
 
-  trendingCard: {
-    borderWidth: 1,
-    borderColor: C.gold,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: '#212a35',
-  },
-  trendingHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  trendingTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: C.fg,
-    letterSpacing: 1,
-  },
-  trendingBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: '#333d4b',
-  },
-  trendingBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: C.gold,
-    letterSpacing: 2,
-  },
-  trendingDesc: {
-    fontSize: 13,
-    color: C.muted,
-    textAlign: 'center',
-    lineHeight: 21,
-  },
-  trendingDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    width: '100%',
-    marginTop: 4,
-  },
-  dividerLine: {
+  /* States */
+  loadingWrap: {
     flex: 1,
-    height: 1,
-    backgroundColor: C.border,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  dividerDiamond: {
-    width: 6,
-    height: 6,
+  loadingDiamond: {
+    width: 16,
+    height: 16,
+    borderWidth: 1.5,
+    borderColor: C.gold,
+    transform: [{ rotate: '45deg' }],
+  },
+  emptyWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 60,
+  },
+  emptyDiamond: {
+    width: 12,
+    height: 12,
     borderWidth: 1,
     borderColor: C.gold,
     transform: [{ rotate: '45deg' }],
+  },
+  emptyText: {
+    fontSize: 14,
+    color: C.muted,
+    letterSpacing: 1,
+  },
+  emptySubtext: {
+    fontSize: 12,
+    color: C.mutedLight,
+    letterSpacing: 0.5,
   },
 });
