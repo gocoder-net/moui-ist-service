@@ -304,9 +304,9 @@ export default function LoginScreen() {
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       {/* 배경 떠다니는 도형들 */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <FloatingShape shape="ring" size={120} color={C.gold} opacity={0.10} top="3%" left="0%" duration={6000} delay={0} />
-        <FloatingShape shape="ring" size={160} color={C.goldLight} opacity={0.06} top="45%" left="55%" duration={7000} delay={800} />
-        <FloatingShape shape="ring" size={80} color={C.gold} opacity={0.08} top="75%" left="8%" duration={5000} delay={400} />
+        <FloatingShape shape="ring" size={50} color={C.gold} opacity={0.10} top="3%" left="0%" duration={6000} delay={0} />
+        <FloatingShape shape="ring" size={70} color={C.goldLight} opacity={0.06} top="45%" left="55%" duration={7000} delay={800} />
+        <FloatingShape shape="ring" size={48} color={C.gold} opacity={0.08} top="75%" left="8%" duration={5000} delay={400} />
 
         <FloatingShape shape="diamond" size={22} color={C.gold} opacity={0.22} top="8%" left="80%" duration={3500} delay={600} />
         <FloatingShape shape="diamond" size={16} color={C.gold} opacity={0.18} top="55%" left="90%" duration={4200} delay={200} />

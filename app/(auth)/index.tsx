@@ -293,9 +293,9 @@ export default function LandingScreen() {
 
       {/* 배경 떠다니는 도형들 */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <FloatingShape shape="ring" size={120} color={C.gold} opacity={0.12} top="5%" left="5%" duration={6000} delay={0} />
-        <FloatingShape shape="ring" size={160} color={C.goldLight} opacity={0.08} top="40%" left="50%" duration={7000} delay={800} />
-        <FloatingShape shape="ring" size={80} color={C.gold} opacity={0.1} top="70%" left="10%" duration={5000} delay={400} />
+        <FloatingShape shape="ring" size={50} color={C.gold} opacity={0.12} top="5%" left="5%" duration={6000} delay={0} />
+        <FloatingShape shape="ring" size={70} color={C.goldLight} opacity={0.08} top="40%" left="50%" duration={7000} delay={800} />
+        <FloatingShape shape="ring" size={48} color={C.gold} opacity={0.1} top="70%" left="10%" duration={5000} delay={400} />
 
         <FloatingShape shape="diamond" size={22} color={C.gold} opacity={0.25} top="12%" left="78%" duration={3500} delay={600} />
         <FloatingShape shape="diamond" size={16} color={C.gold} opacity={0.2} top="50%" left="88%" duration={4200} delay={200} />
