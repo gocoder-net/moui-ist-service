@@ -3,6 +3,6 @@
   "outputDirectory": "dist",
   "framework": null,
   "rewrites": [
-    { "source": "/exhibition/:path*", "destination": "/index.html" }
+    { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
