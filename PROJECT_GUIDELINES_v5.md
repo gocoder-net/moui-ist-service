@@ -26,6 +26,27 @@
 → 앱 디자인은 웹사이트의 **색상 반전** 버전. 구조와 타이포 스타일은 유지하되 밝은 배경으로.
 
 ### 앱 브랜드 컬러 (constants/theme.ts)
+
+**다크/라이트 모드 지원** — `ThemeModeProvider` + `useThemeMode()` 훅으로 전환
+- AsyncStorage로 테마 설정 저장/복원
+- 모든 화면에서 `const { colors: C } = useThemeMode()` 사용
+
+```
+| key        | 다크 모드      | 라이트 모드     |
+|------------|---------------|----------------|
+| bg         | #191f28       | #f5f6f8        |
+| fg         | #f2f4f6       | #191f28        |
+| gold       | #C8A96E       | #C8A96E        |
+| goldLight  | #E0C992       | #E0C992        |
+| goldDim    | #A8905A       | #A8905A        |
+| muted      | #8b95a1       | #6b7280        |
+| mutedLight | #4e5968       | #9ca3af        |
+| border     | #333d4b       | #e5e7eb        |
+| card       | #212a35       | #ffffff        |
+| danger     | #D94040       | #D94040        |
+```
+
+**레거시 Brand 객체** (일부 구버전 코드에서 사용):
 ```
 Brand.gold      = '#C8A96E'    // 메인 액센트 (골드)
 Brand.goldLight = '#E0C992'    // 골드 밝은 버전
@@ -36,7 +57,6 @@ Brand.gray      = '#8A8580'    // 보조 텍스트
 Brand.grayLight = '#C5C0BA'    // 비활성 아이콘
 Brand.border    = '#E8E5DF'    // 구분선
 ```
-※ 홈 화면은 `#FFFFFF` 순백 배경 사용 중 (Brand.white와 별도)
 
 ## 사용자 유형
 
@@ -44,9 +64,24 @@ Brand.border    = '#E8E5DF'    // 구분선
 - 모든 분야의 창작자 (미술, 글, 사진, 음악 등)
 - 핵심 니즈: 작품을 제대로 보여줄 전용 포트폴리오, 작가 간 네트워킹, 전시/모임 참여
 - 진입 동기: "인스타보다 작품에 집중된 공간, 명함/바이오에 걸 수 있는 포트폴리오 링크"
+- **인증 상태**: `profiles.verified` (boolean) — 미인증 작가는 "미인증" 배지 표시
+- **분야 카테고리** (8종, 멀티 선택 가능):
+  - ✍️ 글 (소설가, 시인, 에세이스트, 극작가, 평론가 등)
+  - 🎨 그림 (화가, 일러스트레이터, 만화가, 캘리그래퍼 등)
+  - 🎬 영상 (영화감독, 영상작가, 애니메이터 등)
+  - 🎵 소리 (작곡가, 연주자, 사운드 아티스트, DJ 등)
+  - 📷 사진 (사진작가, 포토그래퍼 등)
+  - 🗿 입체/공간 (조각가, 도예가, 설치미술가, 건축가 등)
+  - 💻 디지털/인터랙티브 (미디어 아티스트, AI 아티스트 등)
+  - 🎭 공연 (무용가, 배우, 퍼포먼스 아티스트 등)
+  - 세부 분야 입력 시 자동 분류 (예: "소설가" → "작가님은 글작가님이네요!")
+  - DB 저장: `profiles.field` 에 쉼표 구분 (예: "글, 그림")
+
+### 지망생 (Aspiring)
+- 예비 창작자, 학생
 
 ### 일반인 (Audience)
-- 예술에 관심 있는 감상자/구매자/지망생
+- 예술에 관심 있는 감상자/구매자
 - 핵심 니즈: 새로운 작가와 작품 발견, 좋아하는 작가 팔로우, 작품 구매
 - 진입 동기: "다양한 창작자와 작품을 한 곳에서 탐색"
 
@@ -207,28 +242,56 @@ Brand.border    = '#E8E5DF'    // 구분선
 ```
 moui-ist-service/
 ├── app/
-│   ├── _layout.tsx              # 루트 레이아웃 (Stack, 테마 Provider)
+│   ├── _layout.tsx              # 루트 레이아웃 (Stack, ThemeModeProvider, AuthProvider)
 │   ├── modal.tsx                # 모달 화면
-│   └── (tabs)/
-│       ├── _layout.tsx          # 탭 레이아웃 (Home, Explore)
-│       ├── index.tsx            # 홈 화면 (MOUI-IST 브랜드 랜딩)
-│       └── explore.tsx          # 탐색 화면 (미구현)
-├── components/                  # 공용 컴포넌트 (Expo 기본 제공)
+│   ├── (tabs)/
+│   │   ├── _layout.tsx          # 탭 레이아웃 (홈, 작당모의, 탐색, 내 정보)
+│   │   ├── index.tsx            # 홈 화면 (출석 이벤트 + 시작하기)
+│   │   ├── moui.tsx             # 작당모의 (협업 모집 게시판)
+│   │   ├── explore.tsx          # 탐색 화면
+│   │   └── profile.tsx          # 내 정보 (프로필, 포인트, 전시관, 인증 배지)
+│   ├── profile/
+│   │   ├── detail.tsx           # 프로필 상세/편집 (아바타, SNS, 분야)
+│   │   ├── settings.tsx         # 설정 (테마 토글, 로그아웃)
+│   │   └── points.tsx           # 포인트 내역 조회
+│   ├── artist/[id].tsx          # 작가 페이지 (작품 뷰어)
+│   ├── artwork/create.tsx       # 작품 업로드/수정
+│   ├── exhibition/
+│   │   ├── create.tsx           # 전시관 만들기/수정 (4단계 위저드)
+│   │   └── [id].tsx             # 전시관 뷰어 (입구 → 3D 관람)
+│   └── (auth)/
+│       ├── login.tsx            # 로그인
+│       └── signup.tsx           # 회원가입
+├── components/
+│   ├── ui/
+│   │   └── icon-symbol.tsx      # SF Symbol ↔ Material Icon 매핑
+│   └── exhibition/              # 전시관 관련 컴포넌트
+│       ├── WallFaceEditor.tsx   # 벽면 정면 편집
+│       ├── Room3DView.tsx       # 펼친 도면 뷰
+│       └── gallery-3d/          # 3D 뷰어 컴포넌트들
 ├── constants/
-│   └── theme.ts                 # 브랜드 컬러, 폰트 정의
+│   └── theme.ts                 # 브랜드 컬러 (DarkColors, LightColors)
+├── contexts/
+│   ├── auth-context.tsx         # 인증 Context (useAuth)
+│   └── theme-context.tsx        # 테마 Context (useThemeMode)
 ├── hooks/                       # 커스텀 훅
 ├── lib/
-│   └── supabase.ts              # Supabase 클라이언트 초기화
+│   ├── supabase.ts              # Supabase 클라이언트 초기화
+│   └── points.ts                # 포인트 차감 유틸 (spendPoints)
+├── types/
+│   └── database.ts              # Supabase 자동 생성 타입
+├── supabase/
+│   └── migrations/              # DB 마이그레이션 SQL 파일
 ├── assets/                      # 이미지, 아이콘
 ├── .env                         # 환경 변수 (Git 제외)
 ├── vercel.json                  # Vercel 배포 설정
-├── eas.json                     # EAS Build 설정 (APK 빌드 프로필)
-├── app.json                     # Expo 앱 설정 (EAS 프로젝트 ID, Android 패키지 포함)
+├── eas.json                     # EAS Build 설정
+├── app.json                     # Expo 앱 설정
 ├── package.json                 # 의존성
 └── tsconfig.json                # TypeScript 설정
 ```
 
-## 📍 현재 진행 상태 (2026년 4월 22일 기준)
+## 📍 현재 진행 상태 (2026년 4월 23일 기준)
 
 ### ✅ 완료된 작업
 1. 프로젝트 기획 및 로드맵 정리
@@ -254,47 +317,101 @@ moui-ist-service/
     - 이미지 로딩: `expo-file-system`으로 로컬 다운로드 후 텍스처 로딩 (순차, 재시도, 타임아웃)
     - 조이스틱: `measure()` 대신 `locationX/Y` 기반 원점 계산
     - 작품 탭: `onResponderRelease`의 불안정한 좌표 → 터치 시작 좌표 사용 + onLayout 캔버스 크기 보정
+12. **다크/라이트 모드 시스템**:
+    - `contexts/theme-context.tsx` — ThemeModeProvider + useThemeMode() 훅
+    - `constants/theme.ts` — DarkColors / LightColors 두 벌
+    - AsyncStorage로 테마 설정 저장/복원
+    - 모든 화면(탭, 프로필, 작가 페이지, 작품 폼, 전시관 폼 등) 테마 적용
+13. **설정 페이지** (`app/profile/settings.tsx`):
+    - 다크/라이트 모드 Switch 토글
+    - 로그아웃 버튼
+    - 프로필 탭의 ⚙ 아이콘에서 진입
+14. **프로필 상세 페이지** (`app/profile/detail.tsx`):
+    - 프로필 이미지 업로드 (뷰 모드 + 편집 모드 모두 가능)
+    - `expo-image-manipulator`로 200px 리사이즈 + 30% JPEG 압축 (서버 용량 절약)
+    - SNS 링크: 3개 URL 입력 → 자동 플랫폼 감지 (Instagram, X, YouTube, Behance 등)
+    - 분야: 8개 카테고리 칩 토글 + 세부 분야 입력 시 자동 분류
+    - 활동명, 본명, 소개 편집
+15. **포인트(모의) 시스템**:
+    - `lib/points.ts` — spendPoints(userId, amount, description) 유틸
+    - 작품 업로드 시 10모의 차감
+    - 전시관 만들기 시 50모의 차감 (수정 시에는 차감 없음)
+    - `point_history` 테이블에 내역 기록
+    - `app/profile/points.tsx` — 포인트 내역 조회 화면
+16. **출석 이벤트** (홈 화면):
+    - 7일 연속 출석 보상 (1~6일차: 50모의, 7일차: 500모의)
+    - 연속 출석 추적, 7일 완료 후 리셋
+    - `attendance` 테이블 (user_id, checked_date, day_number, reward)
+17. **작당모의 탭** (`app/(tabs)/moui.tsx`):
+    - 협업 모집 게시판 (제목, 상세 내용, 찾는 분야)
+    - 작성자 프로필 표시, 모집 상태 (모집 중/마감), 마감 기능
+    - `moui_posts` 테이블
+18. **작가 인증 상태**:
+    - `profiles.verified` (boolean, 기본값 false)
+    - 프로필 탭에서 작가 옆에 "인증/미인증" 배지 표시
+19. **작가 페이지 뷰어 수정** (`app/artist/[id].tsx`):
+    - 슬라이드 카운터: `onMomentumScrollEnd` → `onScroll`로 웹 호환성 수정
+    - 수정/삭제 버튼 크기 축소, 오른쪽 하단 배치
+20. **작품 업로드 폼 개선** (`app/artwork/create.tsx`):
+    - 제작연도 (필수), 재료/기법 분리 (각각 필수)
+    - 크기: 가로/세로 세로 배치 (필수)
+    - 에디션 (선택), 설명 300자 이상 (필수, 글자수 카운터)
+    - 저장 시 재료 + 기법을 "재료, 기법" 형태로 결합
 
 ### 🔄 현재 단계
-**전시관 핵심 기능 완성, 안정화 단계**
+**MVP 기능 확장 중**
 - 전시관 생성→관람 전체 플로우 동작 중 (웹 + Android APK)
-- 전시관 공개 시 에러 핸들링 개선 완료 (user null 체크, try-catch)
+- 다크/라이트 모드, 설정 페이지, 프로필 편집, 포인트 시스템, 작당모의 탭, 출석 이벤트 완성
 - 로컬 APK 빌드: `export JAVA_HOME=$(/usr/libexec/java_home -v 17) && eas build --platform android --profile preview --local`
 
 ### ⏭️ 다음 단계
 
-1. **안정화 + 버그 수정**
-   - Android APK 텍스처 로딩 안정성 확인
-   - 전시관 공개 플로우 테스트 (로그인 상태, 업로드 실패 케이스)
+1. **작가 인증 시스템**
+   - 인증 신청 → 관리자 승인 플로우
+   - 인증 배지 표시
 
 2. **MVP 나머지 기능**
-   - 작가 프로필 페이지 (조회 → 편집)
-   - 탐색 화면 (전체 작가/작품 피드 + 필터)
+   - 탐색 화면 고도화 (전체 작가/작품 피드 + 필터)
    - 팔로우 기능
    - 공유 링크 (`/[username]` 라우트)
 
 3. **Supabase Secret Key 재생성**
    - 대시보드 → Settings → API Keys에서 Secret key rotate
 
-## 🗄️ DB 스키마 (MVP 최소 구성)
+4. **Supabase 마이그레이션 실행**
+   - `005_add_point_history.sql` — 포인트 내역 테이블
+   - `006_add_moui_posts.sql` — 작당모의 게시판 테이블
+   - `007_add_attendance.sql` — 출석 체크 테이블
+   - `008_add_verified.sql` — 작가 인증 상태 컬럼
+
+## 🗄️ DB 스키마
 
 ```
 profiles
 ├── id (auth.users와 1:1)
-├── user_type (creator | audience)
-├── name
-├── bio
-├── field (창작 분야)
-├── sns_links (jsonb)
+├── username
+├── user_type (creator | aspiring | audience)
+├── name (활동명)
+├── real_name (본명)
+├── bio (소개)
+├── field (분야, 쉼표 구분 — "글, 그림")
+├── sns_links (jsonb — { instagram: "url", twitter: "url", ... })
 ├── avatar_url
-└── created_at
+├── points (int, 기본 0 — 모의 포인트)
+├── verified (boolean, 기본 false — 작가 인증 상태)
+├── created_at
+└── updated_at
 
 artworks
 ├── id
 ├── user_id (profiles.id FK)
 ├── title
-├── description
+├── description (300자 이상)
 ├── image_url
+├── year (int — 제작연도)
+├── medium (text — "재료, 기법" 결합)
+├── width_cm / height_cm (실제 크기)
+├── edition (에디션, 선택)
 ├── tags (text[])
 └── created_at
 
@@ -306,15 +423,49 @@ follows
 
 exhibitions
 ├── id
-├── title
+├── user_id (profiles.id FK)
+├── title, description, foreword
+├── room_type (small | medium | large | wide)
+├── wall_images (jsonb), poster_image_url, bgm_url
+├── is_published (boolean)
+└── created_at
+
+exhibition_artworks
+├── id
+├── exhibition_id (FK)
+├── artwork_id (FK)
+├── wall (north | south | east | west)
+├── position_x, position_y (cm), width_cm, height_cm
+└── created_at
+
+point_history
+├── id
+├── user_id (profiles.id FK)
+├── amount (int — 양수: 적립, 음수: 차감)
+├── balance (int — 트랜잭션 후 잔액)
+├── type (spend | reward | mission | purchase)
 ├── description
-├── date
-├── location
-├── cover_image_url
+└── created_at
+
+moui_posts (작당모의 게시판)
+├── id
+├── user_id (profiles.id FK)
+├── title, description
+├── fields (text — 찾는 분야)
+├── status (open | closed)
+└── created_at
+
+attendance (출석 체크)
+├── id
+├── user_id (profiles.id FK)
+├── checked_date (date, UNIQUE per user)
+├── day_number (1~7)
+├── reward (int)
 └── created_at
 ```
 - 모든 테이블에 RLS 활성화 및 policy 작성 필수
 - 회원가입 시 `auth.users` → `profiles` 자동 생성 trigger 설정
+- 마이그레이션 파일: `supabase/migrations/` 디렉토리
 
 ## 🛠 트러블슈팅 기록
 
@@ -407,8 +558,10 @@ exhibitions
 | expo-three | ^8.0.0 | Three.js + Expo 통합 (네이티브 텍스처 로딩) |
 | expo-gl | ~16.0.10 | OpenGL ES / WebGL 컨텍스트 (네이티브 3D 렌더링) |
 | expo-image | ~3.0.11 | 고성능 이미지 컴포넌트 |
-| expo-image-picker | ~17.0.10 | 작품 이미지 선택 |
+| expo-image-picker | ~17.0.10 | 작품/프로필 이미지 선택 |
+| expo-image-manipulator | ~14.0.8 | 이미지 리사이즈/압축 (아바타 200px + 30% JPEG) |
 | expo-speech | ~14.0.8 | TTS (전시 서문 낭독) |
+| @react-native-async-storage/async-storage | 최신 | 테마 설정 저장 (다크/라이트) |
 | typescript | ~5.9.2 | 타입 시스템 |
 
 ## 코딩 규칙
@@ -424,8 +577,13 @@ exhibitions
 - 반응형 레이아웃으로 웹과 모바일 양쪽에서 정상 동작하도록 한다.
   - `useWindowDimensions()` 훅으로 화면 크기를 동적으로 감지한다.
   - `isWide = width > 600` 기준으로 데스크탑/모바일 분기한다.
-- **앱은 라이트 테마 기본** (아티스트 그룹 웹사이트와 반전된 디자인).
-- 브랜드 컬러는 `constants/theme.ts`의 `Brand` 객체를 사용한다.
+- **다크/라이트 모드 지원** — `useThemeMode()` 훅 사용:
+  ```tsx
+  const { colors: C, mode, toggleTheme } = useThemeMode();
+  // C.bg, C.fg, C.gold, C.card, C.border, C.muted, C.mutedLight, C.danger
+  ```
+- 색상은 `const C` 하드코딩 대신 반드시 `useThemeMode().colors`를 사용한다.
+- 새 화면 추가 시 테마 색상을 동적으로 적용해야 한다.
 
 ### Supabase
 - Supabase 클라이언트는 하나의 모듈(`lib/supabase.ts`)에서 초기화하고 재사용한다.
@@ -534,29 +692,36 @@ exhibitions
 ### UI 디자인 변경 이력
 - 로그인/회원가입: FloatingShape 배경 애니메이션, PlayfulDiamond, 인풋 포커스 골드 전환
 - 온보딩: 가로형 카드 + 라디오 선택 애니메이션
-- 홈: 프로필 아바타 + 퀵액션 리스트 + 내 전시관 목록
+- 홈: 시작하기 (작품 업로드 + 전시관 만들기) + 출석 이벤트 (7일 보상)
 - 탐색: 카테고리 그리드 + 검색바 + 트렌딩
-- 탭바: Home→홈, Explore→탐색 (한글화)
+- **탭바 (4개)**: 홈 → 작당모의 → 탐색 → 내 정보
+  - 아이콘: house.fill / bubble.left.and.bubble.right.fill / paperplane.fill / person.fill
+- 내 정보: 프로필 카드 (인증 배지), 모의 포인트, 작품 메뉴, 전시관 목록
+- 프로필 상세: 아바타 업로드, 분야 8카테고리 칩, SNS 3개 URL 자동 감지
+- 설정: 다크/라이트 토글 + 로그아웃
 - 전시관 뷰어: 2D CSS 기반 → Three.js 3D 뷰어로 전환
 - WallFaceEditor: 모서리 핸들 드래그 리사이즈 추가
 
+### 포인트(모의) 경제 시스템
+- **적립**: 출석 보상 (50/500모의), 향후 미션 등
+- **차감**: 작품 업로드 (10모의), 전시관 만들기 (50모의)
+- **수정 시에는 포인트 차감 없음**
+- **내역**: `point_history` 테이블에 모든 트랜잭션 기록
+- **환산**: 1모의 = 100원
+- **유틸**: `lib/points.ts`의 `spendPoints(userId, amount, description)` 함수 사용
+
 ### Git 커밋 히스토리 (최근)
 ```
+fede226 다크/라이트 테마, 설정 페이지, 프로필 기능, 작당모의 탭, 출석 이벤트, 포인트 시스템
+9c59a93 리뉴얼
+537fec2 첫화면 변경
+429a9e2 전시관 UI 개선: 삭제 기능, 탭바 리디자인, 입구/문/상세 디자인 개선
+c6486e1 토스 다크모드 색상 적용, 스플래시 속도 개선, 모바일 작품 탭 수정
 4ec5b5f fix: Android APK 작품 탭 상세보기 안 뜨는 문제 수정
 f308fb3 feat: 작품 모서리 드래그 리사이즈 + Android APK 3D 뷰어 버그 수정
 9e9a547 feat: 자동 관람 기능 추가 — 작품 사이를 걸어다니며 감상하는 투어 모드
 d8dd9c4 feat: 홈 화면에 내 전시관 목록 섹션 추가
 c590abb feat: 작품 상세보기 스포트라이트 조명 효과 + 입장 360도 둘러보기 연출
-d79c805 미니맵 작품 점 골드색 + 글로우 효과
-e9b1563 fix: 작품 상세보기 후 카메라 위치 이탈 및 크래시 수정
-cc3df97 feat: dual joystick controls for movement and camera look
-ae1bc4b feat: add minimap overlay to 3D gallery viewer
-d4d8ad3 feat: add joystick controls, door intro animation, poster image, and foreword overlay
-d506087 feat: add pinch-to-resize for artworks on wall editor
-60a384e feat: add virtual exhibition gallery with first-person viewer
-fd1c7f6 feat: redesign login/signup screens with floating shape animations
-9dc4d6d feat: add email/password auth, onboarding, and splash screen
-f5f4b10 feat: redesign home screen with animated floating shapes
 ```
 
 ## 응답 규칙
