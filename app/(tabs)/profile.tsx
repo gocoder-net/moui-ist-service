@@ -222,6 +222,7 @@ export default function ProfileScreen() {
 
   /* 전시관 · 최근 작품 */
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
+  const [exNumMap, setExNumMap] = useState<Map<string, number>>(new Map());
   const [recentArtworks, setRecentArtworks] = useState<RecentArtwork[]>([]);
   const exScrollRef = useRef<ScrollView>(null);
   const exScrollX = useRef(0);
@@ -230,6 +231,7 @@ export default function ProfileScreen() {
 
   const fetchExhibitions = useCallback(async () => {
     if (!user) return;
+    // Fetch ordered by updated_at for display
     const { data } = await supabase
       .from('exhibitions')
       .select('id, title, room_type, poster_image_url, is_published, created_at')
@@ -237,6 +239,19 @@ export default function ProfileScreen() {
       .order('updated_at', { ascending: false })
       .limit(10);
     if (data) setExhibitions(data);
+
+    // Compute creation-order number for URL (published only)
+    const { data: allPublished } = await supabase
+      .from('exhibitions')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('is_published', true)
+      .order('created_at', { ascending: true });
+    if (allPublished) {
+      const map = new Map<string, number>();
+      allPublished.forEach((ex, i) => map.set(ex.id, i + 1));
+      setExNumMap(map);
+    }
   }, [user]);
 
   const fetchRecentArtworks = useCallback(async () => {
@@ -525,7 +540,14 @@ export default function ProfileScreen() {
                   key={item.id}
                   item={item}
                   C={C}
-                  onPress={() => router.push(`/exhibition/${item.id}`)}
+                  onPress={() => {
+                    const num = exNumMap.get(item.id);
+                    if (num && profile?.username) {
+                      router.push(`/3dexhibition/${profile.username}/${num}`);
+                    } else {
+                      router.push(`/exhibition/${item.id}`);
+                    }
+                  }}
                   onEdit={() => router.push(`/exhibition/create?editId=${item.id}`)}
                   onDelete={() => handleDelete(item.id)}
                 />

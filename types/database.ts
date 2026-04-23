@@ -39,6 +39,7 @@ export type Database = {
           points?: number;
         };
         Update: {
+          username?: string;
           user_type?: "creator" | "aspiring" | "audience";
           name?: string | null;
           real_name?: string | null;

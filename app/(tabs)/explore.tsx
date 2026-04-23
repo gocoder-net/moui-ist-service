@@ -321,13 +321,16 @@ export default function ExploreScreen() {
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
       {/* 배경 */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <FloatingShape shape="ring" size={100} color={C.gold} opacity={0.08} top="8%" left="5%" duration={6000} delay={0} />
-        <FloatingShape shape="ring" size={130} color={C.goldLight} opacity={0.05} top="55%" left="60%" duration={7000} delay={800} />
-        <FloatingShape shape="diamond" size={18} color={C.gold} opacity={0.20} top="12%" left="85%" duration={3500} delay={600} />
-        <FloatingShape shape="diamond" size={22} color={C.goldLight} opacity={0.12} top="75%" left="8%" duration={3800} delay={1000} />
-        <FloatingShape shape="circle" size={6} color={C.gold} opacity={0.28} top="25%" left="20%" duration={2800} delay={300} />
-        <FloatingShape shape="circle" size={8} color={C.goldLight} opacity={0.20} top="45%" left="78%" duration={2500} delay={900} />
-        <FloatingShape shape="line" size={60} color={C.gold} opacity={0.10} top="18%" left="50%" duration={5000} delay={1500} />
+        <FloatingShape shape="ring" size={50} color={C.gold} opacity={0.08} top="5%" left="2%" duration={6000} delay={0} />
+        <FloatingShape shape="ring" size={70} color={C.goldLight} opacity={0.05} top="50%" left="60%" duration={7000} delay={800} />
+        <FloatingShape shape="diamond" size={20} color={C.gold} opacity={0.20} top="10%" left="82%" duration={3500} delay={600} />
+        <FloatingShape shape="diamond" size={14} color={C.gold} opacity={0.15} top="60%" left="5%" duration={4200} delay={200} />
+        <FloatingShape shape="diamond" size={24} color={C.goldLight} opacity={0.10} top="80%" left="70%" duration={3800} delay={1000} />
+        <FloatingShape shape="circle" size={7} color={C.gold} opacity={0.28} top="20%" left="25%" duration={2800} delay={300} />
+        <FloatingShape shape="circle" size={5} color={C.goldLight} opacity={0.22} top="40%" left="75%" duration={2500} delay={900} />
+        <FloatingShape shape="circle" size={8} color={C.gold} opacity={0.18} top="70%" left="35%" duration={3200} delay={500} />
+        <FloatingShape shape="line" size={60} color={C.gold} opacity={0.10} top="15%" left="55%" duration={5000} delay={1500} />
+        <FloatingShape shape="line" size={80} color={C.goldLight} opacity={0.07} top="65%" left="40%" duration={4500} delay={300} />
       </View>
 
       {/* 상단 바 */}

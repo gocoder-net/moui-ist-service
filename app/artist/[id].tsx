@@ -538,9 +538,15 @@ export default function ArtistPortfolioScreen() {
     }
     setLoading(false);
 
-    // Auto-open viewer if artworkId is in URL
+    // Auto-open viewer if artworkId is in URL (supports both 1-based index and UUID)
     if (artworkId && artworksRes.data) {
-      const idx = artworksRes.data.findIndex((a) => a.id === artworkId);
+      const num = parseInt(artworkId, 10);
+      let idx: number;
+      if (!isNaN(num) && num >= 1 && num <= artworksRes.data.length) {
+        idx = num - 1; // 1-based → 0-based
+      } else {
+        idx = artworksRes.data.findIndex((a) => a.id === artworkId); // fallback UUID
+      }
       if (idx >= 0) {
         setViewerIndex(idx);
         setViewerVisible(true);
@@ -548,11 +554,11 @@ export default function ArtistPortfolioScreen() {
     }
   };
 
-  const updateUrlArtwork = (awId: string | null) => {
+  const updateUrlArtwork = (index: number | null) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const url = new URL(window.location.href);
-      if (awId) {
-        url.searchParams.set('artworkId', awId);
+      if (index !== null) {
+        url.searchParams.set('artworkId', String(index + 1)); // 0-based → 1-based
       } else {
         url.searchParams.delete('artworkId');
       }
@@ -664,7 +670,7 @@ export default function ArtistPortfolioScreen() {
   const openViewer = (artworkIndex: number) => {
     setViewerIndex(artworkIndex);
     setViewerVisible(true);
-    updateUrlArtwork(artworks[artworkIndex]?.id ?? null);
+    updateUrlArtwork(artworkIndex);
   };
 
   const handleEditArtwork = (artwork: Artwork) => {
@@ -883,11 +889,14 @@ export default function ArtistPortfolioScreen() {
               <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
 
               <View style={styles.exGrid}>
-                {exhibitions.map((ex) => (
+                {exhibitions.map((ex, idx) => {
+                  // exhibitions is created_at desc; number = total - idx (1-based, asc order)
+                  const exNum = exhibitions.length - idx;
+                  return (
                   <Pressable
                     key={ex.id}
                     style={({ pressed }) => [styles.exGridCard, { backgroundColor: C.card }, pressed && { opacity: 0.8 }]}
-                    onPress={() => router.push(`/exhibition/${ex.id}`)}
+                    onPress={() => router.push(`/3dexhibition/${profile.username}/${exNum}`)}
                   >
                     {ex.poster_image_url ? (
                       <Image
@@ -916,7 +925,8 @@ export default function ArtistPortfolioScreen() {
                       </View>
                     </View>
                   </Pressable>
-                ))}
+                  );
+                })}
               </View>
             </View>
           ) : (
@@ -965,7 +975,7 @@ export default function ArtistPortfolioScreen() {
         isOwner={isOwner}
         onEdit={handleEditArtwork}
         onDelete={handleDeleteArtwork}
-        onIndexChange={(idx) => updateUrlArtwork(artworks[idx]?.id ?? null)}
+        onIndexChange={(idx) => updateUrlArtwork(idx)}
       />
     </View>
   );

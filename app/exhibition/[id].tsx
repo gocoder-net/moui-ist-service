@@ -486,8 +486,7 @@ function CtrlBtn({ b, cur, has, onPress }: {
 }
 
 /* ── 메인 뷰어 ── */
-export default function ExhibitionViewer() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+export function ExhibitionViewerContent({ exhibitionId }: { exhibitionId: string | null }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { width: sw } = useWindowDimensions();
@@ -500,17 +499,18 @@ export default function ExhibitionViewer() {
 
   const mapWidth = Math.min(sw - 48, 360);
 
-  useEffect(() => { if (id) load(); }, [id]);
+  useEffect(() => { if (exhibitionId) load(); }, [exhibitionId]);
 
   const load = async () => {
+    if (!exhibitionId) return;
     setLoading(true);
     const { data: ex } = await supabase.from('exhibitions')
-      .select('*, profiles(name, username)').eq('id', id).single();
+      .select('*, profiles(name, username)').eq('id', exhibitionId).single();
     if (ex) setExhibition(ex as any);
 
     const { data: arts } = await supabase.from('exhibition_artworks')
       .select('*, artwork:artworks(id, title, year, medium, width_cm, height_cm, edition, description, image_url, image_top_url, image_bottom_url, image_left_url, image_right_url)')
-      .eq('exhibition_id', id).order('created_at');
+      .eq('exhibition_id', exhibitionId).order('created_at');
     if (arts) setPlacements(arts as any);
     setLoading(false);
   };
@@ -948,3 +948,9 @@ const styles = StyleSheet.create({
   closeBtn: { backgroundColor: C.bg, paddingVertical: 14, borderTopWidth: 1, borderTopColor: C.border, alignItems: 'center' },
   closeBtnText: { color: C.gold, fontSize: 13, fontWeight: '600', letterSpacing: 1 },
 });
+
+/* ── Default export (UUID route) ── */
+export default function ExhibitionViewer() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  return <ExhibitionViewerContent exhibitionId={id ?? null} />;
+}

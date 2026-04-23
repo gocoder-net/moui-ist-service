@@ -27,7 +27,7 @@ function RootNavigator() {
 
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[0] === '(onboarding)';
-    const inPublic = segments[0] === 'exhibition' || segments[0] === 'artist';
+    const inPublic = segments[0] === 'exhibition' || segments[0] === 'artist' || segments[0] === '3dexhibition';
 
     if (!session) {
       if (!inAuthGroup && !inPublic) {
@@ -92,6 +92,7 @@ function RootNavigator() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="exhibition/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="artist/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="3dexhibition/[username]/[num]" options={{ headerShown: false }} />
           <Stack.Screen name="artwork/create" options={{ headerShown: false }} />
           <Stack.Screen name="profile/detail" options={{ headerShown: false }} />
           <Stack.Screen name="profile/points" options={{ headerShown: false }} />
