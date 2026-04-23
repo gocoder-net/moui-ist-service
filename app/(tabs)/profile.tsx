@@ -382,7 +382,7 @@ export default function ProfileScreen() {
                 <View style={[s.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
                   <Text style={[s.badgeText, { color: C.gold }]}>{label}</Text>
                 </View>
-                {userType === 'creator' && (
+                {(userType === 'creator' || userType === 'aspiring') && (
                   <View style={[s.badge, { backgroundColor: C.bg, borderColor: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
                     <Text style={[s.badgeText, { color: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
                       {(profile as any)?.verified ? '인증' : '미인증'}
@@ -421,8 +421,8 @@ export default function ProfileScreen() {
           </View>
         </Animated.View>
 
-        {/* 나의 작품 (creator only) — 최근 수정 10개 미리보기 */}
-        {userType === 'creator' && user?.id && (
+        {/* 나의 작품 (creator/aspiring) — 최근 수정 10개 미리보기 */}
+        {(userType === 'creator' || userType === 'aspiring') && user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
             <View style={s.exSectionHeader}>
               <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>🎨 나의 작품</Text>

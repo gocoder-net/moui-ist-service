@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   TextInput,
   KeyboardAvoidingView,
+  ScrollView,
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,15 +44,28 @@ const C = {
 type UserType = 'creator' | 'aspiring' | 'audience';
 
 const FIELD_CATEGORIES = [
-  { key: '글', icon: '✍️' },
-  { key: '그림', icon: '🎨' },
-  { key: '영상', icon: '🎬' },
-  { key: '소리', icon: '🎵' },
-  { key: '사진', icon: '📷' },
-  { key: '입체/공간', icon: '🗿' },
-  { key: '디지털/인터랙티브', icon: '💻' },
-  { key: '공연', icon: '🎭' },
+  { key: '글', icon: '✍️', keywords: ['소설가', '시인', '에세이스트', '극작가', '평론가', '작가', '글작가', '문학', '수필가', '번역가', '칼럼니스트', '소설', '시', '에세이', '극본', '평론'] },
+  { key: '그림', icon: '🎨', keywords: ['화가', '일러스트레이터', '만화가', '캘리그래퍼', '그래픽 디자이너', '회화', '수채화', '유화', '드로잉', '일러스트', '만화', '캘리그래피', '판화'] },
+  { key: '영상', icon: '🎬', keywords: ['영화감독', '영상작가', '애니메이터', 'VJ', '영상감독', '시네마토그래퍼', 'PD', '영화', '애니메이션', '다큐멘터리', '뮤직비디오'] },
+  { key: '소리', icon: '🎵', keywords: ['작곡가', '연주자', '사운드 아티스트', 'DJ', '뮤지션', '음악가', '성악가', '래퍼', '프로듀서', '작곡', '연주', '보컬', '싱어송라이터'] },
+  { key: '사진', icon: '📷', keywords: ['사진작가', '포토그래퍼', '사진가', '사진'] },
+  { key: '입체/공간', icon: '🗿', keywords: ['조각가', '도예가', '설치미술가', '건축가', '공예가', '금속공예', '목공예', '세라믹', '조각', '도자기', '설치미술', '건축', '도예', '텍스타일'] },
+  { key: '디지털/인터랙티브', icon: '💻', keywords: ['미디어 아티스트', '게임 디자이너', 'AI 아티스트', 'NFT', '코딩 아티스트', '인터랙티브', '뉴미디어', '디지털 아트', '제너레이티브', '웹 아트'] },
+  { key: '공연', icon: '🎭', keywords: ['무용가', '배우', '퍼포먼스 아티스트', '댄서', '안무가', '연극', '뮤지컬', '무용', '퍼포먼스', '행위예술'] },
 ] as const;
+
+function detectFieldFromInput(input: string): { category: string; icon: string } | null {
+  const trimmed = input.trim().toLowerCase();
+  if (!trimmed || trimmed.length < 2) return null;
+  for (const cat of FIELD_CATEGORIES) {
+    for (const kw of cat.keywords) {
+      if (kw.toLowerCase().includes(trimmed) || trimmed.includes(kw.toLowerCase())) {
+        return { category: cat.key, icon: cat.icon };
+      }
+    }
+  }
+  return null;
+}
 
 const normalizePhoneNumber = (value: string) => value.replace(/\D/g, '').slice(0, 11);
 
@@ -278,6 +292,8 @@ export default function OnboardingScreen() {
   const [realName, setRealName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  const [fieldInput, setFieldInput] = useState('');
+  const [fieldMessage, setFieldMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const realNameRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
@@ -338,6 +354,19 @@ export default function OnboardingScreen() {
     setSelectedFields((prev) =>
       prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
     );
+  };
+
+  const handleFieldInput = (text: string) => {
+    setFieldInput(text);
+    const match = detectFieldFromInput(text);
+    if (match) {
+      setFieldMessage(`작가님은 ${match.icon} ${match.category} 작가님이네요!`);
+      if (!selectedFields.includes(match.category)) {
+        setSelectedFields((prev) => [...prev, match.category]);
+      }
+    } else {
+      setFieldMessage('');
+    }
   };
 
   const handleComplete = async () => {
@@ -439,7 +468,12 @@ export default function OnboardingScreen() {
           </View>
         </>
       ) : (
-        <>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
           {/* Step 2: 이름 입력 */}
           <Animated.View entering={FadeInDown.duration(400).springify()} style={styles.header}>
             <PlayfulDiamond />
@@ -493,7 +527,6 @@ export default function OnboardingScreen() {
                 keyboardType="phone-pad"
                 autoComplete="tel"
                 returnKeyType="done"
-                onSubmitEditing={handleComplete}
                 maxLength={11}
               />
               <Text style={styles.inputHint}>하이픈 없이 입력해 주세요. 외부에는 공개되지 않아요</Text>
@@ -521,12 +554,22 @@ export default function OnboardingScreen() {
                   })}
                 </View>
                 <Text style={styles.inputHint}>작가와 지망생은 최소 1개의 분야 선택이 꼭 필요해요</Text>
+
+                <Text style={[styles.inputLabel, { marginTop: 16 }]}>세부 분야 입력 (자동 분류)</Text>
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="예: 소설가, 일러스트레이터, 작곡가"
+                  placeholderTextColor={C.mutedLight}
+                  value={fieldInput}
+                  onChangeText={handleFieldInput}
+                />
+                {fieldMessage !== '' && (
+                  <Text style={[styles.inputHint, { color: C.gold, fontWeight: '700' }]}>{fieldMessage}</Text>
+                )}
               </View>
             )}
           </Animated.View>
-
-          <View style={{ flex: 1 }} />
-        </>
+        </ScrollView>
       )}
 
       {/* 하단 버튼 */}
