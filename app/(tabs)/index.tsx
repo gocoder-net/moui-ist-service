@@ -57,7 +57,6 @@ const C = {
   muted: '#8b95a1',
   mutedLight: '#4e5968',
   border: '#333d4b',
-  white: '#f2f4f6',
 };
 
 /* ── 배경 떠다니는 도형 ── */
@@ -258,7 +257,7 @@ function ExhibitionCard({ item, onPress, onEdit, onDelete }: { item: Exhibition;
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, profile, signOut } = useAuth();
+  const { user } = useAuth();
 
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const exScrollRef = useRef<ScrollView>(null);
@@ -338,11 +337,6 @@ export default function HomeScreen() {
     });
   }, [fetchExhibitions]);
 
-  const userTypeLabels = { creator: '작가', aspiring: '지망생', audience: '감상자' } as const;
-  const userTypeLabel = userTypeLabels[profile?.user_type ?? 'audience'];
-  const userTypeEmoji = { creator: '🎨', aspiring: '✏️', audience: '👀' } as const;
-  const emoji = userTypeEmoji[profile?.user_type ?? 'audience'];
-
   return (
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* 배경 */}
@@ -360,43 +354,22 @@ export default function HomeScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 상단 바 */}
-        <Animated.View entering={FadeIn.delay(100).duration(300)} style={styles.topBar}>
-          <Text style={styles.enLogo}>
+        {/* 히어로 배너 */}
+        <Animated.View entering={FadeInDown.delay(100).duration(600).springify()} style={styles.heroBanner}>
+          <View style={styles.heroDecoTop}>
+            <View style={styles.heroLine} />
+            <View style={styles.heroDiamond} />
+            <View style={styles.heroLine} />
+          </View>
+          <Text style={styles.heroLogo}>
             MOUI<Text style={{ color: C.gold }}>-</Text>IST
           </Text>
-          <Pressable onPress={signOut} style={styles.logoutBtn}>
-            <Text style={styles.logoutText}>로그아웃</Text>
-          </Pressable>
-        </Animated.View>
-
-        {/* 프로필 영역 */}
-        <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.profileSection}>
-          <View style={styles.avatarWrap}>
-            <Text style={styles.avatarEmoji}>{emoji}</Text>
-            <View style={styles.avatarDiamond}>
-              <PlayfulDiamond size={10} />
-            </View>
+          <Text style={styles.heroSub}>세상 모든 예술가를 위한 서비스</Text>
+          <View style={styles.heroDecoBottom}>
+            <View style={styles.heroLine} />
+            <View style={styles.heroDiamond} />
+            <View style={styles.heroLine} />
           </View>
-
-          <Text style={styles.greeting}>
-            안녕하세요, <Text style={{ color: C.gold }}>{profile?.name ?? '회원'}</Text>님
-          </Text>
-
-          <View style={styles.badgeRow}>
-            <View style={styles.badge}>
-              <Text style={styles.badgeText}>{userTypeLabel}</Text>
-            </View>
-          </View>
-
-          <Text style={styles.email}>{user?.email}</Text>
-        </Animated.View>
-
-        {/* 구분선 */}
-        <Animated.View entering={FadeIn.delay(400).duration(300)} style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <View style={styles.dividerDiamond} />
-          <View style={styles.dividerLine} />
         </Animated.View>
 
         {/* 내 전시관 */}
@@ -503,92 +476,46 @@ const styles = StyleSheet.create({
     paddingBottom: 90,
   },
 
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  heroBanner: {
     alignItems: 'center',
-    paddingVertical: 16,
-  },
-  enLogo: {
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 5,
-    color: C.fg,
-  },
-  logoutBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: C.border,
-  },
-  logoutText: {
-    fontSize: 12,
-    color: C.muted,
-    fontWeight: '600',
-    letterSpacing: 1,
-  },
-
-  profileSection: {
-    alignItems: 'center',
-    paddingVertical: 28,
-    gap: 10,
-  },
-  avatarWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: '#212a35',
-    borderWidth: 1.5,
-    borderColor: C.gold,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  avatarEmoji: {
-    fontSize: 32,
-  },
-  avatarDiamond: {
-    position: 'absolute',
-    bottom: -4,
-    right: -4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: C.white,
-    borderWidth: 1,
-    borderColor: C.border,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  greeting: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: C.fg,
-    letterSpacing: 1,
-  },
-  badgeRow: {
-    flexDirection: 'row',
+    paddingVertical: 32,
     gap: 8,
   },
-  badge: {
-    backgroundColor: '#212a35',
+  heroLogo: {
+    fontSize: 28,
+    fontWeight: '900',
+    letterSpacing: 10,
+    color: C.fg,
+  },
+  heroSub: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: C.muted,
+    letterSpacing: 3,
+  },
+  heroDecoTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 4,
+  },
+  heroDecoBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  heroLine: {
+    width: 32,
+    height: 1,
+    backgroundColor: 'rgba(200,169,110,0.25)',
+  },
+  heroDiamond: {
+    width: 6,
+    height: 6,
     borderWidth: 1,
     borderColor: C.gold,
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingVertical: 5,
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: C.gold,
-    letterSpacing: 1,
-  },
-  email: {
-    fontSize: 12,
-    color: C.mutedLight,
-    letterSpacing: 0.5,
+    transform: [{ rotate: '45deg' }],
   },
 
   dividerRow: {
