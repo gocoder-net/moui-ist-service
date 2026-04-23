@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet, View, Text, Pressable, ScrollView, TextInput,
   Platform, Alert,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
@@ -71,8 +71,12 @@ function snsIconForKey(key: string): string {
 export default function ProfileDetailScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams<{ focus?: string }>();
   const { user, profile, refreshProfile } = useAuth();
   const { colors: C } = useThemeMode();
+  const scrollRef = useRef<ScrollView>(null);
+  const regionYRef = useRef(0);
+  const [regionHighlight, setRegionHighlight] = useState(false);
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -96,6 +100,18 @@ export default function ProfileDetailScreen() {
   const [snsUrl1, setSnsUrl1] = useState('');
   const [snsUrl2, setSnsUrl2] = useState('');
   const [snsUrl3, setSnsUrl3] = useState('');
+
+  // focus=region이면 자동 편집 모드 진입 + 지역 강조
+  useEffect(() => {
+    if (params.focus === 'region' && !editing) {
+      handleStartEdit();
+      setRegionHighlight(true);
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ y: regionYRef.current, animated: true });
+      }, 500);
+      setTimeout(() => setRegionHighlight(false), 3000);
+    }
+  }, [params.focus]);
 
   const userType = profile?.user_type ?? 'audience';
   const emoji = USER_TYPE_EMOJI[userType];
@@ -353,7 +369,7 @@ export default function ProfileDetailScreen() {
         <View style={{ width: 40 }} />
       </Animated.View>
 
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={scrollRef} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 90 }]} showsVerticalScrollIndicator={false}>
         {!editing ? (
           <>
             {/* 프로필 정보 카드 */}
@@ -590,7 +606,11 @@ export default function ProfileDetailScreen() {
                 <Text style={[styles.fieldDetectMsg, { color: C.gold }]}>{fieldMessage}</Text>
               )}
 
-              <Text style={[styles.fieldLabel, { color: C.muted }]}>활동 지역</Text>
+              <View
+                onLayout={(e) => { regionYRef.current = e.nativeEvent.layout.y + 200; }}
+                style={regionHighlight ? [styles.regionHighlight, { borderColor: C.gold }] : undefined}
+              >
+              <Text style={[styles.fieldLabel, { color: regionHighlight ? C.gold : C.muted, fontWeight: regionHighlight ? '900' : '700' }]}>📍 활동 지역</Text>
               {/* 시/도 선택 */}
               <Pressable
                 onPress={() => { setShowProvincePicker(!showProvincePicker); setShowDistrictPicker(false); }}
@@ -656,6 +676,7 @@ export default function ProfileDetailScreen() {
                   </Pressable>
                 </View>
               ) : null}
+              </View>
 
               <Text style={[styles.fieldLabel, { color: C.muted }]}>소개</Text>
               <TextInput
@@ -1102,5 +1123,12 @@ const styles = StyleSheet.create({
   regionPreviewText: {
     fontSize: 13,
     fontWeight: '700',
+  },
+  regionHighlight: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 4,
+    marginBottom: 4,
   },
 });

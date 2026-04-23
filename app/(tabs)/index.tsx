@@ -174,6 +174,8 @@ export default function HomeScreen() {
 
   const [hasExhibition, setHasExhibition] = useState(false);
   const [hasArtwork, setHasArtwork] = useState(false);
+  const [hasRegion, setHasRegion] = useState(false);
+  const [regionRewardClaimed, setRegionRewardClaimed] = useState(true);
   const [welcomeClaimed, setWelcomeClaimed] = useState(true); // 기본 true로 깜빡임 방지
   const [claimingWelcome, setClaimingWelcome] = useState(false);
 
@@ -190,14 +192,36 @@ export default function HomeScreen() {
 
   const checkProgress = useCallback(async () => {
     if (!user) return;
-    const [exRes, artRes, welcomeRes] = await Promise.all([
+    const [exRes, artRes, welcomeRes, regionRewardRes, profileRes] = await Promise.all([
       supabase.from('exhibitions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       supabase.from('artworks').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       (supabase as any).from('point_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('type', 'welcome'),
+      (supabase as any).from('point_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('type', 'region_setup'),
+      supabase.from('profiles').select('region').eq('id', user.id).single(),
     ]);
     setHasExhibition((exRes.count ?? 0) > 0);
     setHasArtwork((artRes.count ?? 0) > 0);
     setWelcomeClaimed((welcomeRes.count ?? 0) > 0);
+    const regionSet = !!profileRes.data?.region;
+    setHasRegion(regionSet);
+    const regionRewarded = (regionRewardRes.count ?? 0) > 0;
+    setRegionRewardClaimed(regionRewarded);
+
+    // 위치 설정 후 자동 보상 지급
+    if (regionSet && !regionRewarded) {
+      const REWARD = 1000;
+      const { data: prof } = await supabase.from('profiles').select('points').eq('id', user.id).single();
+      const pts = prof?.points ?? 0;
+      await supabase.from('profiles').update({ points: pts + REWARD }).eq('id', user.id);
+      await (supabase as any).from('point_history').insert({
+        user_id: user.id, amount: REWARD, balance: pts + REWARD,
+        type: 'region_setup', description: '활동 지역 설정 보너스',
+      });
+      await refreshProfile();
+      setRegionRewardClaimed(true);
+      const msg = `📍 활동 지역 설정 완료! ${REWARD}모의를 받았습니다!`;
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('보상 지급', msg);
+    }
   }, [user]);
 
   const handleClaimWelcome = async () => {
@@ -350,6 +374,11 @@ export default function HomeScreen() {
             icon="🏛️" title="전시관 만들기" desc="나만의 가상 전시 공간을 만드세요"
             delay={380} done={hasExhibition} C={C}
             onPress={() => router.push('/exhibition/create')}
+          />
+          <QuickCard
+            icon="📍" title="내 위치 설정하기" desc="활동 지역을 설정하세요"
+            delay={460} done={hasRegion} C={C}
+            onPress={() => router.push('/profile/detail?focus=region')}
           />
         </View>
 

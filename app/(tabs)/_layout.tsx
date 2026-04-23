@@ -82,7 +82,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="moui"
         options={{
-          title: '작당모의',
+          title: '모임',
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="bubble.left.and.bubble.right.fill" color={color} />,
         }}
       />
@@ -91,6 +91,13 @@ export default function TabLayout() {
         options={{
           title: '탐색모의',
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="paperplane.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="chat"
+        options={{
+          title: '작당모의',
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="chat.fill" color={color} />,
         }}
       />
       <Tabs.Screen

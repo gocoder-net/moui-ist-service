@@ -421,6 +421,25 @@ export default function ProfileScreen() {
           </View>
         </Animated.View>
 
+        {/* 내 위치 */}
+        <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.locationCard, { backgroundColor: C.card }]}>
+          <View style={s.locationRow}>
+            <Text style={s.locationIcon}>📍</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[s.locationLabel, { color: C.muted }]}>내 위치</Text>
+              <Text style={[s.locationValue, { color: C.fg }]}>
+                {(profile as any)?.region ?? '미설정'}
+              </Text>
+            </View>
+            <Pressable
+              style={({ pressed }) => [s.locationEditBtn, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
+              onPress={() => router.push('/profile/detail?focus=region')}
+            >
+              <Text style={[s.locationEditText, { color: C.muted }]}>{(profile as any)?.region ? '변경' : '설정'}</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+
         {/* 나의 작품 (creator/aspiring) — 최근 수정 10개 미리보기 */}
         {(userType === 'creator' || userType === 'aspiring') && user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
@@ -701,6 +720,40 @@ const s = StyleSheet.create({
   pointsInfoText: {
     fontSize: 11,
     letterSpacing: 0.5,
+  },
+
+  /* 내 위치 */
+  locationCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  locationIcon: {
+    fontSize: 20,
+  },
+  locationLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  locationValue: {
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  locationEditBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  locationEditText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   sectionHeader: {
