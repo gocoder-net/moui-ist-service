@@ -16,7 +16,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, realName: string, displayName: string, phoneNumber: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, realName: string, displayName: string, phoneNumber: string, username: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -61,8 +61,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, realName: string, displayName: string, phoneNumber: string) => {
-    const { error } = await supabase.auth.signUp({
+  const signUp = async (email: string, password: string, realName: string, displayName: string, phoneNumber: string, username: string) => {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -70,10 +70,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           real_name: realName.trim(),
           name: displayName.trim(),
           phone_number: phoneNumber.trim(),
+          username: username.trim(),
         },
       },
     });
     if (error) return { error: error.message };
+
+    // Update profile with user-chosen username
+    if (data.user) {
+      await supabase
+        .from("profiles")
+        .update({ username: username.trim() })
+        .eq("id", data.user.id);
+    }
+
     return { error: null };
   };
 

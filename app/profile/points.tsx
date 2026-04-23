@@ -68,7 +68,7 @@ export default function PointsHistoryScreen() {
             <Text style={[styles.historyAmount, { color: isPositive ? '#4CAF50' : C.danger }]}>
               {isPositive ? '+' : ''}{item.amount.toLocaleString()}
             </Text>
-            <Text style={[styles.historyBalance, { color: C.mutedLight }]}>{item.balance.toLocaleString()} 모의</Text>
+            <Text style={[styles.historyBalance, { color: C.mutedLight }]}>{item.balance.toLocaleString()} MOUI</Text>
           </View>
         </View>
       </Animated.View>
@@ -88,10 +88,10 @@ export default function PointsHistoryScreen() {
 
       {/* 잔액 카드 */}
       <Animated.View entering={FadeInDown.delay(100).duration(400).springify()} style={[styles.balanceCard, { backgroundColor: C.card }]}>
-        <Text style={[styles.balanceLabel, { color: C.gold }]}>보유 모의</Text>
+        <Text style={[styles.balanceLabel, { color: C.gold }]}>보유 MOU 포인트</Text>
         <Text style={[styles.balanceAmount, { color: C.fg }]}>
           {(profile?.points ?? 0).toLocaleString()}
-          <Text style={[styles.balanceUnit, { color: C.muted }]}> 모의</Text>
+          <Text style={[styles.balanceUnit, { color: C.muted }]}> MOUI</Text>
         </Text>
         <Text style={[styles.balanceSub, { color: C.mutedLight }]}>= {((profile?.points ?? 0) * 100).toLocaleString()}원</Text>
       </Animated.View>

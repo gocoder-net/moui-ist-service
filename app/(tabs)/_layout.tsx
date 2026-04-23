@@ -89,7 +89,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: '탐색',
+          title: '탐색모의',
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="paperplane.fill" color={color} />,
         }}
       />

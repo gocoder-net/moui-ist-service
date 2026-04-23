@@ -59,6 +59,12 @@ type Exhibition = {
   created_at: string;
 };
 
+type RecentArtwork = {
+  id: string;
+  title: string;
+  image_url: string;
+};
+
 const ROOM_EMOJI: Record<string, string> = { small: '🏠', medium: '🏛️', large: '🏰' };
 const ROOM_LABEL: Record<string, string> = { small: '소형', medium: '중형', large: '대형' };
 
@@ -132,6 +138,9 @@ function ExhibitionCard({ item, onPress, onEdit, onDelete, C }: { item: Exhibiti
             </View>
           )}
           <View style={s.exBadgeRow}>
+            <View style={[s.exBadge, s.exThumbMarkBadge, { borderColor: 'rgba(200,169,110,0.45)' }]}>
+              <Text style={s.exThumbMarkEmoji}>🏛️</Text>
+            </View>
             <View style={s.exBadge}>
               <Text style={[s.exBadgeText, { color: C.muted }]}>{ROOM_LABEL[item.room_type] ?? item.room_type}</Text>
             </View>
@@ -158,33 +167,44 @@ function ExhibitionCard({ item, onPress, onEdit, onDelete, C }: { item: Exhibiti
   );
 }
 
-/* ── 메뉴 행/섹션 컴포넌트 ── */
-type MenuItem = { icon: string; label: string; onPress: () => void; color?: string };
-
-function MenuRow({ item, isLast, C }: { item: MenuItem; isLast: boolean; C: any }) {
+/* ── 최근 작품 카드 (프로필 미리보기) ── */
+function ArtworkPreviewCard({
+  item,
+  onPress,
+  onEdit,
+  onDelete,
+  C,
+}: {
+  item: RecentArtwork;
+  onPress: () => void;
+  onEdit: () => void;
+  onDelete: () => void;
+  C: any;
+}) {
   return (
-    <>
-      <Pressable
-        style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
-        onPress={item.onPress}
-      >
-        {item.icon ? <Text style={s.menuIcon}>{item.icon}</Text> : null}
-        <Text style={[s.menuLabel, { color: C.fg }, item.color ? { color: item.color } : undefined]}>{item.label}</Text>
-        <Text style={[s.menuArrow, { color: C.muted }, item.color ? { color: item.color } : undefined]}>›</Text>
+    <View style={[s.exCard, { borderColor: C.border, backgroundColor: C.bg }]}>
+      <Pressable style={({ pressed }) => [pressed && { opacity: 0.7 }]} onPress={onPress}>
+        <View style={s.exPosterWrap}>
+          <Image source={{ uri: item.image_url }} style={s.exPoster} contentFit="cover" />
+          <View style={s.exBadgeRow}>
+            <View style={[s.exBadge, s.exThumbMarkBadge, { borderColor: 'rgba(200,169,110,0.45)' }]}>
+              <Text style={s.exThumbMarkEmoji}>🖼️</Text>
+            </View>
+          </View>
+        </View>
+        <View style={s.exTitleWrap}>
+          <Text style={[s.exTitle, { color: C.fg }]} numberOfLines={1}>{item.title}</Text>
+        </View>
       </Pressable>
-      {!isLast && <View style={[s.menuDivider, { backgroundColor: C.border }, !item.icon && { marginLeft: 16 }]} />}
-    </>
-  );
-}
-
-function MenuSection({ title, items, delay, C }: { title: string; items: MenuItem[]; delay: number; C: any }) {
-  return (
-    <Animated.View entering={FadeInDown.delay(delay).duration(400).springify()} style={[s.section, { backgroundColor: C.card }]}>
-      <Text style={[s.sectionHeader, { color: C.muted }]}>{title}</Text>
-      {items.map((item, i) => (
-        <MenuRow key={item.label} item={item} isLast={i === items.length - 1} C={C} />
-      ))}
-    </Animated.View>
+      <View style={s.exBtnRow}>
+        <TouchableOpacity style={[s.exEditBtn, { borderColor: C.gold }]} activeOpacity={0.5} onPress={onEdit}>
+          <Text style={[s.exEditText, { color: C.gold }]}>수정</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[s.exDeleteBtn, { borderColor: C.danger }]} activeOpacity={0.5} onPress={onDelete}>
+          <Text style={[s.exDeleteText, { color: C.danger }]}>삭제</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
@@ -200,10 +220,13 @@ export default function ProfileScreen() {
   const label = USER_TYPE_LABELS[userType];
   const avatarUrl = profile?.avatar_url;
 
-  /* 전시관 데이터 */
+  /* 전시관 · 최근 작품 */
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
+  const [recentArtworks, setRecentArtworks] = useState<RecentArtwork[]>([]);
   const exScrollRef = useRef<ScrollView>(null);
   const exScrollX = useRef(0);
+  const artScrollRef = useRef<ScrollView>(null);
+  const artScrollX = useRef(0);
 
   const fetchExhibitions = useCallback(async () => {
     if (!user) return;
@@ -211,11 +234,28 @@ export default function ProfileScreen() {
       .from('exhibitions')
       .select('id, title, room_type, poster_image_url, is_published, created_at')
       .eq('user_id', user.id)
-      .order('created_at', { ascending: false });
+      .order('updated_at', { ascending: false })
+      .limit(10);
     if (data) setExhibitions(data);
   }, [user]);
 
-  useFocusEffect(useCallback(() => { fetchExhibitions(); }, [fetchExhibitions]));
+  const fetchRecentArtworks = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('artworks')
+      .select('id, title, image_url')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(10);
+    if (data) setRecentArtworks(data as RecentArtwork[]);
+  }, [user]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchExhibitions();
+      fetchRecentArtworks();
+    }, [fetchExhibitions, fetchRecentArtworks]),
+  );
 
   const handleDelete = useCallback((id: string) => {
     confirmAlert('전시관 삭제', '정말 삭제하시겠습니까?\n전시관과 관련 파일이 모두 삭제됩니다.', async () => {
@@ -266,11 +306,30 @@ export default function ProfileScreen() {
     });
   }, [fetchExhibitions]);
 
-  /* 메뉴 아이템 */
-  const workItems: MenuItem[] = [
-    { icon: '🖼️', label: '내 작품 보기', onPress: () => router.push(`/artist/${user?.id}`) },
-    { icon: '➕', label: '작품 추가', onPress: () => router.push('/artwork/create') },
-  ];
+  const handleDeleteArtwork = useCallback(
+    (item: RecentArtwork) => {
+      confirmAlert('작품 삭제', '정말 삭제하시겠습니까?\n삭제한 작품은 되돌릴 수 없습니다.', async () => {
+        try {
+          if (item.image_url) {
+            const parts = item.image_url.split('/artworks/');
+            if (parts[1]) {
+              await supabase.storage.from('artworks').remove([decodeURIComponent(parts[1])]);
+            }
+          }
+          const { error } = await supabase.from('artworks').delete().eq('id', item.id);
+          if (error) {
+            if (Platform.OS === 'web') window.alert('삭제 실패: ' + error.message);
+            return;
+          }
+          fetchRecentArtworks();
+        } catch (err) {
+          console.error('작품 삭제 중 오류:', err);
+          if (Platform.OS === 'web') window.alert('삭제 실패: 알 수 없는 오류가 발생했습니다.');
+        }
+      });
+    },
+    [fetchRecentArtworks],
+  );
 
   let delayCounter = 300;
   const nextDelay = () => { delayCounter += 80; return delayCounter; };
@@ -347,9 +406,69 @@ export default function ProfileScreen() {
           </View>
         </Animated.View>
 
-        {/* 나의 작품 (creator only) */}
+        {/* 나의 작품 (creator only) — 최근 수정 10개 미리보기 */}
         {userType === 'creator' && user?.id && (
-          <MenuSection title="🎨 나의 작품" items={workItems} delay={nextDelay()} C={C} />
+          <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
+            <View style={s.exSectionHeader}>
+              <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>🎨 나의 작품</Text>
+              <View style={s.exHeaderRight}>
+                {Platform.OS === 'web' && recentArtworks.length > 1 && (
+                  <View style={s.exScrollBtns}>
+                    <TouchableOpacity
+                      style={[s.exScrollBtn, { borderColor: C.border }]}
+                      activeOpacity={0.5}
+                      onPress={() => artScrollRef.current?.scrollTo({ x: Math.max(0, artScrollX.current - 172), animated: true })}
+                    >
+                      <Text style={[s.exScrollBtnText, { color: C.muted }]}>←</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[s.exScrollBtn, { borderColor: C.border }]}
+                      activeOpacity={0.5}
+                      onPress={() => artScrollRef.current?.scrollTo({ x: artScrollX.current + 172, animated: true })}
+                    >
+                      <Text style={[s.exScrollBtnText, { color: C.muted }]}>→</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <Pressable
+                  style={({ pressed }) => [s.exNewBtn, { borderColor: C.gold }, pressed && { opacity: 0.7 }]}
+                  onPress={() => router.push('/artwork/create')}
+                >
+                  <Text style={[s.exNewBtnText, { color: C.gold }]}>+ 작품 추가</Text>
+                </Pressable>
+              </View>
+            </View>
+            <Pressable
+              style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
+              onPress={() => router.push(`/artist/${profile?.username ?? user.id}`)}
+            >
+              <Text style={s.menuIcon}>🖼️</Text>
+              <Text style={[s.menuLabel, { color: C.fg }]}>내 작품 보기</Text>
+              <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
+            </Pressable>
+            <View style={[s.menuDivider, { backgroundColor: C.border, marginLeft: 48 }]} />
+            {recentArtworks.length > 0 && (
+              <ScrollView
+                ref={artScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.exList}
+                onScroll={(e) => { artScrollX.current = e.nativeEvent.contentOffset.x; }}
+                scrollEventThrottle={16}
+              >
+                {recentArtworks.map((item) => (
+                  <ArtworkPreviewCard
+                    key={item.id}
+                    item={item}
+                    C={C}
+                    onPress={() => router.push(`/artwork/create?artworkId=${item.id}`)}
+                    onEdit={() => router.push(`/artwork/create?artworkId=${item.id}`)}
+                    onDelete={() => handleDeleteArtwork(item)}
+                  />
+                ))}
+              </ScrollView>
+            )}
+          </Animated.View>
         )}
 
         {/* 내 전시관 */}
@@ -384,6 +503,15 @@ export default function ProfileScreen() {
                 </Pressable>
               </View>
             </View>
+            <Pressable
+              style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
+              onPress={() => router.push(`/artist/${profile?.username ?? user?.id}?tab=exhibitions`)}
+            >
+              <Text style={s.menuIcon}>🎫</Text>
+              <Text style={[s.menuLabel, { color: C.fg }]}>내 전시관 보기</Text>
+              <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
+            </Pressable>
+            <View style={[s.menuDivider, { backgroundColor: C.border, marginLeft: 48 }]} />
             <ScrollView
               ref={exScrollRef}
               horizontal
@@ -551,11 +679,6 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
   },
 
-  /* 메뉴 섹션 */
-  section: {
-    borderRadius: 16,
-    marginBottom: 12,
-  },
   sectionHeader: {
     fontSize: 11,
     fontWeight: '800',
@@ -672,6 +795,16 @@ const s = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
     backgroundColor: 'rgba(25,31,40,0.75)',
+  },
+  exThumbMarkBadge: {
+    paddingHorizontal: 5,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exThumbMarkEmoji: {
+    fontSize: 12,
+    lineHeight: 14,
   },
   exBadgePublished: {
     backgroundColor: 'rgba(200,169,110,0.18)',

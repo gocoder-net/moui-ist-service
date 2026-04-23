@@ -40,6 +40,7 @@ import type { Database } from '@/types/database';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Artwork = Database['public']['Tables']['artworks']['Row'];
+type Exhibition = Database['public']['Tables']['exhibitions']['Row'];
 
 const MAX_CONTENT_W = 680;
 const MAX_HERO_H = 280;
@@ -51,7 +52,7 @@ const Fonts = {
 const TAB_ITEMS = [
   { name: '/(tabs)', icon: 'house.fill' as const, label: '홈' },
   { name: '/(tabs)/moui', icon: 'bubble.left.and.bubble.right.fill' as const, label: '작당모의' },
-  { name: '/(tabs)/explore', icon: 'paperplane.fill' as const, label: '탐색' },
+  { name: '/(tabs)/explore', icon: 'paperplane.fill' as const, label: '탐색모의' },
   { name: '/(tabs)/profile', icon: 'person.fill' as const, label: '내 정보' },
 ];
 
@@ -245,6 +246,7 @@ function ArtworkViewer({
   isOwner,
   onEdit,
   onDelete,
+  onIndexChange,
 }: {
   visible: boolean;
   artworks: Artwork[];
@@ -253,6 +255,7 @@ function ArtworkViewer({
   isOwner?: boolean;
   onEdit?: (artwork: Artwork) => void;
   onDelete?: (artwork: Artwork) => void;
+  onIndexChange?: (index: number) => void;
 }) {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -290,6 +293,7 @@ function ArtworkViewer({
     const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
     if (idx !== currentIndex && idx >= 0 && idx < artworks.length) {
       setCurrentIndex(idx);
+      onIndexChange?.(idx);
     }
   };
 
@@ -297,6 +301,7 @@ function ArtworkViewer({
     if (index < 0 || index >= artworks.length) return;
     flatListRef.current?.scrollToIndex({ index, animated: true });
     setCurrentIndex(index);
+    onIndexChange?.(index);
   };
 
   const canGoPrev = currentIndex > 0;
@@ -442,9 +447,11 @@ function ArtworkViewer({
   );
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /* ── Main Page ── */
 export default function ArtistPortfolioScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id: rawId, tab, artworkId } = useLocalSearchParams<{ id: string; tab?: string; artworkId?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -454,16 +461,19 @@ export default function ArtistPortfolioScreen() {
   const heroH = Math.min(screenH * 0.4, MAX_HERO_H);
   const contentW = Math.min(screenW, MAX_CONTENT_W);
 
+  const [resolvedId, setResolvedId] = useState<string | null>(UUID_REGEX.test(rawId) ? rawId : null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [followerCount, setFollowerCount] = useState(0);
-  const [exhibitionCount, setExhibitionCount] = useState(0);
+  const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'works' | 'exhibitions'>(tab === 'exhibitions' ? 'exhibitions' : 'works');
 
   // Viewer state
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
+  const artworksRef = useRef<Artwork[]>([]);
 
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
@@ -480,41 +490,83 @@ export default function ArtistPortfolioScreen() {
     transform: [{ rotate: `${diamondRotation.value}deg` }],
   }));
 
-  useEffect(() => { if (id) loadData(); }, [id]);
-  useFocusEffect(useCallback(() => { if (id) loadData(); }, [id]));
+  // Resolve username to UUID if needed
+  useEffect(() => {
+    if (!rawId) return;
+    if (UUID_REGEX.test(rawId)) {
+      setResolvedId(rawId);
+    } else {
+      // rawId is a username – look up the actual UUID
+      supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', rawId)
+        .single()
+        .then(({ data }) => {
+          setResolvedId(data?.id ?? null);
+        });
+    }
+  }, [rawId]);
 
-  const loadData = async () => {
+  useEffect(() => { if (resolvedId) loadData(resolvedId); }, [resolvedId]);
+  useFocusEffect(useCallback(() => { if (resolvedId) loadData(resolvedId); }, [resolvedId]));
+
+  const loadData = async (uid: string) => {
     setLoading(true);
-    const [profileRes, artworksRes, followCountRes, exhibitionCountRes] = await Promise.all([
-      supabase.from('profiles').select('*').eq('id', id).single(),
-      supabase.from('artworks').select('*').eq('user_id', id).order('created_at', { ascending: false }),
-      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', id),
-      supabase.from('exhibitions').select('*', { count: 'exact', head: true }).eq('user_id', id),
+    const [profileRes, artworksRes, followCountRes, exhibitionsRes] = await Promise.all([
+      supabase.from('profiles').select('*').eq('id', uid).single(),
+      supabase.from('artworks').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+      supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', uid),
+      supabase.from('exhibitions').select('*').eq('user_id', uid).eq('is_published', true).order('created_at', { ascending: false }),
     ]);
 
     if (profileRes.data) setProfile(profileRes.data);
-    if (artworksRes.data) setArtworks(artworksRes.data);
+    if (artworksRes.data) {
+      setArtworks(artworksRes.data);
+      artworksRef.current = artworksRes.data;
+    }
     setFollowerCount(followCountRes.count ?? 0);
-    setExhibitionCount(exhibitionCountRes.count ?? 0);
+    if (exhibitionsRes.data) setExhibitions(exhibitionsRes.data);
 
-    if (user?.id && user.id !== id) {
+    if (user?.id && user.id !== uid) {
       const { count } = await supabase
         .from('follows')
         .select('*', { count: 'exact', head: true })
         .eq('follower_id', user.id)
-        .eq('following_id', id);
+        .eq('following_id', uid);
       setIsFollowing((count ?? 0) > 0);
     }
     setLoading(false);
+
+    // Auto-open viewer if artworkId is in URL
+    if (artworkId && artworksRes.data) {
+      const idx = artworksRes.data.findIndex((a) => a.id === artworkId);
+      if (idx >= 0) {
+        setViewerIndex(idx);
+        setViewerVisible(true);
+      }
+    }
+  };
+
+  const updateUrlArtwork = (awId: string | null) => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      if (awId) {
+        url.searchParams.set('artworkId', awId);
+      } else {
+        url.searchParams.delete('artworkId');
+      }
+      window.history.replaceState({}, '', url.toString());
+    }
   };
 
   const toggleFollow = async () => {
-    if (!user?.id || user.id === id) return;
+    if (!user?.id || !resolvedId || user.id === resolvedId) return;
     if (isFollowing) {
-      await supabase.from('follows').delete().match({ follower_id: user.id, following_id: id });
+      await supabase.from('follows').delete().match({ follower_id: user.id, following_id: resolvedId });
       setFollowerCount((c) => Math.max(0, c - 1));
     } else {
-      await supabase.from('follows').insert({ follower_id: user.id, following_id: id });
+      await supabase.from('follows').insert({ follower_id: user.id, following_id: resolvedId });
       setFollowerCount((c) => c + 1);
     }
     setIsFollowing(!isFollowing);
@@ -599,7 +651,7 @@ export default function ArtistPortfolioScreen() {
     }
   }
 
-  const isOwner = user?.id === id;
+  const isOwner = user?.id === resolvedId;
   const artistName = profile.name ?? profile.username;
   const avatarInitial = artistName.trim().charAt(0).toUpperCase() || 'A';
   const isCreator = profile.user_type === 'creator';
@@ -612,6 +664,7 @@ export default function ArtistPortfolioScreen() {
   const openViewer = (artworkIndex: number) => {
     setViewerIndex(artworkIndex);
     setViewerVisible(true);
+    updateUrlArtwork(artworks[artworkIndex]?.id ?? null);
   };
 
   const handleEditArtwork = (artwork: Artwork) => {
@@ -722,15 +775,17 @@ export default function ArtistPortfolioScreen() {
                     </View>
                   )}
                   <View style={styles.statsRow}>
-                    <View style={styles.statItem}>
-                      <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: C.fg }]} />
-                      <Text style={[styles.statLabel, { color: C.muted }]}>작품</Text>
-                    </View>
+                    <Pressable style={styles.statItem} onPress={() => setActiveTab('works')}>
+                      <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: activeTab === 'works' ? C.gold : C.fg }]} />
+                      <Text style={[styles.statLabel, { color: activeTab === 'works' ? C.gold : C.muted }]}>작품</Text>
+                      {activeTab === 'works' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
+                    </Pressable>
                     <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
-                    <View style={styles.statItem}>
-                      <AnimatedCounter to={exhibitionCount} style={[styles.statNumber, { color: C.fg }]} />
-                      <Text style={[styles.statLabel, { color: C.muted }]}>전시</Text>
-                    </View>
+                    <Pressable style={styles.statItem} onPress={() => setActiveTab('exhibitions')}>
+                      <AnimatedCounter to={exhibitions.length} style={[styles.statNumber, { color: activeTab === 'exhibitions' ? C.gold : C.fg }]} />
+                      <Text style={[styles.statLabel, { color: activeTab === 'exhibitions' ? C.gold : C.muted }]}>전시관</Text>
+                      {activeTab === 'exhibitions' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
+                    </Pressable>
                     <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
                     <View style={styles.statItem}>
                       <AnimatedCounter to={followerCount} style={[styles.statNumber, { color: C.fg }]} />
@@ -740,7 +795,7 @@ export default function ArtistPortfolioScreen() {
                 </View>
               </View>
 
-              {user?.id && user.id !== id && (
+              {user?.id && user.id !== resolvedId && (
                 <Pressable
                   style={({ pressed }) => [
                     styles.followBtn,
@@ -769,56 +824,107 @@ export default function ArtistPortfolioScreen() {
           </Animated.View>
         )}
 
-        {/* ═══ GALLERY SECTION ═══ */}
-        {artworks.length > 0 ? (
-          <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-            <Text style={[styles.sectionLabel, { color: C.muted }]}>WORKS</Text>
-            <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
+        {/* ═══ GALLERY / EXHIBITIONS SECTION ═══ */}
+        {activeTab === 'works' ? (
+          artworks.length > 0 ? (
+            <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
+              <Text style={[styles.sectionLabel, { color: C.muted }]}>WORKS</Text>
+              <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
 
-            {rows.map((row: any, idx: number) => {
-              if (row.type === 'hero') {
-                return (
-                  <ArtworkCard
-                    key={row.artwork.id}
-                    artwork={row.artwork}
-                    index={row.globalIdx}
-                    isHero
-                    scrollY={scrollY}
-                    layoutY={row.layoutY}
-                    cardW={heroCardW}
-                    cardH={heroCardH}
-                    viewH={screenH}
-                    onPress={() => openViewer(row.globalIdx)}
-                    C={C}
-                  />
-                );
-              }
-              return (
-                <View key={`grid-${idx}`} style={styles.gridRow}>
-                  {row.artworks.map((aw: Artwork, gi: number) => (
+              {rows.map((row: any, idx: number) => {
+                if (row.type === 'hero') {
+                  return (
                     <ArtworkCard
-                      key={aw.id}
-                      artwork={aw}
-                      index={row.globalIdx + gi}
-                      isHero={false}
+                      key={row.artwork.id}
+                      artwork={row.artwork}
+                      index={row.globalIdx}
+                      isHero
                       scrollY={scrollY}
                       layoutY={row.layoutY}
-                      cardW={gridCardW}
-                      cardH={gridCardH}
+                      cardW={heroCardW}
+                      cardH={heroCardH}
                       viewH={screenH}
-                      onPress={() => openViewer(row.globalIdx + gi)}
+                      onPress={() => openViewer(row.globalIdx)}
                       C={C}
                     />
-                  ))}
-                </View>
-              );
-            })}
-          </View>
+                  );
+                }
+                return (
+                  <View key={`grid-${idx}`} style={styles.gridRow}>
+                    {row.artworks.map((aw: Artwork, gi: number) => (
+                      <ArtworkCard
+                        key={aw.id}
+                        artwork={aw}
+                        index={row.globalIdx + gi}
+                        isHero={false}
+                        scrollY={scrollY}
+                        layoutY={row.layoutY}
+                        cardW={gridCardW}
+                        cardH={gridCardH}
+                        viewH={screenH}
+                        onPress={() => openViewer(row.globalIdx + gi)}
+                        C={C}
+                      />
+                    ))}
+                  </View>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.emptySection}>
+              <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
+              <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 작품이 없습니다</Text>
+            </View>
+          )
         ) : (
-          <View style={styles.emptySection}>
-            <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
-            <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 작품이 없습니다</Text>
-          </View>
+          exhibitions.length > 0 ? (
+            <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
+              <Text style={[styles.sectionLabel, { color: C.muted }]}>EXHIBITIONS</Text>
+              <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
+
+              <View style={styles.exGrid}>
+                {exhibitions.map((ex) => (
+                  <Pressable
+                    key={ex.id}
+                    style={({ pressed }) => [styles.exGridCard, { backgroundColor: C.card }, pressed && { opacity: 0.8 }]}
+                    onPress={() => router.push(`/exhibition/${ex.id}`)}
+                  >
+                    {ex.poster_image_url ? (
+                      <Image
+                        source={{ uri: ex.poster_image_url }}
+                        style={styles.exGridPoster}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.exGridPosterEmpty, { backgroundColor: C.bg }]}>
+                        <Text style={{ fontSize: 32 }}>
+                          {ex.room_type === 'small' ? '🏠' : ex.room_type === 'large' ? '🏰' : '🏛️'}
+                        </Text>
+                      </View>
+                    )}
+                    <View style={styles.exGridInfo}>
+                      <Text style={[styles.exGridTitle, { color: C.fg }]} numberOfLines={1}>{ex.title}</Text>
+                      {ex.description ? (
+                        <Text style={[styles.exGridDesc, { color: C.muted }]} numberOfLines={2}>{ex.description}</Text>
+                      ) : null}
+                      <View style={styles.exGridBadgeRow}>
+                        <View style={[styles.exGridBadge, { backgroundColor: 'rgba(200,169,110,0.12)' }]}>
+                          <Text style={[styles.exGridBadgeText, { color: C.gold }]}>
+                            {ex.room_type === 'small' ? '소형' : ex.room_type === 'medium' ? '중형' : ex.room_type === 'large' ? '대형' : ex.room_type}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          ) : (
+            <View style={styles.emptySection}>
+              <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
+              <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 전시관이 없습니다</Text>
+            </View>
+          )
         )}
 
         {/* ═══ SNS / CONTACT SECTION ═══ */}
@@ -855,10 +961,11 @@ export default function ArtistPortfolioScreen() {
         visible={viewerVisible}
         artworks={artworks}
         initialIndex={viewerIndex}
-        onClose={() => setViewerVisible(false)}
+        onClose={() => { setViewerVisible(false); updateUrlArtwork(null); }}
         isOwner={isOwner}
         onEdit={handleEditArtwork}
         onDelete={handleDeleteArtwork}
+        onIndexChange={(idx) => updateUrlArtwork(artworks[idx]?.id ?? null)}
       />
     </View>
   );
@@ -1038,6 +1145,12 @@ const styles = StyleSheet.create({
     height: 3,
     borderRadius: 1.5,
   },
+  statActiveDot: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 3,
+  },
 
   /* Follow */
   followBtn: {
@@ -1139,6 +1252,56 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: 'rgba(242,244,246,0.5)',
     marginTop: 1,
+  },
+
+  /* Exhibition Grid */
+  exGrid: {
+    gap: 12,
+  },
+  exGridCard: {
+    flexDirection: 'row',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  exGridPoster: {
+    width: 100,
+    height: 100,
+  },
+  exGridPosterEmpty: {
+    width: 100,
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exGridInfo: {
+    flex: 1,
+    padding: 12,
+    justifyContent: 'center',
+    gap: 4,
+  },
+  exGridTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  exGridDesc: {
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  exGridBadgeRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 4,
+  },
+  exGridBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  exGridBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 
   /* Empty */

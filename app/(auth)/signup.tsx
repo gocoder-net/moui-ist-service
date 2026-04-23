@@ -26,6 +26,7 @@ import Animated, {
   interpolateColor,
 } from 'react-native-reanimated';
 import { useAuth } from '@/contexts/auth-context';
+import { supabase } from '@/lib/supabase';
 
 const C = {
   bg: '#191f28',
@@ -271,6 +272,7 @@ export default function SignUpScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { signUp } = useAuth();
+  const usernameRef = useRef<TextInput>(null);
   const realNameRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
@@ -278,6 +280,9 @@ export default function SignUpScreen() {
   const confirmRef = useRef<TextInput>(null);
 
   const [displayName, setDisplayName] = useState('');
+  const [username, setUsername] = useState('');
+  const [usernameStatus, setUsernameStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle');
+  const usernameTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [realName, setRealName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
@@ -285,6 +290,34 @@ export default function SignUpScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const USERNAME_REGEX = /^[a-z0-9_.]{2,20}$/;
+
+  const handleUsernameChange = (text: string) => {
+    const lower = text.toLowerCase().replace(/[^a-z0-9_.]/g, '').slice(0, 20);
+    setUsername(lower);
+
+    if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current);
+
+    if (!lower || lower.length < 2) {
+      setUsernameStatus(lower ? 'invalid' : 'idle');
+      return;
+    }
+    if (!USERNAME_REGEX.test(lower)) {
+      setUsernameStatus('invalid');
+      return;
+    }
+
+    setUsernameStatus('checking');
+    usernameTimerRef.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('username', lower)
+        .maybeSingle();
+      setUsernameStatus(data ? 'taken' : 'available');
+    }, 500);
+  };
 
   // 버튼 펄스
   const btnGlow = useSharedValue(0);
@@ -307,8 +340,16 @@ export default function SignUpScreen() {
   const handleSignUp = async () => {
     const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
 
-    if (!displayName.trim() || !realName.trim() || !normalizedPhoneNumber || !email.trim() || !password || !confirmPassword) {
+    if (!displayName.trim() || !username.trim() || !realName.trim() || !normalizedPhoneNumber || !email.trim() || !password || !confirmPassword) {
       setError('모든 항목을 입력해주세요.');
+      return;
+    }
+    if (!USERNAME_REGEX.test(username)) {
+      setError('아이디는 영문 소문자, 숫자, 밑줄, 점만 사용 가능합니다. (2~20자)');
+      return;
+    }
+    if (usernameStatus !== 'available') {
+      setError('아이디 중복 확인을 해주세요.');
       return;
     }
     if (normalizedPhoneNumber.length < 9) {
@@ -332,6 +373,7 @@ export default function SignUpScreen() {
       realName.trim(),
       displayName.trim(),
       normalizedPhoneNumber,
+      username.trim(),
     );
     setLoading(false);
 
@@ -400,11 +442,42 @@ export default function SignUpScreen() {
               onChangeText={setDisplayName}
               autoCapitalize="words"
               returnKeyType="next"
-              onSubmitEditing={() => realNameRef.current?.focus()}
+              onSubmitEditing={() => usernameRef.current?.focus()}
               helperText="다른 사용자에게 보이는 이름이에요."
               required
               delay={350}
             />
+
+            <Animated.View entering={FadeInDown.delay(390).duration(400).springify()}>
+              <Text style={styles.label}>
+                아이디<Text style={styles.labelRequired}> *필수</Text>
+              </Text>
+              <View style={[styles.inputWrap, { borderColor: usernameStatus === 'taken' ? C.error : usernameStatus === 'available' ? '#22c55e' : C.border }]}>
+                <TextInput
+                  ref={usernameRef}
+                  style={styles.input}
+                  placeholder="영문 소문자, 숫자, 밑줄, 점 (2~20자)"
+                  placeholderTextColor={C.mutedLight}
+                  value={username}
+                  onChangeText={handleUsernameChange}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  returnKeyType="next"
+                  onSubmitEditing={() => realNameRef.current?.focus()}
+                />
+              </View>
+              <Text style={[
+                styles.inputHint,
+                usernameStatus === 'taken' && { color: C.error },
+                usernameStatus === 'available' && { color: '#22c55e' },
+              ]}>
+                {usernameStatus === 'idle' && '프로필 URL에 사용됩니다. (예: moui-ist.com/artist/myid)'}
+                {usernameStatus === 'invalid' && '영문 소문자, 숫자, 밑줄(_), 점(.)만 가능 (2~20자)'}
+                {usernameStatus === 'checking' && '확인 중...'}
+                {usernameStatus === 'available' && '✓ 사용 가능한 아이디입니다.'}
+                {usernameStatus === 'taken' && '✗ 이미 사용 중인 아이디입니다.'}
+              </Text>
+            </Animated.View>
 
             <AnimatedInput
               label="본명"
