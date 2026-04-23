@@ -9,7 +9,7 @@ import {
   FlatList,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import Animated, {
@@ -207,9 +207,11 @@ export default function ExploreScreen() {
     setLoading(false);
   }, []);
 
-  useEffect(() => {
-    loadArtists();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      loadArtists();
+    }, [loadArtists]),
+  );
 
   const tabCounts = (() => {
     const counts: Record<TabKey, number> = { creator: 0, aspiring: 0, audience: 0 };
@@ -353,11 +355,7 @@ export default function ExploreScreen() {
 
       {/* 상단 타이틀 */}
       <Animated.View entering={FadeIn.delay(100).duration(300)} style={styles.topHeader}>
-        <View style={styles.topTitleRow}>
-          <PlayfulDiamond color={C.gold} />
-          <Text style={[styles.topTitle, { color: C.fg }]}>탐색모의</Text>
-        </View>
-        <Text style={[styles.topSubtitle, { color: C.muted }]}>다양한 작가들을 만나보세요</Text>
+        <Text style={[styles.topTitle, { color: C.fg }]}>탐색모의</Text>
       </Animated.View>
 
       {/* 유형 탭 (작가 / 지망생 / 감상자) */}
@@ -443,25 +441,11 @@ const styles = StyleSheet.create({
 
   topHeader: {
     paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: 10,
-    gap: 4,
-  },
-  topTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+    paddingVertical: 16,
   },
   topTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    letterSpacing: 1,
-  },
-  topSubtitle: {
-    fontSize: 12,
-    fontWeight: '400',
-    letterSpacing: 0.5,
-    marginLeft: 26,
+    fontSize: 18,
+    fontWeight: '800',
   },
 
   tabsRow: {

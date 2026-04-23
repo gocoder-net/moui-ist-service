@@ -164,7 +164,7 @@ export default function MouiScreen() {
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
       {/* 헤더 */}
       <Animated.View entering={FadeIn.delay(50).duration(200)} style={[styles.header, { borderBottomColor: C.border }]}>
-        <Text style={[styles.headerTitle, { color: C.fg }]}>모의</Text>
+        <Text style={[styles.headerTitle, { color: C.fg }]}>작당모의</Text>
         <Pressable
           onPress={() => {
             if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
@@ -226,8 +226,8 @@ export default function MouiScreen() {
       ) : posts.length === 0 ? (
         <View style={styles.center}>
           <Text style={{ fontSize: 48, marginBottom: 12 }}>🤝</Text>
-          <Text style={[styles.emptyTitle, { color: C.fg }]}>아직 모의가 없어요</Text>
-          <Text style={[styles.emptyDesc, { color: C.muted }]}>첫 번째 협업 모집을 올려보세요!</Text>
+          <Text style={[styles.emptyTitle, { color: C.fg }]}>아직 작당모의가 없어요</Text>
+          <Text style={[styles.emptyDesc, { color: C.muted }]}>첫 번째 모의를 작당해보세요!</Text>
         </View>
       ) : (
         <FlatList
@@ -253,8 +253,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '900',
+    fontSize: 18,
+    fontWeight: '800',
     letterSpacing: 1,
   },
   headerBtn: {

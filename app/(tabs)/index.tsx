@@ -174,6 +174,8 @@ export default function HomeScreen() {
 
   const [hasExhibition, setHasExhibition] = useState(false);
   const [hasArtwork, setHasArtwork] = useState(false);
+  const [welcomeClaimed, setWelcomeClaimed] = useState(true); // 기본 true로 깜빡임 방지
+  const [claimingWelcome, setClaimingWelcome] = useState(false);
 
   // 출석
   const [attendanceDay, setAttendanceDay] = useState(0); // 현재까지 출석한 일수 (0~7)
@@ -181,20 +183,43 @@ export default function HomeScreen() {
   const [checkingIn, setCheckingIn] = useState(false);
 
   const heroSubtitle = profile?.user_type === 'aspiring'
-    ? '예술가가 되고 싶은 이를 위한 서비스'
+    ? '당신도 작가가 될 수 있습니다.'
     : profile?.user_type === 'audience'
       ? '작가와 감상자가 만나는\n창작 커뮤니티'
       : '세상 모든 예술가를 위한 서비스';
 
   const checkProgress = useCallback(async () => {
     if (!user) return;
-    const [exRes, artRes] = await Promise.all([
+    const [exRes, artRes, welcomeRes] = await Promise.all([
       supabase.from('exhibitions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       supabase.from('artworks').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      (supabase as any).from('point_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('type', 'welcome'),
     ]);
     setHasExhibition((exRes.count ?? 0) > 0);
     setHasArtwork((artRes.count ?? 0) > 0);
+    setWelcomeClaimed((welcomeRes.count ?? 0) > 0);
   }, [user]);
+
+  const handleClaimWelcome = async () => {
+    if (!user || claimingWelcome || welcomeClaimed) return;
+    setClaimingWelcome(true);
+    const REWARD = 1000;
+    const { data: prof } = await supabase.from('profiles').select('points').eq('id', user.id).single();
+    const currentPoints = prof?.points ?? 0;
+    await supabase.from('profiles').update({ points: currentPoints + REWARD }).eq('id', user.id);
+    await (supabase as any).from('point_history').insert({
+      user_id: user.id,
+      amount: REWARD,
+      balance: currentPoints + REWARD,
+      type: 'welcome',
+      description: '모의스트 임명 보너스',
+    });
+    await refreshProfile();
+    setWelcomeClaimed(true);
+    setClaimingWelcome(false);
+    const msg = `🎉 모의스트로 임명되었습니다! ${REWARD}모의를 받았습니다!`;
+    Platform.OS === 'web' ? window.alert(msg) : Alert.alert('환영합니다!', msg);
+  };
 
   // 출석 정보 가져오기
   const fetchAttendance = useCallback(async () => {
@@ -318,12 +343,12 @@ export default function HomeScreen() {
         <View style={styles.quickGrid}>
           <QuickCard
             icon="🎨" title="작품 업로드" desc="포트폴리오에 작품을 등록하세요"
-            delay={250} done={hasArtwork} C={C}
+            delay={300} done={hasArtwork} C={C}
             onPress={() => router.push('/artwork/create')}
           />
           <QuickCard
             icon="🏛️" title="전시관 만들기" desc="나만의 가상 전시 공간을 만드세요"
-            delay={330} done={hasExhibition} C={C}
+            delay={380} done={hasExhibition} C={C}
             onPress={() => router.push('/exhibition/create')}
           />
         </View>
@@ -403,6 +428,46 @@ export default function HomeScreen() {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+
+      {/* 모의스트 임명 팝업 */}
+      {!welcomeClaimed && user && (
+        <View style={styles.popupOverlay}>
+          <Animated.View entering={FadeIn.duration(200)} style={styles.popupBackdrop} />
+          <Animated.View entering={FadeInDown.delay(100).duration(500).springify()} style={[styles.popupCard, { backgroundColor: C.card }]}>
+            <View style={styles.popupDiamondWrap}>
+              <PlayfulDiamond size={24} color={C.gold} />
+            </View>
+            <Text style={[styles.popupTitle, { color: C.fg }]}>
+              {profile?.name ?? '회원'}님
+            </Text>
+            <Text style={[styles.popupSubtitle, { color: C.gold }]}>
+              모의스트로 임명합니다!
+            </Text>
+            <View style={[styles.popupDivider, { backgroundColor: C.gold }]} />
+            <Text style={[styles.popupDesc, { color: C.muted }]}>
+              모의스트에 오신 것을 환영합니다{'\n'}임명 보너스를 받아주세요
+            </Text>
+            <View style={[styles.popupRewardBox, { borderColor: C.gold }]}>
+              <Text style={[styles.popupRewardAmount, { color: C.gold }]}>1,000</Text>
+              <Text style={[styles.popupRewardUnit, { color: C.muted }]}>MOUI</Text>
+            </View>
+            <Pressable
+              onPress={handleClaimWelcome}
+              disabled={claimingWelcome}
+              style={({ pressed }) => [
+                styles.popupBtn,
+                { backgroundColor: C.gold },
+                pressed && { opacity: 0.8 },
+                claimingWelcome && { opacity: 0.5 },
+              ]}
+            >
+              <Text style={[styles.popupBtnText, { color: C.bg }]}>
+                {claimingWelcome ? '지급 중...' : '보상 받기'}
+              </Text>
+            </Pressable>
+          </Animated.View>
+        </View>
+      )}
     </View>
   );
 }
@@ -467,6 +532,84 @@ const styles = StyleSheet.create({
   quickDesc: {
     fontSize: 12,
     lineHeight: 16,
+  },
+
+  /* 모의스트 임명 팝업 */
+  popupOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+  },
+  popupBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+  },
+  popupCard: {
+    width: '85%',
+    maxWidth: 340,
+    borderRadius: 24,
+    padding: 32,
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#C8A96E',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  popupDiamondWrap: {
+    marginBottom: 4,
+  },
+  popupTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    letterSpacing: 1,
+  },
+  popupSubtitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: 2,
+  },
+  popupDivider: {
+    width: 32,
+    height: 1.5,
+    marginVertical: 4,
+  },
+  popupDesc: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  popupRewardBox: {
+    borderWidth: 1.5,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    alignItems: 'center',
+    marginVertical: 4,
+  },
+  popupRewardAmount: {
+    fontSize: 32,
+    fontWeight: '900',
+    letterSpacing: 2,
+  },
+  popupRewardUnit: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
+  popupBtn: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  popupBtnText: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
 
   /* 보상 뱃지 */
