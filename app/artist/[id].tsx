@@ -106,6 +106,9 @@ function snsIcon(key: string): string {
   return map[key.toLowerCase()] || '🔗';
 }
 
+const USER_TYPE_LABELS: Record<string, string> = { creator: '작가', aspiring: '지망생', audience: '감상자' };
+const USER_TYPE_EMOJI: Record<string, string> = { creator: '🎨', aspiring: '✏️', audience: '👀' };
+
 const FIELD_ICON_MAP: Record<string, string> = {
   글: '✍️',
   그림: '🎨',
@@ -770,16 +773,23 @@ export default function ArtistPortfolioScreen() {
 
                 {/* ── Right: Fields + Stats ── */}
                 <View style={styles.heroRight}>
-                  {fieldItems.length > 0 && (
-                    <View style={styles.heroFieldRow}>
-                      {fieldItems.map((field) => (
+                  <View style={styles.heroFieldRow}>
+                    {fieldItems.length > 0 ? (
+                      fieldItems.map((field) => (
                         <View key={field} style={[styles.heroFieldChip, { borderColor: 'rgba(200,169,110,0.28)' }]}>
                           <Text style={styles.heroFieldEmoji}>{FIELD_ICON_MAP[field] ?? '🎯'}</Text>
                           <Text style={[styles.heroFieldChipText, { color: C.gold }]}>{field}</Text>
                         </View>
-                      ))}
-                    </View>
-                  )}
+                      ))
+                    ) : (
+                      <View style={[styles.heroFieldChip, { borderColor: C.border }]}>
+                        <Text style={styles.heroFieldEmoji}>{USER_TYPE_EMOJI[profile.user_type] ?? '👀'}</Text>
+                        <Text style={[styles.heroFieldChipText, { color: C.muted }]}>
+                          {USER_TYPE_LABELS[profile.user_type] ?? profile.user_type}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                   <View style={styles.statsRow}>
                     <Pressable style={styles.statItem} onPress={() => setActiveTab('works')}>
                       <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: activeTab === 'works' ? C.gold : C.fg }]} />

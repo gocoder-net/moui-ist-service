@@ -49,6 +49,7 @@ export type Database = {
           sns_links?: Json;
           avatar_url?: string | null;
           points?: number;
+          verified?: boolean;
         };
         Relationships: [];
       };

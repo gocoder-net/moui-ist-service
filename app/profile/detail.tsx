@@ -76,6 +76,7 @@ export default function ProfileDetailScreen() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [changingType, setChangingType] = useState(false);
 
   // 편집 폼 상태
   const [name, setName] = useState(profile?.name ?? '');
@@ -147,6 +148,81 @@ export default function ProfileDetailScreen() {
     setSnsUrl2(urls[1] ?? '');
     setSnsUrl3(urls[2] ?? '');
   }
+
+  const handleChangeUserType = async (newType: 'creator' | 'aspiring' | 'audience') => {
+    if (!user || !profile || newType === userType) return;
+    const points = profile.points ?? 0;
+    const COST = 100;
+
+    if (points < COST) {
+      const msg = `유형 변경에는 ${COST} MOUI가 필요합니다.\n현재 보유: ${points} MOUI`;
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('포인트 부족', msg);
+      return;
+    }
+
+    // 인증 작가가 다른 유형으로 바꿀 경우 경고
+    const isVerified = !!(profile as any)?.verified;
+    if (userType === 'creator' && isVerified && newType !== 'creator') {
+      const confirmed = Platform.OS === 'web'
+        ? window.confirm(`유형을 변경하면 인증 작가 상태가 미인증으로 초기화됩니다.\n${COST} MOUI가 차감됩니다.\n계속하시겠습니까?`)
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              '인증 초기화 경고',
+              `유형을 변경하면 인증 작가 상태가 미인증으로 초기화됩니다.\n${COST} MOUI가 차감됩니다.`,
+              [{ text: '취소', style: 'cancel', onPress: () => resolve(false) }, { text: '변경', style: 'destructive', onPress: () => resolve(true) }],
+            );
+          });
+      if (!confirmed) return;
+    } else {
+      const confirmed = Platform.OS === 'web'
+        ? window.confirm(`유형을 "${USER_TYPE_LABELS[newType]}"(으)로 변경합니다.\n${COST} MOUI가 차감됩니다.\n계속하시겠습니까?`)
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              '유형 변경',
+              `유형을 "${USER_TYPE_LABELS[newType]}"(으)로 변경합니다.\n${COST} MOUI가 차감됩니다.`,
+              [{ text: '취소', style: 'cancel', onPress: () => resolve(false) }, { text: '변경', onPress: () => resolve(true) }],
+            );
+          });
+      if (!confirmed) return;
+    }
+
+    setChangingType(true);
+    try {
+      const updatePayload: Record<string, any> = {
+        user_type: newType,
+        points: points - COST,
+      };
+      // 작가→다른 유형: 인증 초기화
+      if (userType === 'creator' && isVerified && newType !== 'creator') {
+        updatePayload.verified = false;
+      }
+
+      const { error } = await supabase.from('profiles').update(updatePayload).eq('id', user.id);
+      if (error) {
+        const msg = '유형 변경에 실패했습니다: ' + error.message;
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('오류', msg);
+        setChangingType(false);
+        return;
+      }
+
+      await refreshProfile();
+      setChangingType(false);
+
+      // 관람자→작가/지망생: 분야 선택 필요
+      if (userType === 'audience' && (newType === 'creator' || newType === 'aspiring')) {
+        const msg = '분야를 선택해주세요. 작가정보 수정 페이지로 이동합니다.';
+        if (Platform.OS === 'web') {
+          window.alert(msg);
+        } else {
+          Alert.alert('분야 선택 필요', msg);
+        }
+        handleStartEdit();
+      }
+    } catch (err) {
+      console.error('유형 변경 오류:', err);
+      setChangingType(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!user) return;
@@ -347,6 +423,42 @@ export default function ProfileDetailScreen() {
               >
                 <Text style={[styles.editBtnText, { color: C.fg }]}>작가정보 수정</Text>
               </Pressable>
+            </Animated.View>
+
+            {/* 유형 변경 */}
+            <Animated.View entering={FadeInDown.delay(150).duration(400).springify()} style={[styles.card, { backgroundColor: C.card }]}>
+              <Text style={[styles.sectionTitle, { color: C.muted }]}>유형 변경</Text>
+              <Text style={[styles.typeChangeHint, { color: C.mutedLight }]}>
+                변경 시 100 MOUI가 차감됩니다
+              </Text>
+              <View style={styles.typeChangeRow}>
+                {(['creator', 'aspiring', 'audience'] as const).map((t) => {
+                  const selected = userType === t;
+                  return (
+                    <Pressable
+                      key={t}
+                      onPress={() => !selected && !changingType && handleChangeUserType(t)}
+                      style={({ pressed }) => [
+                        styles.typeChangeBtn,
+                        {
+                          borderColor: selected ? C.gold : C.border,
+                          backgroundColor: selected ? C.gold + '22' : C.bg,
+                        },
+                        pressed && !selected && { opacity: 0.7 },
+                        changingType && !selected && { opacity: 0.4 },
+                      ]}
+                    >
+                      <Text style={styles.typeChangeEmoji}>{USER_TYPE_EMOJI[t]}</Text>
+                      <Text style={[styles.typeChangeLabel, { color: selected ? C.gold : C.fg }]}>
+                        {USER_TYPE_LABELS[t]}
+                      </Text>
+                      {selected && (
+                        <Text style={[styles.typeChangeCurrent, { color: C.gold }]}>현재</Text>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
             </Animated.View>
 
             {/* 소개 */}
@@ -827,6 +939,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     marginTop: 8,
+  },
+  typeChangeHint: {
+    fontSize: 11,
+    marginBottom: 12,
+  },
+  typeChangeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  typeChangeBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    gap: 4,
+  },
+  typeChangeEmoji: {
+    fontSize: 20,
+  },
+  typeChangeLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  typeChangeCurrent: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   fieldTagRow: {
     flexDirection: 'row',
