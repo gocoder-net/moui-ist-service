@@ -279,7 +279,14 @@ export default function OnboardingScreen() {
     );
   }, []);
 
-  const canProceed = step === 1 ? !!selected : !!displayName.trim();
+  useEffect(() => {
+    const presetRealName = typeof user?.user_metadata?.real_name === 'string' ? user.user_metadata.real_name : '';
+    if (presetRealName && !realName.trim()) {
+      setRealName(presetRealName);
+    }
+  }, [user]);
+
+  const canProceed = step === 1 ? !!selected : !!displayName.trim() && !!realName.trim();
 
   const btnGlowStyle = useAnimatedStyle(() => ({
     shadowOpacity: 0.15 + btnGlow.value * 0.15,
@@ -291,14 +298,14 @@ export default function OnboardingScreen() {
   };
 
   const handleComplete = async () => {
-    if (!displayName.trim() || !selected || !user) return;
+    if (!displayName.trim() || !realName.trim() || !selected || !user) return;
     setLoading(true);
     await supabase
       .from('profiles')
       .update({
         user_type: selected,
         name: displayName.trim(),
-        real_name: realName.trim() || null,
+        real_name: realName.trim(),
       })
       .eq('id', user.id);
 
@@ -413,11 +420,11 @@ export default function OnboardingScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.inputLabel}>본명 <Text style={styles.inputOptional}>(선택)</Text></Text>
+              <Text style={styles.inputLabel}>본명 <Text style={styles.inputRequired}>(필수)</Text></Text>
               <TextInput
                 ref={realNameRef}
                 style={styles.textInput}
-                placeholder="실명 (비공개)"
+                placeholder="실명 입력"
                 placeholderTextColor={C.mutedLight}
                 value={realName}
                 onChangeText={setRealName}
@@ -425,7 +432,7 @@ export default function OnboardingScreen() {
                 onSubmitEditing={handleComplete}
                 maxLength={30}
               />
-              <Text style={styles.inputHint}>외부에 공개되지 않아요</Text>
+              <Text style={styles.inputHint}>본인인증을 위해 꼭 필요하며 외부에는 공개되지 않아요</Text>
             </View>
           </Animated.View>
 
@@ -666,6 +673,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '400',
     color: C.muted,
+  },
+  inputRequired: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: C.gold,
   },
   textInput: {
     backgroundColor: C.inputBg,

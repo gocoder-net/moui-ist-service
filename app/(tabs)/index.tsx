@@ -293,6 +293,9 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 히어로 배너 */}
         <Animated.View entering={FadeInDown.delay(100).duration(600).springify()} style={styles.heroBanner}>
+          <View style={styles.heroAccent}>
+            <PlayfulDiamond size={16} color={C.gold} />
+          </View>
           <Text style={[styles.heroLogo, { color: C.fg }]}>
             MOUI<Text style={{ color: C.gold }}>-</Text>IST
           </Text>
@@ -352,6 +355,7 @@ export default function HomeScreen() {
                       </View>
                       <Text style={[styles.attendReward, { color: dayNum === 7 ? C.gold : C.mutedLight }]}>
                         {reward}
+                        <Text style={styles.attendRewardUnit}> MOUI</Text>
                       </Text>
                     </View>
                   );
@@ -410,6 +414,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 32,
     gap: 8,
+  },
+  heroAccent: {
+    marginBottom: 6,
   },
   heroLogo: {
     fontSize: 28,
@@ -541,8 +548,16 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   attendReward: {
-    fontSize: 10,
+    minWidth: 42,
+    fontSize: 9,
+    fontWeight: '700',
+    textAlign: 'center',
+    letterSpacing: 0.1,
+  },
+  attendRewardUnit: {
+    fontSize: 6,
     fontWeight: '600',
+    letterSpacing: 0,
   },
   attendBtn: {
     paddingVertical: 12,

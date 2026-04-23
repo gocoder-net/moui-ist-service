@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   StyleSheet,
   View,
@@ -14,7 +14,17 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 
 const USER_TYPE_LABELS = { creator: '작가', aspiring: '지망생', audience: '감상자' } as const;
 const USER_TYPE_EMOJI = { creator: '🎨', aspiring: '✏️', audience: '👀' } as const;
@@ -51,6 +61,62 @@ type Exhibition = {
 
 const ROOM_EMOJI: Record<string, string> = { small: '🏠', medium: '🏛️', large: '🏰' };
 const ROOM_LABEL: Record<string, string> = { small: '소형', medium: '중형', large: '대형' };
+
+/* ── PlayfulDiamond ── */
+function PlayfulDiamond({ size = 14, color = '#C8A96E' }: { size?: number; color?: string }) {
+  const rot = useSharedValue(0);
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    const play = () => {
+      rot.value = withSequence(
+        withTiming(360, { duration: 600, easing: Easing.in(Easing.cubic) }),
+        withSpring(360, { damping: 6, stiffness: 200 }),
+        withDelay(1500, withTiming(360, { duration: 0 })),
+        withTiming(180, { duration: 400, easing: Easing.inOut(Easing.cubic) }),
+        withSpring(180, { damping: 8, stiffness: 250 }),
+        withDelay(2000, withTiming(180, { duration: 0 })),
+        withTiming(720, { duration: 800, easing: Easing.in(Easing.quad) }),
+        withSpring(720, { damping: 5, stiffness: 180 }),
+        withDelay(1200, withTiming(720, { duration: 0 })),
+        withTiming(740, { duration: 200, easing: Easing.out(Easing.cubic) }),
+        withSpring(720, { damping: 10, stiffness: 300 }),
+        withDelay(1500, withTiming(0, { duration: 0 })),
+      );
+      scale.value = withSequence(
+        withTiming(1.1, { duration: 300 }),
+        withTiming(1, { duration: 300 }),
+        withDelay(1500, withTiming(1, { duration: 0 })),
+        withTiming(0.9, { duration: 200 }),
+        withSpring(1, { damping: 8 }),
+        withDelay(2000, withTiming(1, { duration: 0 })),
+        withTiming(1.15, { duration: 400 }),
+        withTiming(1, { duration: 400 }),
+        withDelay(1200, withTiming(1, { duration: 0 })),
+        withTiming(1.05, { duration: 200 }),
+        withSpring(1, { damping: 12 }),
+        withDelay(1500, withTiming(1, { duration: 0 })),
+      );
+    };
+
+    play();
+    const interval = setInterval(play, 9200);
+    return () => clearInterval(interval);
+  }, []);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rot.value}deg` }, { scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        { width: size, height: size, borderWidth: 1.5, borderColor: color, transform: [{ rotate: '45deg' }] },
+        animStyle,
+      ]}
+    />
+  );
+}
 
 /* ── 전시관 카드 ── */
 function ExhibitionCard({ item, onPress, onEdit, onDelete, C }: { item: Exhibition; onPress: () => void; onEdit: () => void; onDelete: () => void; C: any }) {
@@ -202,8 +268,8 @@ export default function ProfileScreen() {
 
   /* 메뉴 아이템 */
   const workItems: MenuItem[] = [
-    { icon: '', label: '내 작품 보기', onPress: () => router.push(`/artist/${user?.id}`) },
-    { icon: '', label: '작품 추가', onPress: () => router.push('/artwork/create') },
+    { icon: '🖼️', label: '내 작품 보기', onPress: () => router.push(`/artist/${user?.id}`) },
+    { icon: '➕', label: '작품 추가', onPress: () => router.push('/artwork/create') },
   ];
 
   let delayCounter = 300;
@@ -260,10 +326,13 @@ export default function ProfileScreen() {
         <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.pointsCard, { backgroundColor: C.card }]}>
           <View style={s.pointsRow}>
             <View style={s.pointsLeft}>
-              <Text style={[s.pointsLabel, { color: C.gold }]}>◆ 모의</Text>
+              <View style={s.pointsLabelRow}>
+                <PlayfulDiamond size={12} color={C.gold} />
+                <Text style={[s.pointsLabel, { color: C.gold }]}>모의 포인트</Text>
+              </View>
               <Text style={[s.pointsAmount, { color: C.fg }]}>
                 {(profile?.points ?? 0).toLocaleString()}
-                <Text style={[s.pointsUnit, { color: C.muted }]}> 모의</Text>
+                <Text style={[s.pointsUnit, { color: C.muted }]}> MOUI</Text>
               </Text>
             </View>
             <Pressable
@@ -274,7 +343,7 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
           <View style={[s.pointsInfo, { borderTopColor: C.border }]}>
-            <Text style={[s.pointsInfoText, { color: C.mutedLight }]}>1모의 = 100원</Text>
+            <Text style={[s.pointsInfoText, { color: C.mutedLight }]}>1 MOUI = 100원</Text>
           </View>
         </Animated.View>
 
@@ -443,6 +512,11 @@ const s = StyleSheet.create({
   },
   pointsLeft: {
     gap: 4,
+  },
+  pointsLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   pointsLabel: {
     fontSize: 12,

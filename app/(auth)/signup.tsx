@@ -9,7 +9,6 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
-  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -211,6 +210,8 @@ function AnimatedInput({
   returnKeyType,
   onSubmitEditing,
   inputRef,
+  helperText,
+  autoCapitalize = 'none',
   delay: enterDelay,
 }: {
   label: string;
@@ -223,6 +224,8 @@ function AnimatedInput({
   returnKeyType?: any;
   onSubmitEditing?: () => void;
   inputRef?: React.RefObject<TextInput>;
+  helperText?: string;
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   delay: number;
 }) {
   const focused = useSharedValue(0);
@@ -242,7 +245,7 @@ function AnimatedInput({
           value={value}
           onChangeText={onChangeText}
           secureTextEntry={secureTextEntry}
-          autoCapitalize="none"
+          autoCapitalize={autoCapitalize}
           autoComplete={autoComplete}
           keyboardType={keyboardType}
           returnKeyType={returnKeyType}
@@ -251,6 +254,7 @@ function AnimatedInput({
           onBlur={() => { focused.value = withTiming(0, { duration: 200 }); }}
         />
       </Animated.View>
+      {helperText ? <Text style={styles.inputHint}>{helperText}</Text> : null}
     </Animated.View>
   );
 }
@@ -258,12 +262,13 @@ function AnimatedInput({
 /* ── 메인 화면 ── */
 export default function SignUpScreen() {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const router = useRouter();
   const { signUp } = useAuth();
+  const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
 
+  const [realName, setRealName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -289,7 +294,7 @@ export default function SignUpScreen() {
   }));
 
   const handleSignUp = async () => {
-    if (!email.trim() || !password || !confirmPassword) {
+    if (!realName.trim() || !email.trim() || !password || !confirmPassword) {
       setError('모든 항목을 입력해주세요.');
       return;
     }
@@ -304,7 +309,7 @@ export default function SignUpScreen() {
 
     setError('');
     setLoading(true);
-    const result = await signUp(email.trim(), password);
+    const result = await signUp(email.trim(), password, realName.trim());
     setLoading(false);
 
     if (result.error) {
@@ -366,6 +371,18 @@ export default function SignUpScreen() {
           {/* 폼 */}
           <View style={styles.form}>
             <AnimatedInput
+              label="본명 (필수)"
+              placeholder="실명 입력"
+              value={realName}
+              onChangeText={setRealName}
+              autoCapitalize="words"
+              returnKeyType="next"
+              onSubmitEditing={() => emailRef.current?.focus()}
+              helperText="본인인증을 위해 꼭 필요하며 외부에는 공개되지 않아요."
+              delay={350}
+            />
+
+            <AnimatedInput
               label="이메일"
               placeholder="email@example.com"
               value={email}
@@ -374,7 +391,8 @@ export default function SignUpScreen() {
               autoComplete="email"
               returnKeyType="next"
               onSubmitEditing={() => passwordRef.current?.focus()}
-              delay={350}
+              inputRef={emailRef}
+              delay={430}
             />
 
             <AnimatedInput
@@ -387,7 +405,7 @@ export default function SignUpScreen() {
               returnKeyType="next"
               onSubmitEditing={() => confirmRef.current?.focus()}
               inputRef={passwordRef}
-              delay={450}
+              delay={510}
             />
 
             <AnimatedInput
@@ -400,7 +418,7 @@ export default function SignUpScreen() {
               returnKeyType="done"
               onSubmitEditing={handleSignUp}
               inputRef={confirmRef}
-              delay={550}
+              delay={590}
             />
 
             {error ? (
@@ -409,7 +427,7 @@ export default function SignUpScreen() {
               </Animated.Text>
             ) : null}
 
-            <Animated.View entering={FadeInDown.delay(650).duration(400).springify()}>
+            <Animated.View entering={FadeInDown.delay(690).duration(400).springify()}>
               <Pressable
                 onPress={handleSignUp}
                 disabled={loading}
@@ -434,7 +452,7 @@ export default function SignUpScreen() {
           </View>
 
           {/* 하단 */}
-          <Animated.View entering={FadeIn.delay(750).duration(400)} style={styles.footer}>
+          <Animated.View entering={FadeIn.delay(790).duration(400)} style={styles.footer}>
             <View style={styles.footerDivider}>
               <View style={styles.footerLine} />
               <View style={styles.footerDiamond} />
@@ -540,6 +558,13 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     fontSize: 15,
     color: C.fg,
+  },
+  inputHint: {
+    fontSize: 11,
+    color: C.muted,
+    marginTop: 8,
+    marginLeft: 4,
+    lineHeight: 16,
   },
   error: {
     fontSize: 13,

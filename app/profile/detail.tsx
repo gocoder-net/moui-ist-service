@@ -94,6 +94,7 @@ export default function ProfileDetailScreen() {
   const emoji = USER_TYPE_EMOJI[userType];
   const label = USER_TYPE_LABELS[userType];
   const avatarUrl = profile?.avatar_url;
+  const realNameLocked = !!profile?.real_name?.trim();
 
   /* 분야 카테고리 토글 */
   const toggleField = (key: string) => {
@@ -149,16 +150,24 @@ export default function ProfileDetailScreen() {
 
   const handleSave = async () => {
     if (!user) return;
+    if (!realNameLocked && !realName.trim()) {
+      const msg = '본명은 본인인증을 위해 꼭 필요합니다.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('안내', msg);
+      return;
+    }
     setSaving(true);
     const snsLinks = buildSnsLinks();
     const fieldValue = selectedFields.length > 0 ? selectedFields.join(', ') : null;
-    await supabase.from('profiles').update({
+    const updatePayload: Record<string, any> = {
       name: name || null,
-      real_name: realName || null,
       bio: bio || null,
       field: fieldValue,
       sns_links: snsLinks,
-    }).eq('id', user.id);
+    };
+    if (!realNameLocked) {
+      updatePayload.real_name = realName.trim();
+    }
+    await supabase.from('profiles').update(updatePayload).eq('id', user.id);
     await refreshProfile();
     setSaving(false);
     setEditing(false);
@@ -362,15 +371,6 @@ export default function ProfileDetailScreen() {
               </Animated.View>
             )}
 
-            {/* 포인트 */}
-            <Animated.View entering={FadeInDown.delay(350).duration(400).springify()} style={[styles.card, { backgroundColor: C.card }]}>
-              <Text style={[styles.sectionTitle, { color: C.muted }]}>보유 모의</Text>
-              <Text style={[styles.pointsValue, { color: C.fg }]}>
-                {(profile?.points ?? 0).toLocaleString()}
-                <Text style={[styles.pointsUnit, { color: C.muted }]}> 모의</Text>
-              </Text>
-              <Text style={[styles.pointsSub, { color: C.mutedLight }]}>= {((profile?.points ?? 0) * 100).toLocaleString()}원</Text>
-            </Animated.View>
           </>
         ) : (
           <>
@@ -407,8 +407,25 @@ export default function ProfileDetailScreen() {
               <Text style={[styles.fieldLabel, { color: C.muted }]}>활동명</Text>
               <TextInput style={[styles.input, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]} value={name} onChangeText={setName} placeholder="활동명" placeholderTextColor={C.mutedLight} />
 
-              <Text style={[styles.fieldLabel, { color: C.muted }]}>본명</Text>
-              <TextInput style={[styles.input, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]} value={realName} onChangeText={setRealName} placeholder="본명 (선택)" placeholderTextColor={C.mutedLight} />
+              <Text style={[styles.fieldLabel, { color: C.muted }]}>본명 (필수)</Text>
+              <TextInput
+                style={[
+                  styles.input,
+                  { backgroundColor: C.bg, borderColor: C.border, color: C.fg },
+                  realNameLocked && styles.inputReadonly,
+                ]}
+                value={realName}
+                onChangeText={setRealName}
+                placeholder="실명 입력"
+                placeholderTextColor={C.mutedLight}
+                editable={!realNameLocked}
+                selectTextOnFocus={!realNameLocked}
+              />
+              <Text style={[styles.fieldHelp, { color: C.mutedLight }]}>
+                {realNameLocked
+                  ? '가입 시 등록한 본명이며, 본인인증을 위해 꼭 필요해요. 등록 후에는 변경할 수 없어요.'
+                  : '본인인증을 위해 꼭 필요하며, 등록 후에는 변경할 수 없어요.'}
+              </Text>
 
               <Text style={[styles.fieldLabel, { color: C.muted }]}>분야</Text>
               <View style={styles.chipGrid}>
@@ -626,8 +643,9 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   badgeGroup: {
-    alignItems: 'flex-end',
-    gap: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   badgeText: {
     fontSize: 11,
@@ -727,20 +745,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
-  /* 포인트 */
-  pointsValue: {
-    fontSize: 28,
-    fontWeight: '900',
-  },
-  pointsUnit: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  pointsSub: {
-    fontSize: 13,
-    marginTop: 4,
-  },
-
   /* 편집 폼 */
   fieldLabel: {
     fontSize: 12,
@@ -754,6 +758,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
+  },
+  inputReadonly: {
+    opacity: 0.72,
+  },
+  fieldHelp: {
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 6,
+    marginLeft: 2,
   },
   inputMulti: {
     minHeight: 100,

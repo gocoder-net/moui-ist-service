@@ -245,7 +245,12 @@ function ArtworkViewer({
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const flatListRef = useRef<FlatList>(null);
+  const [viewerHovered, setViewerHovered] = useState(false);
+  const flatListRef = useRef<FlatList<Artwork>>(null);
+  const isWebViewer = Platform.OS === 'web';
+  const viewerFrameWidth = isWebViewer ? Math.min(screenW * 0.88, 1280) : screenW;
+  const viewerImageHeight = isWebViewer ? screenH * 0.72 : screenH * 0.6;
+  const viewerNavOffset = isWebViewer ? Math.max((screenW - viewerFrameWidth) / 2 + 18, 18) : 18;
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
@@ -276,6 +281,39 @@ function ArtworkViewer({
     }
   };
 
+  const scrollToIndex = (index: number) => {
+    if (index < 0 || index >= artworks.length) return;
+    flatListRef.current?.scrollToIndex({ index, animated: true });
+    setCurrentIndex(index);
+  };
+
+  const canGoPrev = currentIndex > 0;
+  const canGoNext = currentIndex < artworks.length - 1;
+
+  const viewerList = (
+    <FlatList
+      ref={flatListRef}
+      data={artworks}
+      horizontal
+      pagingEnabled
+      showsHorizontalScrollIndicator={false}
+      initialScrollIndex={initialIndex}
+      getItemLayout={(_, i) => ({ length: screenW, offset: screenW * i, index: i })}
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
+      keyExtractor={(item) => item.id}
+      renderItem={({ item }) => (
+        <View style={{ width: screenW, height: screenH, justifyContent: 'center', alignItems: 'center' }}>
+          <Image
+            source={{ uri: item.image_url }}
+            style={{ width: viewerFrameWidth, height: viewerImageHeight }}
+            resizeMode="contain"
+          />
+        </View>
+      )}
+    />
+  );
+
   return (
     <Modal
       visible={visible}
@@ -294,27 +332,51 @@ function ArtworkViewer({
         </Pressable>
 
         {/* Image swiper */}
-        <FlatList
-          ref={flatListRef}
-          data={artworks}
-          horizontal
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-          initialScrollIndex={initialIndex}
-          getItemLayout={(_, i) => ({ length: screenW, offset: screenW * i, index: i })}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => (
-            <View style={{ width: screenW, height: screenH, justifyContent: 'center', alignItems: 'center' }}>
-              <Image
-                source={{ uri: item.image_url }}
-                style={{ width: screenW, height: screenH * 0.6 }}
-                resizeMode="contain"
-              />
-            </View>
-          )}
-        />
+        {isWebViewer ? (
+          <View
+            style={styles.viewerStage}
+            {...({
+              onMouseEnter: () => setViewerHovered(true),
+              onMouseLeave: () => setViewerHovered(false),
+            } as any)}
+          >
+            {viewerList}
+            {artworks.length > 1 && viewerHovered && (
+              <>
+                {canGoPrev && (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.viewerNavButton,
+                      styles.viewerNavButtonLeft,
+                      { left: viewerNavOffset },
+                      pressed && { opacity: 0.75 },
+                    ]}
+                    onPress={() => scrollToIndex(currentIndex - 1)}
+                  >
+                    <Text style={styles.viewerNavText}>‹</Text>
+                  </Pressable>
+                )}
+                {canGoNext && (
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.viewerNavButton,
+                      styles.viewerNavButtonRight,
+                      { right: viewerNavOffset },
+                      pressed && { opacity: 0.75 },
+                    ]}
+                    onPress={() => scrollToIndex(currentIndex + 1)}
+                  >
+                    <Text style={styles.viewerNavText}>›</Text>
+                  </Pressable>
+                )}
+              </>
+            )}
+          </View>
+        ) : (
+          <View style={styles.viewerStage}>
+            {viewerList}
+          </View>
+        )}
 
         {/* Bottom info */}
         <LinearGradient
@@ -523,6 +585,8 @@ export default function ArtistPortfolioScreen() {
   }
 
   const isOwner = user?.id === id;
+  const artistName = profile.name ?? profile.username;
+  const avatarInitial = artistName.trim().charAt(0).toUpperCase() || 'A';
 
   const openViewer = (artworkIndex: number) => {
     setViewerIndex(artworkIndex);
@@ -580,41 +644,59 @@ export default function ArtistPortfolioScreen() {
           />
 
           <Animated.View style={[styles.heroContent, heroContentStyle]}>
-            <Animated.View style={[styles.heroDiamond, { borderColor: C.gold }, diamondSpinStyle]} />
-
-            <Text style={[styles.heroName, { color: C.fg }]}>{profile.name ?? profile.username}</Text>
-
-            {profile.field && (
-              <Text style={[styles.heroField, { color: C.gold }]}>{profile.field}</Text>
-            )}
-
-            <View style={styles.statsRow}>
-              <View style={styles.statItem}>
-                <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: C.fg }]} />
-                <Text style={[styles.statLabel, { color: C.muted }]}>작품</Text>
+            <LinearGradient
+              colors={['rgba(16,22,30,0.84)', 'rgba(28,39,52,0.72)', 'rgba(16,22,30,0.58)']}
+              locations={[0, 0.55, 1]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.heroPanel, { borderColor: 'rgba(200,169,110,0.22)' }]}
+            >
+              <View style={styles.heroPanelShine} />
+              <Animated.View style={[styles.heroDiamond, { borderColor: C.gold }, diamondSpinStyle]} />
+              <View style={[styles.heroAvatarWrap, { borderColor: 'rgba(200,169,110,0.45)', backgroundColor: 'rgba(12,18,26,0.75)' }]}>
+                {profile.avatar_url ? (
+                  <Image source={{ uri: profile.avatar_url }} style={styles.heroAvatar} resizeMode="cover" />
+                ) : (
+                  <View style={[styles.heroAvatarFallback, { backgroundColor: 'rgba(200,169,110,0.16)' }]}>
+                    <Text style={[styles.heroAvatarInitial, { color: C.gold }]}>{avatarInitial}</Text>
+                  </View>
+                )}
               </View>
-              <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
-              <View style={styles.statItem}>
-                <AnimatedCounter to={followerCount} style={[styles.statNumber, { color: C.fg }]} />
-                <Text style={[styles.statLabel, { color: C.muted }]}>팔로워</Text>
-              </View>
-            </View>
 
-            {user?.id && user.id !== id && (
-              <Pressable
-                style={({ pressed }) => [
-                  styles.followBtn,
-                  { borderColor: C.gold },
-                  isFollowing && { backgroundColor: C.gold },
-                  pressed && { opacity: 0.8 },
-                ]}
-                onPress={toggleFollow}
-              >
-                <Text style={[styles.followBtnText, { color: C.gold }, isFollowing && { color: C.bg }]}>
-                  {isFollowing ? '팔로잉' : '팔로우'}
-                </Text>
-              </Pressable>
-            )}
+              <Text style={[styles.heroName, { color: C.fg }]}>{artistName}</Text>
+
+              {profile.field && (
+                <Text style={[styles.heroField, { color: C.gold }]}>{profile.field}</Text>
+              )}
+
+              <View style={styles.statsRow}>
+                <View style={styles.statItem}>
+                  <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: C.fg }]} />
+                  <Text style={[styles.statLabel, { color: C.muted }]}>작품</Text>
+                </View>
+                <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
+                <View style={styles.statItem}>
+                  <AnimatedCounter to={followerCount} style={[styles.statNumber, { color: C.fg }]} />
+                  <Text style={[styles.statLabel, { color: C.muted }]}>팔로워</Text>
+                </View>
+              </View>
+
+              {user?.id && user.id !== id && (
+                <Pressable
+                  style={({ pressed }) => [
+                    styles.followBtn,
+                    { borderColor: C.gold },
+                    isFollowing && { backgroundColor: C.gold },
+                    pressed && { opacity: 0.8 },
+                  ]}
+                  onPress={toggleFollow}
+                >
+                  <Text style={[styles.followBtnText, { color: C.gold }, isFollowing && { color: C.bg }]}>
+                    {isFollowing ? '팔로잉' : '팔로우'}
+                  </Text>
+                </Pressable>
+              )}
+            </LinearGradient>
           </Animated.View>
         </View>
 
@@ -753,15 +835,62 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   heroContent: {
+    width: '100%',
     alignItems: 'center',
-    paddingHorizontal: 40,
-    gap: 10,
+    paddingHorizontal: 24,
+  },
+  heroPanel: {
+    width: '100%',
+    maxWidth: 420,
+    alignItems: 'center',
+    paddingHorizontal: 32,
+    paddingVertical: 28,
+    borderRadius: 28,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  heroPanelShine: {
+    position: 'absolute',
+    top: 0,
+    left: '22%',
+    right: '22%',
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   heroDiamond: {
     width: 14,
     height: 14,
     borderWidth: 1.5,
     marginBottom: 8,
+  },
+  heroAvatarWrap: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    borderWidth: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOpacity: 0.28,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+  },
+  heroAvatar: {
+    width: '100%',
+    height: '100%',
+  },
+  heroAvatarFallback: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  heroAvatarInitial: {
+    fontSize: 34,
+    fontWeight: '800',
+    letterSpacing: 1,
   },
   heroName: {
     fontSize: 28,
@@ -975,6 +1104,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.95)',
   },
+  viewerStage: {
+    flex: 1,
+  },
   viewerCloseBtn: {
     position: 'absolute',
     right: 20,
@@ -989,6 +1121,33 @@ const styles = StyleSheet.create({
   viewerCloseText: {
     color: '#fff',
     fontSize: 18,
+    fontWeight: '300',
+  },
+  viewerNavButton: {
+    position: 'absolute',
+    top: '50%',
+    zIndex: 6,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'rgba(13,16,22,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    transform: [{ translateY: -28 }],
+    cursor: 'pointer',
+  },
+  viewerNavButtonLeft: {
+    left: 18,
+  },
+  viewerNavButtonRight: {
+    right: 18,
+  },
+  viewerNavText: {
+    fontSize: 34,
+    lineHeight: 36,
+    color: '#f2f4f6',
     fontWeight: '300',
   },
   viewerBottom: {
