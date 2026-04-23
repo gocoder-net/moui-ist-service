@@ -382,7 +382,7 @@ export default function ProfileScreen() {
                 <View style={[s.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
                   <Text style={[s.badgeText, { color: C.gold }]}>{label}</Text>
                 </View>
-                {(userType === 'creator' || userType === 'aspiring') && (
+                {userType === 'creator' && (
                   <View style={[s.badge, { backgroundColor: C.bg, borderColor: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
                     <Text style={[s.badgeText, { color: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
                       {(profile as any)?.verified ? '인증' : '미인증'}
@@ -487,7 +487,7 @@ export default function ProfileScreen() {
         )}
 
         {/* 내 전시관 */}
-        {exhibitions.length > 0 && (
+        {(userType === 'creator' || userType === 'aspiring') && user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
             <View style={s.exSectionHeader}>
               <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>🏛️ 내 전시관</Text>
@@ -527,32 +527,34 @@ export default function ProfileScreen() {
               <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
             </Pressable>
             <View style={[s.menuDivider, { backgroundColor: C.border, marginLeft: 48 }]} />
-            <ScrollView
-              ref={exScrollRef}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={s.exList}
-              onScroll={(e) => { exScrollX.current = e.nativeEvent.contentOffset.x; }}
-              scrollEventThrottle={16}
-            >
-              {exhibitions.map((item) => (
-                <ExhibitionCard
-                  key={item.id}
-                  item={item}
-                  C={C}
-                  onPress={() => {
-                    const num = exNumMap.get(item.id);
-                    if (num && profile?.username) {
-                      router.push(`/3dexhibition/${profile.username}/${num}`);
-                    } else {
-                      router.push(`/exhibition/${item.id}`);
-                    }
-                  }}
-                  onEdit={() => router.push(`/exhibition/create?editId=${item.id}`)}
-                  onDelete={() => handleDelete(item.id)}
-                />
-              ))}
-            </ScrollView>
+            {exhibitions.length > 0 && (
+              <ScrollView
+                ref={exScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.exList}
+                onScroll={(e) => { exScrollX.current = e.nativeEvent.contentOffset.x; }}
+                scrollEventThrottle={16}
+              >
+                {exhibitions.map((item) => (
+                  <ExhibitionCard
+                    key={item.id}
+                    item={item}
+                    C={C}
+                    onPress={() => {
+                      const num = exNumMap.get(item.id);
+                      if (num && profile?.username) {
+                        router.push(`/3dexhibition/${profile.username}/${num}`);
+                      } else {
+                        router.push(`/exhibition/${item.id}`);
+                      }
+                    }}
+                    onEdit={() => router.push(`/exhibition/create?editId=${item.id}`)}
+                    onDelete={() => handleDelete(item.id)}
+                  />
+                ))}
+              </ScrollView>
+            )}
           </Animated.View>
         )}
       </ScrollView>

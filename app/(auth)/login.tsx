@@ -296,7 +296,20 @@ export default function LoginScreen() {
     setLoading(false);
 
     if (result.error) {
-      setError(result.error);
+      const msg = result.error.toLowerCase();
+      if (msg.includes('invalid login credentials') || msg.includes('invalid credentials')) {
+        setError('이메일 또는 비밀번호가 올바르지 않습니다.');
+      } else if (msg.includes('email not confirmed')) {
+        setError('이메일 인증이 완료되지 않았습니다. 메일함을 확인해주세요.');
+      } else if (msg.includes('too many requests') || msg.includes('rate limit')) {
+        setError('너무 많은 시도가 있었습니다. 잠시 후 다시 시도해주세요.');
+      } else if (msg.includes('user not found')) {
+        setError('등록되지 않은 이메일입니다.');
+      } else if (msg.includes('network') || msg.includes('fetch')) {
+        setError('네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.');
+      } else {
+        setError('로그인에 실패했습니다. 다시 시도해주세요.');
+      }
     }
   };
 
