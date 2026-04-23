@@ -80,8 +80,8 @@ export default function CreateArtworkScreen() {
     if (!medium.trim()) { showAlert('알림', '재료를 입력해주세요.'); return; }
     if (!technique.trim()) { showAlert('알림', '기법을 입력해주세요.'); return; }
     if (!widthCm.trim() || !heightCm.trim()) { showAlert('알림', '크기(가로, 세로)를 입력해주세요.'); return; }
-    if (!description.trim() || description.trim().length < 300) {
-      showAlert('알림', `설명은 300글자 이상 입력해주세요. (현재 ${description.trim().length}자)`);
+    if (!description.trim() || description.trim().length < 50) {
+      showAlert('알림', `설명은 50글자 이상 입력해주세요. (현재 ${description.trim().length}자)`);
       return;
     }
 
@@ -303,15 +303,15 @@ export default function CreateArtworkScreen() {
         <Animated.View entering={FadeInDown.delay(500).duration(400).springify()}>
           <View style={styles.labelRow}>
             <Text style={[styles.label, { color: C.fg, marginTop: 0 }]}>설명 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
-            <Text style={[styles.charCount, { color: description.trim().length >= 300 ? C.gold : C.danger }]}>
-              {description.trim().length}/300
+            <Text style={[styles.charCount, { color: description.trim().length >= 50 ? C.gold : C.danger }]}>
+              {description.trim().length}/50
             </Text>
           </View>
           <TextInput
             style={[styles.input, styles.textArea, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
             value={description}
             onChangeText={setDescription}
-            placeholder="작품에 대한 설명을 입력하세요 (300자 이상)"
+            placeholder="작품에 대한 설명을 입력하세요 (50자 이상)"
             placeholderTextColor={C.mutedLight}
             multiline
             textAlignVertical="top"

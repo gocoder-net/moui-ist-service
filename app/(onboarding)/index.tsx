@@ -360,7 +360,11 @@ export default function OnboardingScreen() {
     setFieldInput(text);
     const match = detectFieldFromInput(text);
     if (match) {
-      setFieldMessage(`작가님은 ${match.icon} ${match.category} 작가님이네요!`);
+      setFieldMessage(
+        selected === 'aspiring'
+          ? `${match.icon} ${match.category} 분야에 관심이 있으시군요!`
+          : `작가님은 ${match.icon} ${match.category} 작가님이네요!`
+      );
       if (!selectedFields.includes(match.category)) {
         setSelectedFields((prev) => [...prev, match.category]);
       }
@@ -534,7 +538,7 @@ export default function OnboardingScreen() {
 
             {needsFieldSelection && (
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>분야 <Text style={styles.inputRequired}>(필수)</Text></Text>
+                <Text style={styles.inputLabel}>{selected === 'aspiring' ? '희망 분��' : '분야'} <Text style={styles.inputRequired}>(필수)</Text></Text>
                 <View style={styles.chipGrid}>
                   {FIELD_CATEGORIES.map((cat) => {
                     const selectedField = selectedFields.includes(cat.key);
@@ -553,7 +557,9 @@ export default function OnboardingScreen() {
                     );
                   })}
                 </View>
-                <Text style={styles.inputHint}>작가와 지망생은 최소 1개의 분야 선택이 꼭 필요해요</Text>
+                <Text style={styles.inputHint}>
+                  {selected === 'aspiring' ? '관심 있는 희망 분야를 최소 1개 선택해주세요' : '최소 1개의 분야를 선택해주세요'}
+                </Text>
 
                 <Text style={[styles.inputLabel, { marginTop: 16 }]}>세부 분야 입력 (자동 분류)</Text>
                 <TextInput

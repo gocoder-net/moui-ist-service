@@ -188,11 +188,6 @@ export default function ExploreScreen() {
     });
 
     const result: ArtistCard[] = profiles
-      .filter((p) => {
-        if (p.user_type === 'audience') return true;
-        const info = artworkMap.get(p.id);
-        return info && info.count > 0;
-      })
       .map((p) => {
         const info = artworkMap.get(p.id);
         return {
@@ -219,7 +214,7 @@ export default function ExploreScreen() {
   const tabCounts = (() => {
     const counts: Record<TabKey, number> = { creator: 0, aspiring: 0, audience: 0 };
     artists.forEach((a) => {
-      if (a.user_type in counts) counts[a.user_type as TabKey]++;
+      if (a.artworkCount > 0 && a.user_type in counts) counts[a.user_type as TabKey]++;
     });
     return counts;
   })();
@@ -228,6 +223,7 @@ export default function ExploreScreen() {
     let list = artists.filter((a) => a.user_type === activeTab);
 
     if (search.trim()) {
+      // 검색 시: 이름/아이디가 정확히 일치하면 작품 없어도 표시
       const q = search.toLowerCase();
       list = list.filter(
         (a) =>
@@ -235,6 +231,9 @@ export default function ExploreScreen() {
           a.username.toLowerCase().includes(q) ||
           a.field?.toLowerCase().includes(q),
       );
+    } else {
+      // 기본: 작품 올린 유저만 표시
+      list = list.filter((a) => a.artworkCount > 0);
     }
 
     if (user?.id) {
