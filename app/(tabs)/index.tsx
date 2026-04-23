@@ -1,17 +1,40 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Pressable,
+  TouchableOpacity,
   ScrollView,
-  FlatList,
+  Platform,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
+
+/** 크로스플랫폼 확인 다이얼로그 */
+function confirmAlert(title: string, message: string, onConfirm: () => void) {
+  if (Platform.OS === 'web') {
+    if (window.confirm(`${title}\n${message}`)) onConfirm();
+  } else {
+    const { Alert } = require('react-native');
+    Alert.alert(title, message, [
+      { text: '취소', style: 'cancel' },
+      { text: '삭제', style: 'destructive', onPress: onConfirm },
+    ]);
+  }
+}
+
+/** public URL에서 스토리지 파일 경로 추출 */
+function extractStoragePath(url: string, bucket: string): string | null {
+  const marker = `/storage/v1/object/public/${bucket}/`;
+  const idx = url.indexOf(marker);
+  if (idx === -1) return null;
+  return decodeURIComponent(url.slice(idx + marker.length));
+}
+
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -181,37 +204,53 @@ const ROOM_LABEL: Record<string, string> = {
 };
 
 /* ── 전시관 카드 ── */
-function ExhibitionCard({ item, onPress, onEdit }: { item: Exhibition; onPress: () => void; onEdit: () => void }) {
+function ExhibitionCard({ item, onPress, onEdit, onDelete }: { item: Exhibition; onPress: () => void; onEdit: () => void; onDelete: () => void }) {
   return (
-    <Pressable
-      style={({ pressed }) => [styles.exCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
-      onPress={onPress}
-    >
-      {item.poster_image_url ? (
-        <Image source={{ uri: item.poster_image_url }} style={styles.exPoster} contentFit="cover" />
-      ) : (
-        <View style={styles.exPosterPlaceholder}>
-          <Text style={styles.exPosterEmoji}>{ROOM_EMOJI[item.room_type] ?? '🏛️'}</Text>
+    <View style={styles.exCard}>
+      <Pressable
+        style={({ pressed }) => [pressed && { opacity: 0.7 }]}
+        onPress={onPress}
+      >
+        <View style={styles.exPosterWrap}>
+          {item.poster_image_url ? (
+            <Image source={{ uri: item.poster_image_url }} style={styles.exPoster} contentFit="cover" />
+          ) : (
+            <View style={styles.exPosterPlaceholder}>
+              <Text style={styles.exPosterEmoji}>{ROOM_EMOJI[item.room_type] ?? '🏛️'}</Text>
+            </View>
+          )}
+          <View style={styles.exBadgeRow}>
+            <View style={styles.exBadge}>
+              <Text style={styles.exBadgeText}>{ROOM_LABEL[item.room_type] ?? item.room_type}</Text>
+            </View>
+            <View style={[styles.exBadge, item.is_published && styles.exBadgePublished]}>
+              <Text style={[styles.exBadgeText, item.is_published && { color: C.gold }]}>
+                {item.is_published ? '공개' : '비공개'}
+              </Text>
+            </View>
+          </View>
         </View>
-      )}
-      <View style={styles.exInfo}>
-        <Text style={styles.exTitle} numberOfLines={1}>{item.title}</Text>
-        <View style={styles.exMeta}>
-          <Text style={styles.exRoomType}>{ROOM_LABEL[item.room_type] ?? item.room_type}</Text>
-          <Text style={styles.exMetaDot}>·</Text>
-          <Text style={[styles.exPublish, item.is_published && { color: C.gold }]}>
-            {item.is_published ? '공개' : '비공개'}
-          </Text>
-          <Pressable
-            style={styles.exEditBtn}
-            onPress={(e) => { e.stopPropagation(); onEdit(); }}
-            hitSlop={6}
-          >
-            <Text style={styles.exEditText}>수정</Text>
-          </Pressable>
+        <View style={styles.exTitleWrap}>
+          <Text style={styles.exTitle} numberOfLines={1}>{item.title}</Text>
         </View>
+      </Pressable>
+      <View style={styles.exBtnRow}>
+        <TouchableOpacity
+          style={styles.exEditBtn}
+          activeOpacity={0.5}
+          onPress={onEdit}
+        >
+          <Text style={styles.exEditText}>수정</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.exDeleteBtn}
+          activeOpacity={0.5}
+          onPress={onDelete}
+        >
+          <Text style={styles.exDeleteText}>삭제</Text>
+        </TouchableOpacity>
       </View>
-    </Pressable>
+    </View>
   );
 }
 
@@ -222,6 +261,8 @@ export default function HomeScreen() {
   const { user, profile, signOut } = useAuth();
 
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
+  const exScrollRef = useRef<ScrollView>(null);
+  const exScrollX = useRef(0);
 
   const fetchExhibitions = useCallback(async () => {
     if (!user) return;
@@ -236,6 +277,67 @@ export default function HomeScreen() {
   useEffect(() => { fetchExhibitions(); }, [fetchExhibitions]);
   useFocusEffect(useCallback(() => { fetchExhibitions(); }, [fetchExhibitions]));
 
+  const handleDelete = useCallback((id: string) => {
+    confirmAlert('전시관 삭제', '정말 삭제하시겠습니까?\n전시관과 관련 파일이 모두 삭제됩니다.', async () => {
+      try {
+        // 1) 전시관 상세 정보 조회 (스토리지 파일 경로 확보)
+        const { data: ex } = await supabase
+          .from('exhibitions')
+          .select('poster_image_url, wall_images, bgm_url')
+          .eq('id', id)
+          .single();
+
+        // 2) 스토리지 파일 삭제
+        if (ex) {
+          const artworkPaths: string[] = [];
+          const bgmPaths: string[] = [];
+
+          if (ex.poster_image_url) {
+            const p = extractStoragePath(ex.poster_image_url, 'artworks');
+            if (p) artworkPaths.push(p);
+          }
+          if (ex.wall_images && typeof ex.wall_images === 'object') {
+            const wi = ex.wall_images as Record<string, { url: string; mode: string } | null>;
+            for (const wall of ['north', 'south', 'east', 'west']) {
+              if (wi[wall]?.url) {
+                const p = extractStoragePath(wi[wall]!.url, 'artworks');
+                if (p) artworkPaths.push(p);
+              }
+            }
+          }
+          if (ex.bgm_url) {
+            const p = extractStoragePath(ex.bgm_url, 'bgm');
+            if (p) bgmPaths.push(p);
+          }
+
+          if (artworkPaths.length > 0) {
+            await supabase.storage.from('artworks').remove(artworkPaths);
+          }
+          if (bgmPaths.length > 0) {
+            await supabase.storage.from('bgm').remove(bgmPaths);
+          }
+        }
+
+        // 3) DB 삭제
+        const { error: eaErr } = await supabase
+          .from('exhibition_artworks').delete().eq('exhibition_id', id);
+        if (eaErr) console.warn('exhibition_artworks 삭제 실패:', eaErr.message);
+
+        const { error: exErr } = await supabase
+          .from('exhibitions').delete().eq('id', id);
+        if (exErr) {
+          if (Platform.OS === 'web') window.alert('삭제 실패: ' + exErr.message);
+          return;
+        }
+
+        fetchExhibitions();
+      } catch (err) {
+        console.error('삭제 중 오류:', err);
+        if (Platform.OS === 'web') window.alert('삭제 실패: 알 수 없는 오류가 발생했습니다.');
+      }
+    });
+  }, [fetchExhibitions]);
+
   const userTypeLabels = { creator: '작가', aspiring: '지망생', audience: '감상자' } as const;
   const userTypeLabel = userTypeLabels[profile?.user_type ?? 'audience'];
   const userTypeEmoji = { creator: '🎨', aspiring: '✏️', audience: '👀' } as const;
@@ -245,8 +347,8 @@ export default function HomeScreen() {
     <View style={[styles.root, { paddingTop: insets.top }]}>
       {/* 배경 */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
-        <FloatingShape shape="ring" size={100} color={C.gold} opacity={0.08} top="5%" left="2%" duration={6000} delay={0} />
-        <FloatingShape shape="ring" size={140} color={C.goldLight} opacity={0.05} top="50%" left="60%" duration={7000} delay={800} />
+        <FloatingShape shape="ring" size={50} color={C.gold} opacity={0.08} top="5%" left="2%" duration={6000} delay={0} />
+        <FloatingShape shape="ring" size={70} color={C.goldLight} opacity={0.05} top="50%" left="60%" duration={7000} delay={800} />
         <FloatingShape shape="diamond" size={20} color={C.gold} opacity={0.20} top="10%" left="82%" duration={3500} delay={600} />
         <FloatingShape shape="diamond" size={14} color={C.gold} opacity={0.15} top="60%" left="5%" duration={4200} delay={200} />
         <FloatingShape shape="diamond" size={24} color={C.goldLight} opacity={0.10} top="80%" left="70%" duration={3800} delay={1000} />
@@ -302,27 +404,51 @@ export default function HomeScreen() {
           <Animated.View entering={FadeInDown.delay(420).duration(400).springify()}>
             <View style={styles.exSectionHeader}>
               <Text style={styles.sectionTitle}>🏛️ 내 전시관</Text>
-              <Pressable
-                style={({ pressed }) => [styles.exNewBtn, pressed && { opacity: 0.7 }]}
-                onPress={() => router.push('/exhibition/create')}
-              >
-                <Text style={styles.exNewBtnText}>+ 새 전시관</Text>
-              </Pressable>
+              <View style={styles.exHeaderRight}>
+                {Platform.OS === 'web' && exhibitions.length > 1 && (
+                  <View style={styles.exScrollBtns}>
+                    <TouchableOpacity
+                      style={styles.exScrollBtn}
+                      activeOpacity={0.5}
+                      onPress={() => exScrollRef.current?.scrollTo({ x: Math.max(0, exScrollX.current - 172), animated: true })}
+                    >
+                      <Text style={styles.exScrollBtnText}>←</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.exScrollBtn}
+                      activeOpacity={0.5}
+                      onPress={() => exScrollRef.current?.scrollTo({ x: exScrollX.current + 172, animated: true })}
+                    >
+                      <Text style={styles.exScrollBtnText}>→</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <Pressable
+                  style={({ pressed }) => [styles.exNewBtn, pressed && { opacity: 0.7 }]}
+                  onPress={() => router.push('/exhibition/create')}
+                >
+                  <Text style={styles.exNewBtnText}>+ 새 전시관</Text>
+                </Pressable>
+              </View>
             </View>
-            <FlatList
-              data={exhibitions}
-              keyExtractor={(item) => item.id}
+            <ScrollView
+              ref={exScrollRef}
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.exList}
-              renderItem={({ item }) => (
+              onScroll={(e) => { exScrollX.current = e.nativeEvent.contentOffset.x; }}
+              scrollEventThrottle={16}
+            >
+              {exhibitions.map((item) => (
                 <ExhibitionCard
+                  key={item.id}
                   item={item}
                   onPress={() => router.push(`/exhibition/${item.id}`)}
                   onEdit={() => router.push(`/exhibition/create?editId=${item.id}`)}
+                  onDelete={() => handleDelete(item.id)}
                 />
-              )}
-            />
+              ))}
+            </ScrollView>
           </Animated.View>
         )}
 
@@ -374,7 +500,7 @@ const styles = StyleSheet.create({
   },
   scroll: {
     paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingBottom: 90,
   },
 
   topBar: {
@@ -570,6 +696,28 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 14,
   },
+  exHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  exScrollBtns: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  exScrollBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exScrollBtnText: {
+    fontSize: 14,
+    color: C.muted,
+  },
   exNewBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
@@ -595,6 +743,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#212a35',
     overflow: 'hidden',
   },
+  exPosterWrap: {
+    position: 'relative',
+  },
   exPoster: {
     width: '100%',
     height: 110,
@@ -609,9 +760,32 @@ const styles = StyleSheet.create({
   exPosterEmoji: {
     fontSize: 40,
   },
-  exInfo: {
-    padding: 12,
-    gap: 6,
+  exBadgeRow: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    flexDirection: 'row',
+    gap: 4,
+  },
+  exBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(25,31,40,0.75)',
+  },
+  exBadgePublished: {
+    backgroundColor: 'rgba(200,169,110,0.18)',
+  },
+  exBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: C.muted,
+    letterSpacing: 0.3,
+  },
+  exTitleWrap: {
+    paddingHorizontal: 10,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   exTitle: {
     fontSize: 14,
@@ -619,29 +793,16 @@ const styles = StyleSheet.create({
     color: C.fg,
     letterSpacing: 0.3,
   },
-  exMeta: {
+  exBtnRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  exRoomType: {
-    fontSize: 11,
-    color: C.muted,
-    fontWeight: '600',
-  },
-  exMetaDot: {
-    fontSize: 11,
-    color: C.mutedLight,
-  },
-  exPublish: {
-    fontSize: 11,
-    color: C.muted,
-    fontWeight: '600',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
   },
   exEditBtn: {
-    marginLeft: 'auto',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: C.gold,
@@ -651,6 +812,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: C.gold,
+    letterSpacing: 0.5,
+  },
+  exDeleteBtn: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D94040',
+    backgroundColor: 'rgba(217,64,64,0.08)',
+  },
+  exDeleteText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#D94040',
     letterSpacing: 0.5,
   },
 });

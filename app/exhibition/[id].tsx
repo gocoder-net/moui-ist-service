@@ -223,73 +223,101 @@ function KaraokeForeword({ text }: { text: string }) {
 /* ── 1. 입구 화면 (서문 + 포스터) ── */
 function EntranceView({ exhibition, onEnter }: { exhibition: Exhibition; onEnter: () => void }) {
   const { width: sw } = useWindowDimensions();
-  const posterW = Math.min(sw * 0.65, 280);
+  const posterW = Math.min(sw * 0.7, 320);
   const hasForeword = !!exhibition.foreword?.trim();
+  const hasPoster = !!exhibition.poster_image_url;
 
   return (
-    <ScrollView contentContainerStyle={styles.entranceScroll} showsVerticalScrollIndicator={false}>
-      {/* 전시 제목 */}
-      <Animated.View entering={FadeIn.delay(200).duration(600)} style={styles.entranceContent}>
-        <View style={styles.entranceDiamond} />
-        <Text style={styles.entranceTitle}>{exhibition.title}</Text>
-        <View style={styles.entranceLine} />
-        <Text style={styles.entranceAuthor}>
-          {exhibition.profiles?.name || exhibition.profiles?.username || '작가'}
-        </Text>
-      </Animated.View>
+    <View style={{ flex: 1 }}>
+      {/* 포스터 배경 블러 */}
+      {hasPoster && (
+        <View style={styles.entranceBgWrap}>
+          <Image
+            source={{ uri: exhibition.poster_image_url! }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            blurRadius={40}
+          />
+          <View style={styles.entranceBgOverlay} />
+        </View>
+      )}
 
-      {/* 포스터 이미지 — 길거리 포스터 스타일 */}
-      {exhibition.poster_image_url && (
-        <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.posterWrap}>
-          <View style={[styles.posterFrame, { width: posterW + 8, height: posterW * 1.4 + 8 }]}>
-            <Image
-              source={{ uri: exhibition.poster_image_url }}
-              style={{ width: posterW, height: posterW * 1.4 }}
-              contentFit="cover"
-              transition={300}
-            />
-            {/* 테이프 — 4 모서리 */}
-            <View style={[styles.tape, styles.tapeTL]} />
-            <View style={[styles.tape, styles.tapeTR]} />
-            <View style={[styles.tape, styles.tapeBL]} />
-            <View style={[styles.tape, styles.tapeBR]} />
+      <ScrollView contentContainerStyle={styles.entranceScroll} showsVerticalScrollIndicator={false}>
+        {/* 상단 여백 */}
+        <View style={{ height: 20 }} />
+
+        {/* 포스터 이미지 */}
+        {hasPoster && (
+          <Animated.View entering={FadeIn.delay(200).duration(800)} style={styles.posterWrap}>
+            <View style={[styles.posterFrame, { width: posterW, height: posterW * 1.35 }]}>
+              <Image
+                source={{ uri: exhibition.poster_image_url! }}
+                style={{ width: posterW - 8, height: posterW * 1.35 - 8 }}
+                contentFit="cover"
+                transition={300}
+              />
+            </View>
+            <View style={[styles.posterGlow, { width: posterW * 0.6 }]} />
+          </Animated.View>
+        )}
+
+        {/* 전시 제목 영역 */}
+        <Animated.View entering={FadeInDown.delay(400).duration(600)} style={styles.entranceContent}>
+          <Text style={styles.entranceTitle}>{exhibition.title}</Text>
+          <View style={styles.entranceTitleLine}>
+            <View style={styles.entranceLineSide} />
+            <View style={styles.entranceDiamond} />
+            <View style={styles.entranceLineSide} />
           </View>
-          {/* 포스터 그림자 */}
-          <View style={[styles.posterShadow, { width: posterW - 10, height: 6 }]} />
+          <Text style={styles.entranceAuthor}>
+            {exhibition.profiles?.name || exhibition.profiles?.username || '작가'}
+          </Text>
         </Animated.View>
-      )}
 
-      {/* 전시 설명 */}
-      {exhibition.description && (
-        <Animated.View entering={FadeInDown.delay(500).duration(500)}>
-          <Text style={styles.entranceDesc}>{exhibition.description}</Text>
+        {/* 전시 설명 */}
+        {exhibition.description && (
+          <Animated.View entering={FadeInDown.delay(500).duration(500)}>
+            <Text style={styles.entranceDesc}>{exhibition.description}</Text>
+          </Animated.View>
+        )}
+
+        {/* 전시 정보 뱃지 */}
+        <Animated.View entering={FadeInDown.delay(600).duration(400)} style={styles.entranceInfoRow}>
+          <View style={styles.entranceInfoBadge}>
+            <Text style={styles.entranceInfoIcon}>📐</Text>
+            <Text style={styles.entranceInfoText}>
+              {ROOM_SIZES[exhibition.room_type].ns / 100}m × {ROOM_SIZES[exhibition.room_type].ew / 100}m
+            </Text>
+          </View>
         </Animated.View>
-      )}
 
-      {/* 전시 정보 */}
-      <Animated.View entering={FadeInDown.delay(600).duration(400)} style={styles.entranceInfo}>
-        <Text style={styles.entranceInfoText}>
-          {ROOM_SIZES[exhibition.room_type].ns / 100}m × {ROOM_SIZES[exhibition.room_type].ew / 100}m 전시 공간
-        </Text>
-      </Animated.View>
+        {/* 서문 */}
+        {hasForeword && (
+          <Animated.View entering={FadeIn.delay(700).duration(500)} style={styles.forewordBox}>
+            <View style={styles.forewordHeader}>
+              <View style={styles.forewordHeaderLine} />
+              <Text style={styles.forewordLabel}>전시 서문</Text>
+              <View style={styles.forewordHeaderLine} />
+            </View>
+            <KaraokeForeword text={exhibition.foreword!} />
+          </Animated.View>
+        )}
 
-      {/* 서문 — 노래방 스타일 */}
-      {hasForeword && (
-        <Animated.View entering={FadeIn.delay(700).duration(500)} style={styles.forewordBox}>
-          <Text style={styles.forewordLabel}>전시 서문</Text>
-          <View style={styles.forewordDivider} />
-          <KaraokeForeword text={exhibition.foreword!} />
+        {/* 입장 버튼 */}
+        <Animated.View entering={FadeInUp.delay(hasForeword ? 1000 : 800).duration(400)} style={styles.enterBtnWrap}>
+          <Pressable style={styles.enterBtn} onPress={onEnter}>
+            <View style={styles.enterBtnInner}>
+              <Text style={styles.enterBtnText}>전시관 입장</Text>
+              <View style={styles.enterBtnArrowWrap}>
+                <Text style={styles.enterBtnArrow}>→</Text>
+              </View>
+            </View>
+          </Pressable>
         </Animated.View>
-      )}
 
-      {/* 입장 버튼 */}
-      <Animated.View entering={FadeInUp.delay(hasForeword ? 1000 : 800).duration(400)}>
-        <Pressable style={styles.enterBtn} onPress={onEnter}>
-          <Text style={styles.enterBtnText}>전시관 입장</Text>
-          <Text style={styles.enterBtnArrow}>→</Text>
-        </Pressable>
-      </Animated.View>
-    </ScrollView>
+        <View style={{ height: 40 }} />
+      </ScrollView>
+    </View>
   );
 }
 
@@ -555,9 +583,12 @@ export default function ExhibitionViewer() {
   if (mode === 'entrance') {
     return (
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-        <Pressable style={styles.topBack} onPress={() => router.back()}>
-          <Text style={styles.topBackText}>← 나가기</Text>
-        </Pressable>
+        <View style={styles.topBackWrap}>
+          <Pressable style={styles.topBack} onPress={() => router.back()}>
+            <Text style={styles.topBackArrow}>←</Text>
+            <Text style={styles.topBackText}>나가기</Text>
+          </Pressable>
+        </View>
         <EntranceView exhibition={exhibition} onEnter={() => setMode('map')} />
       </View>
     );
@@ -644,58 +675,223 @@ const styles = StyleSheet.create({
   loadingText: { color: C.muted, fontSize: 14, letterSpacing: 1, marginTop: 12 },
 
   // Entrance
-  entranceScroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 32, paddingVertical: 40 },
-  entranceContent: { alignItems: 'center', gap: 12 },
-  entranceDiamond: { width: 14, height: 14, borderWidth: 1.5, borderColor: C.gold, transform: [{ rotate: '45deg' }], marginBottom: 8 },
-  entranceTitle: { fontSize: 28, fontWeight: '900', color: C.fg, letterSpacing: 3, textAlign: 'center' },
-  entranceLine: { width: 32, height: 1, backgroundColor: C.gold, marginVertical: 8 },
-  entranceAuthor: { fontSize: 14, color: C.gold, fontWeight: '600', letterSpacing: 1 },
-  entranceDesc: { fontSize: 13, color: C.muted, textAlign: 'center', lineHeight: 20, marginTop: 8, paddingHorizontal: 8 },
-  posterWrap: { alignItems: 'center', marginTop: 24, marginBottom: 8 },
+  entranceBgWrap: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  entranceBgOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(25, 31, 40, 0.82)',
+  },
+  entranceScroll: {
+    flexGrow: 1,
+    alignItems: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 20,
+  },
+  entranceContent: {
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  entranceTitle: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: C.fg,
+    letterSpacing: 3,
+    textAlign: 'center',
+  },
+  entranceTitleLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginVertical: 6,
+  },
+  entranceLineSide: {
+    width: 28,
+    height: 1,
+    backgroundColor: 'rgba(200,169,110,0.4)',
+  },
+  entranceDiamond: {
+    width: 8,
+    height: 8,
+    borderWidth: 1,
+    borderColor: C.gold,
+    transform: [{ rotate: '45deg' }],
+  },
+  entranceAuthor: {
+    fontSize: 13,
+    color: C.gold,
+    fontWeight: '600',
+    letterSpacing: 2,
+  },
+  entranceDesc: {
+    fontSize: 13,
+    color: C.muted,
+    textAlign: 'center',
+    lineHeight: 21,
+    marginTop: 4,
+    paddingHorizontal: 12,
+  },
+  posterWrap: {
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   posterFrame: {
-    justifyContent: 'center', alignItems: 'center',
-    backgroundColor: '#1a1a1a',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#111',
     padding: 4,
+    borderRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.6,
+    shadowRadius: 24,
+    elevation: 20,
   },
-  posterShadow: {
-    marginTop: 6,
+  posterGlow: {
+    height: 8,
+    marginTop: 8,
     borderRadius: 50,
-    backgroundColor: 'rgba(200,169,110,0.08)',
+    backgroundColor: 'rgba(200,169,110,0.1)',
   },
-  tape: {
-    position: 'absolute',
-    width: 32, height: 14,
-    backgroundColor: 'rgba(200,180,140,0.35)',
-    borderWidth: 0.5,
-    borderColor: 'rgba(200,180,140,0.15)',
+  entranceInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: 10,
+    marginBottom: 4,
   },
-  tapeTL: { top: -6, left: -8, transform: [{ rotate: '-35deg' }] },
-  tapeTR: { top: -6, right: -8, transform: [{ rotate: '35deg' }] },
-  tapeBL: { bottom: -6, left: -8, transform: [{ rotate: '35deg' }] },
-  tapeBR: { bottom: -6, right: -8, transform: [{ rotate: '-35deg' }] },
-  forewordBox: { width: '100%', borderWidth: 1, borderColor: C.border, borderRadius: 16, padding: 24, marginTop: 20, gap: 10 },
-  karaokeWindow: { minHeight: 90, justifyContent: 'center', gap: 8, marginVertical: 8 },
+  entranceInfoBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  entranceInfoIcon: {
+    fontSize: 12,
+  },
+  entranceInfoText: {
+    fontSize: 11,
+    color: C.muted,
+    letterSpacing: 0.5,
+    fontWeight: '600',
+  },
+  forewordBox: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(200,169,110,0.2)',
+    borderRadius: 16,
+    padding: 20,
+    marginTop: 16,
+    gap: 12,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+  },
+  forewordHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    justifyContent: 'center',
+  },
+  forewordHeaderLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(200,169,110,0.2)',
+  },
+  forewordLabel: {
+    fontSize: 10,
+    color: C.gold,
+    fontWeight: '700',
+    letterSpacing: 3,
+  },
+  forewordText: { fontSize: 14, color: '#ccc', lineHeight: 24 },
+  karaokeWindow: { minHeight: 80, justifyContent: 'center', gap: 8, marginVertical: 4 },
   karaokeLine: { fontSize: 14, color: '#ddd', lineHeight: 24, textAlign: 'center' },
-  karaokeFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 8 },
+  karaokeFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 6 },
   karaokeDots: { flexDirection: 'row', gap: 6 },
   karaokeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.border },
   karaokeDotActive: { backgroundColor: C.gold, width: 16, borderRadius: 3 },
   karaokeActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  showAllBtn: { paddingVertical: 6, paddingHorizontal: 16, borderWidth: 1, borderColor: C.border, borderRadius: 12 },
+  showAllBtn: { paddingVertical: 5, paddingHorizontal: 14, borderWidth: 1, borderColor: C.border, borderRadius: 12 },
   showAllText: { fontSize: 10, color: C.gold, fontWeight: '600', letterSpacing: 1 },
-  ttsBtn: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: C.border, justifyContent: 'center', alignItems: 'center' },
-  ttsBtnText: { fontSize: 14 },
-  forewordLabel: { fontSize: 11, color: C.gold, fontWeight: '700', letterSpacing: 2, textTransform: 'uppercase' },
+  ttsBtn: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: C.border, justifyContent: 'center', alignItems: 'center' },
+  ttsBtnText: { fontSize: 13 },
   forewordDivider: { height: 1, backgroundColor: C.border },
-  forewordText: { fontSize: 14, color: '#ccc', lineHeight: 24 },
-  entranceInfo: { marginTop: 12 },
-  entranceInfoText: { fontSize: 11, color: C.muted, letterSpacing: 1 },
-  enterBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.fg, paddingHorizontal: 40, paddingVertical: 16, borderRadius: 16, borderWidth: 1, borderColor: C.gold, marginTop: 16 },
-  enterBtnText: { color: C.gold, fontSize: 16, fontWeight: '700', letterSpacing: 2 },
-  enterBtnArrow: { color: C.gold, fontSize: 18 },
+  enterBtnWrap: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  enterBtn: {
+    width: '100%',
+    maxWidth: 300,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.gold,
+    backgroundColor: 'rgba(200,169,110,0.12)',
+    overflow: 'hidden',
+  },
+  enterBtnInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    gap: 12,
+  },
+  enterBtnText: {
+    color: C.gold,
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 3,
+  },
+  enterBtnArrowWrap: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: C.gold,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  enterBtnArrow: {
+    color: C.bg,
+    fontSize: 16,
+    fontWeight: '800',
+  },
 
-  topBack: { paddingHorizontal: 24, paddingVertical: 8 },
-  topBackText: { color: C.muted, fontSize: 13 },
+  topBackWrap: {
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    zIndex: 10,
+  },
+  topBack: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderWidth: 1,
+    borderColor: C.border,
+  },
+  topBackArrow: {
+    color: C.fg,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  topBackText: {
+    color: C.muted,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
 
   // Map view
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },

@@ -290,7 +290,19 @@ export default function GalleryScene({
             style={StyleSheet.absoluteFill}
             onLayout={(e) => {
               const { width, height } = e.nativeEvent.layout;
-              if (width > 0 && height > 0) canvasSizeRef.current = { width, height };
+              if (width > 0 && height > 0) {
+                canvasSizeRef.current = { width, height };
+                // カメラのアスペクト比を実際の表示領域に合わせる
+                const camera = cameraRef.current;
+                if (camera) {
+                  camera.aspect = width / height;
+                  camera.updateProjectionMatrix();
+                }
+                // Web: レンダラーサイズも更新
+                if (Platform.OS === 'web' && handleRef.current) {
+                  handleRef.current.renderer.setSize(width, height);
+                }
+              }
             }}
             onStartShouldSetResponder={() => true}
             onMoveShouldSetResponder={() => true}
@@ -400,9 +412,18 @@ export default function GalleryScene({
       {/* Artwork detail overlay */}
       {detailInfo && selectedPlacement && (
         <View style={[styles.detailOverlay, { backgroundColor: detailInfo.wc }]}>
+          {/* 닫기 버튼 (상단) */}
+          <Pressable
+            style={styles.detailCloseBtn}
+            onPress={() => { setSelectedPlacement(null); setViewAngle('front'); }}
+          >
+            <Text style={styles.detailCloseBtnText}>✕</Text>
+          </Pressable>
+
           <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.detailWall}>
             <SpotlightBeam wallColor={detailInfo.wc} />
 
+            {/* 프레임 + 그림 */}
             <View style={[styles.detailFrame, {
               borderColor: detailInfo.frameColor,
               width: detailInfo.imgW + 16, height: detailInfo.imgH + 16,
@@ -424,61 +445,75 @@ export default function GalleryScene({
 
               {viewAngle === 'front' && detailInfo.angles.top && (
                 <Pressable style={[styles.edgeIcon, styles.edgeTop]} onPress={() => setViewAngle('top')}>
-                  <Text style={styles.edgeIconText}>👁</Text>
+                  <Text style={styles.edgeIconText}>↑</Text>
                 </Pressable>
               )}
               {viewAngle === 'front' && detailInfo.angles.bottom && (
                 <Pressable style={[styles.edgeIcon, styles.edgeBottom]} onPress={() => setViewAngle('bottom')}>
-                  <Text style={styles.edgeIconText}>👁</Text>
+                  <Text style={styles.edgeIconText}>↓</Text>
                 </Pressable>
               )}
               {viewAngle === 'front' && detailInfo.angles.left && (
                 <Pressable style={[styles.edgeIcon, styles.edgeLeft]} onPress={() => setViewAngle('left')}>
-                  <Text style={styles.edgeIconText}>👁</Text>
+                  <Text style={styles.edgeIconText}>←</Text>
                 </Pressable>
               )}
               {viewAngle === 'front' && detailInfo.angles.right && (
                 <Pressable style={[styles.edgeIcon, styles.edgeRight]} onPress={() => setViewAngle('right')}>
-                  <Text style={styles.edgeIconText}>👁</Text>
+                  <Text style={styles.edgeIconText}>→</Text>
                 </Pressable>
               )}
             </View>
 
+            {/* 시점 뱃지 */}
             {viewAngle !== 'front' && (
-              <View style={styles.angleLabelBadge}>
+              <Pressable style={styles.angleLabelBadge} onPress={() => setViewAngle('front')}>
                 <Text style={styles.angleLabelText}>
                   {{ top: '위에서 본 모습', bottom: '아래에서 본 모습', left: '왼쪽에서 본 모습', right: '오른쪽에서 본 모습' }[viewAngle]}
                 </Text>
-                <Pressable onPress={() => setViewAngle('front')}>
-                  <Text style={styles.angleLabelBack}>정면으로 ✕</Text>
-                </Pressable>
-              </View>
+                <Text style={styles.angleLabelBack}>✕</Text>
+              </Pressable>
             )}
 
+            {/* 작품 정보 카드 */}
             <View style={[styles.detailPlate, {
-              backgroundColor: detailInfo.isDark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.45)',
-              borderColor: detailInfo.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+              backgroundColor: detailInfo.isDark ? 'rgba(0,0,0,0.45)' : 'rgba(255,255,255,0.55)',
+              borderColor: detailInfo.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)',
             }]}>
-              <Text style={[styles.plateTitle, { color: detailInfo.isDark ? '#eee' : '#333' }]}>
-                {detailInfo.art.title}{detailInfo.art.year ? `, ${detailInfo.art.year}` : ''}
+              <View style={styles.plateDivider}>
+                <View style={[styles.plateDividerLine, { backgroundColor: detailInfo.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]} />
+                <View style={[styles.plateDividerDot, { borderColor: detailInfo.isDark ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)' }]} />
+                <View style={[styles.plateDividerLine, { backgroundColor: detailInfo.isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)' }]} />
+              </View>
+              <Text style={[styles.plateTitle, { color: detailInfo.isDark ? '#f0f0f0' : '#2a2a2a' }]}>
+                {detailInfo.art.title}
               </Text>
+              {detailInfo.art.year && (
+                <Text style={[styles.plateYear, { color: detailInfo.isDark ? '#999' : '#888' }]}>
+                  {detailInfo.art.year}
+                </Text>
+              )}
               <Text style={[styles.plateMeta, { color: detailInfo.isDark ? '#aaa' : '#777' }]}>
                 {[
                   detailInfo.art.medium,
                   `${selectedPlacement.width_cm} × ${selectedPlacement.height_cm} cm`,
                   detailInfo.art.edition,
-                ].filter(Boolean).join(' · ')}
+                ].filter(Boolean).join('  ·  ')}
               </Text>
               {detailInfo.art.description && (
-                <Text style={[styles.plateDesc, { color: detailInfo.isDark ? '#888' : '#999' }]}>
-                  {detailInfo.art.description}
-                </Text>
+                <>
+                  <View style={[styles.plateDescLine, { backgroundColor: detailInfo.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]} />
+                  <Text style={[styles.plateDesc, { color: detailInfo.isDark ? '#999' : '#888' }]}>
+                    {detailInfo.art.description}
+                  </Text>
+                </>
               )}
             </View>
           </ScrollView>
 
+          {/* 하단 돌아가기 바 */}
           <Pressable
-            style={styles.backBar}
+            style={[styles.backBar, { borderTopColor: detailInfo.isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.08)' }]}
             onPress={() => { setSelectedPlacement(null); setViewAngle('front'); }}
           >
             <Text style={styles.backBarText}>← 전시관으로 돌아가기</Text>
@@ -488,7 +523,7 @@ export default function GalleryScene({
 
       {/* Door opening overlay */}
       {introPhase === 'doors' && (
-        <DoorOverlay sceneReady={sceneReady} screenWidth={sw} title={title} />
+        <DoorOverlay sceneReady={sceneReady} screenWidth={sw} />
       )}
     </View>
   );
@@ -620,15 +655,15 @@ function Minimap({ cameraRef, yawRef, dims, wallColors, placements, onTap }: {
 }
 
 /* ── Door Opening Overlay ── */
-function DoorOverlay({ sceneReady, screenWidth, title }: {
-  sceneReady: boolean; screenWidth: number; title?: string;
+function DoorOverlay({ sceneReady, screenWidth }: {
+  sceneReady: boolean; screenWidth: number;
 }) {
   const halfW = screenWidth / 2;
 
   const leftX = useSharedValue(0);
   const rightX = useSharedValue(0);
   const crackOp = useSharedValue(0);
-  const titleOp = useSharedValue(1);
+
   const overlayOp = useSharedValue(1);
 
   useEffect(() => {
@@ -637,7 +672,7 @@ function DoorOverlay({ sceneReady, screenWidth, title }: {
     crackOp.value = withDelay(200, withTiming(1, { duration: 500 }));
     leftX.value = withDelay(700, withTiming(-halfW - 20, { duration: 1400, easing: doorEase }));
     rightX.value = withDelay(700, withTiming(halfW + 20, { duration: 1400, easing: doorEase }));
-    titleOp.value = withDelay(500, withTiming(0, { duration: 600 }));
+
     overlayOp.value = withDelay(2200, withTiming(0, { duration: 800 }));
   }, [sceneReady]);
 
@@ -645,27 +680,51 @@ function DoorOverlay({ sceneReady, screenWidth, title }: {
   const leftStyle = useAnimatedStyle(() => ({ transform: [{ translateX: leftX.value }] }));
   const rightStyle = useAnimatedStyle(() => ({ transform: [{ translateX: rightX.value }] }));
   const crackStyle = useAnimatedStyle(() => ({ opacity: crackOp.value }));
-  const titleStyle = useAnimatedStyle(() => ({ opacity: titleOp.value }));
+
 
   return (
     <Animated.View style={[styles.introOverlay, containerStyle]} pointerEvents="auto">
+      {/* 빛 틈 */}
       <Animated.View style={[styles.introCrack, crackStyle]} />
 
+      {/* 왼쪽 문 */}
       <Animated.View style={[styles.introDoor, styles.introDoorLeft, leftStyle]}>
-        <View style={styles.introDoorPanel} />
-        <View style={[styles.introDoorHandle, { right: 18 }]} />
+        {/* 벽 질감 */}
+        <View style={styles.doorWallTexture} />
+        {/* 문짝 패널 (이중) */}
+        <View style={styles.introDoorPanel}>
+          <View style={styles.doorPanelInner} />
+        </View>
+        {/* 손잡이 */}
+        <View style={[styles.introDoorHandle, { right: 20 }]}>
+          <View style={styles.doorHandleKnob} />
+          <View style={styles.doorHandlePlate} />
+        </View>
+        {/* 경첩 */}
+        <View style={[styles.doorHinge, { left: 8, top: '20%' }]} />
+        <View style={[styles.doorHinge, { left: 8, top: '50%' }]} />
+        <View style={[styles.doorHinge, { left: 8, top: '80%' }]} />
       </Animated.View>
 
+      {/* 오른쪽 문 */}
       <Animated.View style={[styles.introDoor, styles.introDoorRight, rightStyle]}>
-        <View style={styles.introDoorPanel} />
-        <View style={[styles.introDoorHandle, { left: 18 }]} />
+        <View style={styles.doorWallTexture} />
+        <View style={styles.introDoorPanel}>
+          <View style={styles.doorPanelInner} />
+        </View>
+        <View style={[styles.introDoorHandle, { left: 20 }]}>
+          <View style={styles.doorHandleKnob} />
+          <View style={styles.doorHandlePlate} />
+        </View>
+        {/* 경첩 */}
+        <View style={[styles.doorHinge, { right: 8, top: '20%' }]} />
+        <View style={[styles.doorHinge, { right: 8, top: '50%' }]} />
+        <View style={[styles.doorHinge, { right: 8, top: '80%' }]} />
       </Animated.View>
 
-      <Animated.View style={[styles.introTitleWrap, titleStyle]}>
-        <Text style={styles.introTitleSub}>MOUI-IST</Text>
-        <View style={styles.introTitleLine} />
-        <Text style={styles.introTitle}>{title || '전시관 입장'}</Text>
-      </Animated.View>
+      {/* 상단 프레임 */}
+      <View style={styles.doorTopFrame} />
+
     </Animated.View>
   );
 }
@@ -936,41 +995,67 @@ const styles = StyleSheet.create({
   introOverlay: {
     ...StyleSheet.absoluteFillObject, zIndex: 100,
     justifyContent: 'center', alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.3)',
   },
   introCrack: {
-    position: 'absolute', width: 2, top: 0, bottom: 0, alignSelf: 'center',
-    backgroundColor: 'rgba(255,248,220,0.5)',
+    position: 'absolute', width: 3, top: 0, bottom: 0, alignSelf: 'center',
+    backgroundColor: 'rgba(255,248,220,0.6)',
     shadowColor: '#FFF8DC', shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9, shadowRadius: 30,
+    shadowOpacity: 1, shadowRadius: 40,
   },
   introDoor: {
     position: 'absolute', top: 0, bottom: 0, width: '52%',
-    backgroundColor: '#1A1410', justifyContent: 'center',
+    backgroundColor: '#1C1814', justifyContent: 'center',
   },
   introDoorLeft: {
-    left: 0, borderRightWidth: 1, borderRightColor: 'rgba(200,169,110,0.25)',
+    left: 0, borderRightWidth: 1.5, borderRightColor: 'rgba(200,169,110,0.3)',
   },
   introDoorRight: {
-    right: 0, borderLeftWidth: 1, borderLeftColor: 'rgba(200,169,110,0.25)',
+    right: 0, borderLeftWidth: 1.5, borderLeftColor: 'rgba(200,169,110,0.3)',
+  },
+  doorWallTexture: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(200,169,110,0.03)',
+    borderWidth: 0,
   },
   introDoorPanel: {
-    position: 'absolute', top: '12%', bottom: '12%', left: 24, right: 24,
-    borderWidth: 1, borderColor: 'rgba(200,169,110,0.12)', borderRadius: 3,
+    position: 'absolute', top: '10%', bottom: '10%', left: 20, right: 20,
+    borderWidth: 1.5, borderColor: 'rgba(200,169,110,0.15)', borderRadius: 4,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  doorPanelInner: {
+    position: 'absolute', top: 12, bottom: 12, left: 12, right: 12,
+    borderWidth: 1, borderColor: 'rgba(200,169,110,0.08)', borderRadius: 2,
   },
   introDoorHandle: {
-    position: 'absolute', width: 6, height: 44, borderRadius: 3,
-    backgroundColor: C.gold, shadowColor: C.gold,
-    shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.4, shadowRadius: 6,
+    position: 'absolute',
+    alignItems: 'center',
+    top: '46%',
   },
-  introTitleWrap: { zIndex: 10, alignItems: 'center', gap: 8 },
-  introTitleSub: {
-    fontSize: 10, color: 'rgba(200,169,110,0.5)', letterSpacing: 6, fontWeight: '600',
+  doorHandleKnob: {
+    width: 14, height: 14, borderRadius: 7,
+    backgroundColor: C.gold,
+    shadowColor: C.gold, shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6, shadowRadius: 8,
   },
-  introTitleLine: {
-    width: 40, height: 1, backgroundColor: 'rgba(200,169,110,0.3)',
+  doorHandlePlate: {
+    width: 8, height: 32, borderRadius: 4,
+    backgroundColor: 'rgba(200,169,110,0.4)',
+    marginTop: 4,
   },
-  introTitle: {
-    fontSize: 20, color: C.gold, fontWeight: '800', letterSpacing: 4,
+  doorHinge: {
+    position: 'absolute',
+    width: 10, height: 18, borderRadius: 2,
+    backgroundColor: 'rgba(200,169,110,0.2)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(200,169,110,0.1)',
+  },
+  doorTopFrame: {
+    position: 'absolute', top: 0, left: 0, right: 0, height: 6,
+    backgroundColor: 'rgba(200,169,110,0.15)',
+    shadowColor: C.gold, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2, shadowRadius: 12,
+    zIndex: 20,
   },
 
   // Artwork detail overlay
@@ -978,9 +1063,19 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     zIndex: 50,
   },
+  detailCloseBtn: {
+    position: 'absolute', top: 16, right: 16, zIndex: 60,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  detailCloseBtnText: {
+    color: '#ddd', fontSize: 16, fontWeight: '600',
+  },
   detailWall: {
     flexGrow: 1, justifyContent: 'center', alignItems: 'center',
-    gap: 16, paddingVertical: 24, paddingTop: 60,
+    gap: 20, paddingVertical: 24, paddingTop: 56,
   },
 
   // Vignetting — dark edges for depth
@@ -1043,46 +1138,59 @@ const styles = StyleSheet.create({
 
   // Frame — enhanced shadow for wall-mounted feel
   detailFrame: {
-    borderWidth: 5, backgroundColor: '#fff',
+    borderWidth: 6, backgroundColor: '#fff',
     justifyContent: 'center', alignItems: 'center', padding: 4,
-    shadowColor: '#000', shadowOffset: { width: 2, height: 6 },
-    shadowOpacity: 0.5, shadowRadius: 20,
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.6, shadowRadius: 24,
     zIndex: 1,
   },
 
   // Info plate — gallery wall caption style
   detailPlate: {
-    alignItems: 'center', gap: 4,
-    paddingHorizontal: 24, paddingVertical: 12,
-    borderRadius: 6, borderWidth: 1,
+    alignItems: 'center', gap: 6,
+    paddingHorizontal: 28, paddingVertical: 16,
+    borderRadius: 8, borderWidth: 1,
     zIndex: 1,
+    maxWidth: 340,
   },
-  plateTitle: { fontSize: 15, fontWeight: '700', letterSpacing: 0.5 },
-  plateMeta: { fontSize: 10, letterSpacing: 0.3 },
-  plateDesc: { fontSize: 10, marginTop: 3, textAlign: 'center', lineHeight: 15 },
+  plateDivider: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, width: '100%', marginBottom: 4,
+  },
+  plateDividerLine: {
+    flex: 1, height: 1,
+  },
+  plateDividerDot: {
+    width: 6, height: 6, borderWidth: 1, transform: [{ rotate: '45deg' }],
+  },
+  plateTitle: { fontSize: 17, fontWeight: '800', letterSpacing: 1, textAlign: 'center' },
+  plateYear: { fontSize: 11, letterSpacing: 0.5 },
+  plateMeta: { fontSize: 10, letterSpacing: 0.5, textAlign: 'center' },
+  plateDescLine: { width: 24, height: 1, marginTop: 4 },
+  plateDesc: { fontSize: 11, textAlign: 'center', lineHeight: 17 },
 
   edgeIcon: {
-    position: 'absolute', width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    position: 'absolute', width: 30, height: 30, borderRadius: 15,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center', alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)',
+    borderWidth: 1.5, borderColor: 'rgba(200,169,110,0.4)',
   },
-  edgeIconText: { fontSize: 14 },
-  edgeTop: { top: 6, alignSelf: 'center', left: '50%', marginLeft: -16 },
-  edgeBottom: { bottom: 6, alignSelf: 'center', left: '50%', marginLeft: -16 },
-  edgeLeft: { left: 6, top: '50%', marginTop: -16 },
-  edgeRight: { right: 6, top: '50%', marginTop: -16 },
+  edgeIconText: { fontSize: 13, color: C.gold, fontWeight: '700' },
+  edgeTop: { top: 8, alignSelf: 'center', left: '50%', marginLeft: -15 },
+  edgeBottom: { bottom: 8, alignSelf: 'center', left: '50%', marginLeft: -15 },
+  edgeLeft: { left: 8, top: '50%', marginTop: -15 },
+  edgeRight: { right: 8, top: '50%', marginTop: -15 },
   angleLabelBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 14, paddingVertical: 6,
-    borderRadius: 16,
+    backgroundColor: 'rgba(0,0,0,0.55)', paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1, borderColor: 'rgba(200,169,110,0.2)',
   },
-  angleLabelText: { color: '#ddd', fontSize: 12 },
-  angleLabelBack: { color: C.gold, fontSize: 12, fontWeight: '600' },
+  angleLabelText: { color: '#ddd', fontSize: 12, letterSpacing: 0.5 },
+  angleLabelBack: { color: C.gold, fontSize: 14, fontWeight: '700' },
 
   backBar: {
-    backgroundColor: C.bg, paddingVertical: 12,
-    borderTopWidth: 1, borderTopColor: C.border, alignItems: 'center',
+    backgroundColor: 'rgba(25,31,40,0.95)', paddingVertical: 14,
+    borderTopWidth: 1, alignItems: 'center',
   },
-  backBarText: { color: C.gold, fontSize: 13, fontWeight: '600', letterSpacing: 1 },
+  backBarText: { color: C.gold, fontSize: 13, fontWeight: '700', letterSpacing: 1.5 },
 });

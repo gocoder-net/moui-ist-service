@@ -77,7 +77,9 @@ export async function buildArtworks(
       try {
         const tex = await loadTexture(url);
         imgMesh.material = new THREE.MeshBasicMaterial({ map: tex });
-      } catch { /* keep white placeholder */ }
+      } catch (e: any) {
+        console.warn('[GalleryArtwork] texture load failed:', url, e?.message);
+      }
     }));
   } else {
     // Sequential: one at a time to avoid Android overload
@@ -85,7 +87,9 @@ export async function buildArtworks(
       try {
         const tex = await loadTexture(url);
         imgMesh.material = new THREE.MeshBasicMaterial({ map: tex });
-      } catch { /* keep white placeholder */ }
+      } catch (e: any) {
+        console.warn('[GalleryArtwork] texture load failed:', url, e?.message);
+      }
     }
   }
 

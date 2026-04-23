@@ -13,18 +13,29 @@ export function loadTextureWeb(url: string): Promise<THREE.Texture> {
   });
 }
 
-/** Native: download to local file, then load as texture */
+/** djb2 hash for cache key */
+function hashUrl(url: string): number {
+  let h = 5381;
+  for (let i = 0; i < url.length; i++) h = ((h << 5) + h + url.charCodeAt(i)) >>> 0;
+  return h;
+}
+
+function getExt(url: string): string {
+  return url.match(/\.(jpe?g|png|webp|gif)/i)?.[0] || '.jpg';
+}
+
+/** Native: download → cache → load via expo-three */
 export async function loadTextureNative(url: string): Promise<THREE.Texture> {
   const FileSystem = require('expo-file-system').default ?? require('expo-file-system');
   const ExpoTHREE = require('expo-three');
+  const { Asset } = require('expo-asset');
 
-  // Unique local path per URL (hash via simple djb2)
-  let h = 5381;
-  for (let i = 0; i < url.length; i++) h = ((h << 5) + h + url.charCodeAt(i)) >>> 0;
-  const ext = url.match(/\.(jpe?g|png|webp|gif)/i)?.[0] || '.jpg';
+  const h = hashUrl(url);
+  const ext = getExt(url);
+  const type = ext.replace('.', ''); // 'jpg', 'png', etc.
   const localUri = `${FileSystem.cacheDirectory}artwork_${h}${ext}`;
 
-  // Check if already cached
+  // Download if not cached
   const info = await FileSystem.getInfoAsync(localUri);
   if (!info.exists || info.size === 0) {
     const result = await FileSystem.downloadAsync(url, localUri);
@@ -33,14 +44,60 @@ export async function loadTextureNative(url: string): Promise<THREE.Texture> {
     }
   }
 
-  // Load from local file via expo-asset → expo-three
-  const { Asset } = require('expo-asset');
-  const asset = Asset.fromURI(localUri);
-  asset.localUri = localUri;  // skip downloadAsync — file is already local
-  const tex: THREE.Texture = await ExpoTHREE.loadAsync(asset);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.needsUpdate = true;
-  return tex;
+  // Method 1: local file via Asset.fromURI
+  try {
+    const asset = Asset.fromURI(localUri);
+    asset.localUri = localUri;
+    asset.type = type;
+    asset.downloaded = true;
+    asset.name = `artwork_${h}`;
+    const tex: THREE.Texture = await ExpoTHREE.loadAsync(asset);
+    if (tex?.image) {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.needsUpdate = true;
+      return tex;
+    }
+  } catch (e: any) {
+    console.warn('[texture-loader] local asset failed, trying remote:', e?.message);
+  }
+
+  // Method 2: let expo-asset download from remote URL
+  try {
+    const asset = Asset.fromURI(url);
+    asset.type = type;
+    await asset.downloadAsync();
+    const tex: THREE.Texture = await ExpoTHREE.loadAsync(asset);
+    if (tex?.image) {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.needsUpdate = true;
+      return tex;
+    }
+  } catch (e: any) {
+    console.warn('[texture-loader] remote asset failed, trying base64:', e?.message);
+  }
+
+  // Method 3: base64 data URI fallback
+  try {
+    const base64 = await FileSystem.readAsStringAsync(localUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    const mimeType = type === 'png' ? 'image/png' : 'image/jpeg';
+    const dataUri = `data:${mimeType};base64,${base64}`;
+    const asset = Asset.fromURI(dataUri);
+    asset.localUri = dataUri;
+    asset.type = type;
+    asset.downloaded = true;
+    const tex: THREE.Texture = await ExpoTHREE.loadAsync(asset);
+    if (tex?.image) {
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.needsUpdate = true;
+      return tex;
+    }
+  } catch (e: any) {
+    console.warn('[texture-loader] base64 fallback failed:', e?.message);
+  }
+
+  throw new Error('All texture loading methods failed for: ' + url);
 }
 
 /** Load with one retry and timeout */
@@ -49,22 +106,21 @@ export async function loadTexture(url: string): Promise<THREE.Texture> {
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      // 15s timeout per attempt
+      // 20s timeout per attempt
       const tex = await Promise.race([
         loadTextureNative(url),
-        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 15000)),
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error('timeout')), 20000)),
       ]);
-      // Sanity check — texture should have image data
       if (tex.image) return tex;
       throw new Error('empty texture');
-    } catch {
+    } catch (e: any) {
+      console.warn(`[texture-loader] attempt ${attempt + 1} failed:`, e?.message);
       if (attempt === 1) throw new Error('loadTexture failed after retry');
       // Clear cached file before retry
       try {
         const FileSystem = require('expo-file-system').default ?? require('expo-file-system');
-        let h = 5381;
-        for (let i = 0; i < url.length; i++) h = ((h << 5) + h + url.charCodeAt(i)) >>> 0;
-        const ext = url.match(/\.(jpe?g|png|webp|gif)/i)?.[0] || '.jpg';
+        const h = hashUrl(url);
+        const ext = getExt(url);
         const localUri = `${FileSystem.cacheDirectory}artwork_${h}${ext}`;
         await FileSystem.deleteAsync(localUri, { idempotent: true });
       } catch { /* ignore cleanup errors */ }
