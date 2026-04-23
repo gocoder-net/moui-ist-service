@@ -198,6 +198,8 @@ const diamondStyles = StyleSheet.create({
   },
 });
 
+const normalizePhoneNumber = (value: string) => value.replace(/\D/g, '').slice(0, 11);
+
 /* ── 인풋 포커스 애니메이션 ── */
 function AnimatedInput({
   label,
@@ -212,6 +214,7 @@ function AnimatedInput({
   inputRef,
   helperText,
   autoCapitalize = 'none',
+  required = false,
   delay: enterDelay,
 }: {
   label: string;
@@ -226,6 +229,7 @@ function AnimatedInput({
   inputRef?: React.RefObject<TextInput>;
   helperText?: string;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  required?: boolean;
   delay: number;
 }) {
   const focused = useSharedValue(0);
@@ -235,7 +239,10 @@ function AnimatedInput({
 
   return (
     <Animated.View entering={FadeInDown.delay(enterDelay).duration(400).springify()}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.label}>
+        {label}
+        {required ? <Text style={styles.labelRequired}> *필수</Text> : null}
+      </Text>
       <Animated.View style={[styles.inputWrap, borderAnim]}>
         <TextInput
           ref={inputRef as any}
@@ -264,11 +271,15 @@ export default function SignUpScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { signUp } = useAuth();
+  const realNameRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
   const emailRef = useRef<TextInput>(null);
   const passwordRef = useRef<TextInput>(null);
   const confirmRef = useRef<TextInput>(null);
 
+  const [displayName, setDisplayName] = useState('');
   const [realName, setRealName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -294,8 +305,14 @@ export default function SignUpScreen() {
   }));
 
   const handleSignUp = async () => {
-    if (!realName.trim() || !email.trim() || !password || !confirmPassword) {
+    const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+
+    if (!displayName.trim() || !realName.trim() || !normalizedPhoneNumber || !email.trim() || !password || !confirmPassword) {
       setError('모든 항목을 입력해주세요.');
+      return;
+    }
+    if (normalizedPhoneNumber.length < 9) {
+      setError('전화번호를 올바르게 입력해주세요.');
       return;
     }
     if (password.length < 6) {
@@ -309,7 +326,13 @@ export default function SignUpScreen() {
 
     setError('');
     setLoading(true);
-    const result = await signUp(email.trim(), password, realName.trim());
+    const result = await signUp(
+      email.trim(),
+      password,
+      realName.trim(),
+      displayName.trim(),
+      normalizedPhoneNumber,
+    );
     setLoading(false);
 
     if (result.error) {
@@ -371,15 +394,45 @@ export default function SignUpScreen() {
           {/* 폼 */}
           <View style={styles.form}>
             <AnimatedInput
-              label="본명 (필수)"
+              label="활동명"
+              placeholder="모의스트에서 사용할 이름"
+              value={displayName}
+              onChangeText={setDisplayName}
+              autoCapitalize="words"
+              returnKeyType="next"
+              onSubmitEditing={() => realNameRef.current?.focus()}
+              helperText="다른 사용자에게 보이는 이름이에요."
+              required
+              delay={350}
+            />
+
+            <AnimatedInput
+              label="본명"
               placeholder="실명 입력"
               value={realName}
               onChangeText={setRealName}
               autoCapitalize="words"
               returnKeyType="next"
-              onSubmitEditing={() => emailRef.current?.focus()}
+              onSubmitEditing={() => phoneRef.current?.focus()}
+              inputRef={realNameRef}
               helperText="본인인증을 위해 꼭 필요하며 외부에는 공개되지 않아요."
-              delay={350}
+              required
+              delay={430}
+            />
+
+            <AnimatedInput
+              label="전화번호"
+              placeholder="01012345678"
+              value={phoneNumber}
+              onChangeText={(value) => setPhoneNumber(normalizePhoneNumber(value))}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              returnKeyType="next"
+              onSubmitEditing={() => emailRef.current?.focus()}
+              inputRef={phoneRef}
+              helperText="하이픈 없이 입력해 주세요. 외부에는 공개되지 않아요."
+              required
+              delay={510}
             />
 
             <AnimatedInput
@@ -392,7 +445,8 @@ export default function SignUpScreen() {
               returnKeyType="next"
               onSubmitEditing={() => passwordRef.current?.focus()}
               inputRef={emailRef}
-              delay={430}
+              required
+              delay={590}
             />
 
             <AnimatedInput
@@ -405,7 +459,8 @@ export default function SignUpScreen() {
               returnKeyType="next"
               onSubmitEditing={() => confirmRef.current?.focus()}
               inputRef={passwordRef}
-              delay={510}
+              required
+              delay={670}
             />
 
             <AnimatedInput
@@ -418,7 +473,8 @@ export default function SignUpScreen() {
               returnKeyType="done"
               onSubmitEditing={handleSignUp}
               inputRef={confirmRef}
-              delay={590}
+              required
+              delay={750}
             />
 
             {error ? (
@@ -427,7 +483,7 @@ export default function SignUpScreen() {
               </Animated.Text>
             ) : null}
 
-            <Animated.View entering={FadeInDown.delay(690).duration(400).springify()}>
+            <Animated.View entering={FadeInDown.delay(850).duration(400).springify()}>
               <Pressable
                 onPress={handleSignUp}
                 disabled={loading}
@@ -452,12 +508,7 @@ export default function SignUpScreen() {
           </View>
 
           {/* 하단 */}
-          <Animated.View entering={FadeIn.delay(790).duration(400)} style={styles.footer}>
-            <View style={styles.footerDivider}>
-              <View style={styles.footerLine} />
-              <View style={styles.footerDiamond} />
-              <View style={styles.footerLine} />
-            </View>
+          <Animated.View entering={FadeIn.delay(950).duration(400)} style={styles.footer}>
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>이미 계정이 있으신가요?</Text>
               <Pressable onPress={() => router.replace('/(auth)/login')} hitSlop={8}>
@@ -546,6 +597,11 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 8,
   },
+  labelRequired: {
+    color: C.gold,
+    letterSpacing: 0.5,
+    textTransform: 'none',
+  },
   inputWrap: {
     borderWidth: 1.5,
     borderColor: C.border,
@@ -608,24 +664,6 @@ const styles = StyleSheet.create({
     marginTop: 'auto',
     paddingTop: 32,
     paddingBottom: 24,
-    gap: 16,
-  },
-  footerDivider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  footerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: C.border,
-  },
-  footerDiamond: {
-    width: 6,
-    height: 6,
-    borderWidth: 1,
-    borderColor: C.gold,
-    transform: [{ rotate: '45deg' }],
   },
   footerRow: {
     flexDirection: 'row',

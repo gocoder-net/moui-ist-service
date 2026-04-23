@@ -169,7 +169,7 @@ function getYesterday(): string {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { colors: C } = useThemeMode();
 
   const [hasExhibition, setHasExhibition] = useState(false);
@@ -179,6 +179,12 @@ export default function HomeScreen() {
   const [attendanceDay, setAttendanceDay] = useState(0); // 현재까지 출석한 일수 (0~7)
   const [checkedToday, setCheckedToday] = useState(false);
   const [checkingIn, setCheckingIn] = useState(false);
+
+  const heroSubtitle = profile?.user_type === 'aspiring'
+    ? '예술가가 되고 싶은 이를 위한 서비스'
+    : profile?.user_type === 'audience'
+      ? '작가와 감상자가 만나는\n창작 커뮤니티'
+      : '세상 모든 예술가를 위한 서비스';
 
   const checkProgress = useCallback(async () => {
     if (!user) return;
@@ -299,7 +305,7 @@ export default function HomeScreen() {
           <Text style={[styles.heroLogo, { color: C.fg }]}>
             MOUI<Text style={{ color: C.gold }}>-</Text>IST
           </Text>
-          <Text style={[styles.heroSub, { color: C.muted }]}>세상 모든 예술가를 위한 서비스</Text>
+          <Text style={[styles.heroSub, { color: C.muted }]}>{heroSubtitle}</Text>
         </Animated.View>
 
         {/* 퀵 액션 */}

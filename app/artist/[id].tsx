@@ -104,6 +104,17 @@ function snsIcon(key: string): string {
   return map[key.toLowerCase()] || '🔗';
 }
 
+const FIELD_ICON_MAP: Record<string, string> = {
+  글: '✍️',
+  그림: '🎨',
+  영상: '🎬',
+  소리: '🎵',
+  사진: '📷',
+  '입체/공간': '🗿',
+  '디지털/인터랙티브': '💻',
+  공연: '🎭',
+};
+
 /* ── Animated Counter ── */
 function AnimatedCounter({ to, duration = 1200, style }: { to: number; duration?: number; style?: any }) {
   const [display, setDisplay] = useState(0);
@@ -587,6 +598,12 @@ export default function ArtistPortfolioScreen() {
   const isOwner = user?.id === id;
   const artistName = profile.name ?? profile.username;
   const avatarInitial = artistName.trim().charAt(0).toUpperCase() || 'A';
+  const isCreator = profile.user_type === 'creator';
+  const isVerifiedCreator = !!(profile as any)?.verified;
+  const fieldItems = (profile.field ?? '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
 
   const openViewer = (artworkIndex: number) => {
     setViewerIndex(artworkIndex);
@@ -665,8 +682,37 @@ export default function ArtistPortfolioScreen() {
 
               <Text style={[styles.heroName, { color: C.fg }]}>{artistName}</Text>
 
-              {profile.field && (
-                <Text style={[styles.heroField, { color: C.gold }]}>{profile.field}</Text>
+              {isCreator && (
+                <View style={styles.heroBadgeRow}>
+                  <View style={[styles.heroBadge, styles.heroTypeBadge, { borderColor: C.gold }]}>
+                    <Text style={[styles.heroBadgeText, { color: C.gold }]}>작가</Text>
+                  </View>
+                  <View
+                    style={[
+                      styles.heroBadge,
+                      styles.heroVerifyBadge,
+                      {
+                        borderColor: isVerifiedCreator ? '#22c55e' : '#ff4d4f',
+                        backgroundColor: isVerifiedCreator ? 'rgba(34,197,94,0.1)' : 'rgba(255,77,79,0.1)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.heroBadgeText, { color: isVerifiedCreator ? '#22c55e' : '#ff4d4f' }]}>
+                      {isVerifiedCreator ? '인증' : '미인증'}
+                    </Text>
+                  </View>
+                </View>
+              )}
+
+              {fieldItems.length > 0 && (
+                <View style={styles.heroFieldRow}>
+                  {fieldItems.map((field) => (
+                    <View key={field} style={[styles.heroFieldChip, { borderColor: 'rgba(200,169,110,0.28)' }]}>
+                      <Text style={styles.heroFieldEmoji}>{FIELD_ICON_MAP[field] ?? '🎯'}</Text>
+                      <Text style={[styles.heroFieldChipText, { color: C.gold }]}>{field}</Text>
+                    </View>
+                  ))}
+                </View>
               )}
 
               <View style={styles.statsRow}>
@@ -703,9 +749,9 @@ export default function ArtistPortfolioScreen() {
         {/* ═══ BIO SECTION ═══ */}
         {profile.bio && (
           <Animated.View entering={FadeIn.delay(200).duration(500)} style={[styles.bioSection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-            <Text style={[styles.bioQuote, { color: C.gold }]}>"</Text>
+            <Text style={[styles.bioQuote, { color: C.gold }]}>{'"'}</Text>
             <Text style={[styles.bioText, { color: C.fg }]}>{profile.bio}</Text>
-            <Text style={[styles.bioQuote, { color: C.gold, alignSelf: 'flex-end' }]}>"</Text>
+            <Text style={[styles.bioQuote, { color: C.gold, alignSelf: 'flex-end' }]}>{'"'}</Text>
             <View style={[styles.bioDivider, { backgroundColor: C.gold }]} />
           </Animated.View>
         )}
@@ -898,11 +944,56 @@ const styles = StyleSheet.create({
     letterSpacing: 6,
     textAlign: 'center',
   },
-  heroField: {
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: 3,
-    textTransform: 'uppercase',
+  heroBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  heroBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  heroTypeBadge: {
+    backgroundColor: 'rgba(200,169,110,0.1)',
+  },
+  heroVerifyBadge: {
+    backgroundColor: 'rgba(255,77,79,0.1)',
+  },
+  heroBadgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  heroFieldRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  heroFieldChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: 'rgba(200,169,110,0.1)',
+  },
+  heroFieldEmoji: {
+    fontSize: 13,
+  },
+  heroFieldChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 
   /* Stats */

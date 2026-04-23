@@ -42,6 +42,19 @@ const C = {
 
 type UserType = 'creator' | 'aspiring' | 'audience';
 
+const FIELD_CATEGORIES = [
+  { key: '글', icon: '✍️' },
+  { key: '그림', icon: '🎨' },
+  { key: '영상', icon: '🎬' },
+  { key: '소리', icon: '🎵' },
+  { key: '사진', icon: '📷' },
+  { key: '입체/공간', icon: '🗿' },
+  { key: '디지털/인터랙티브', icon: '💻' },
+  { key: '공연', icon: '🎭' },
+] as const;
+
+const normalizePhoneNumber = (value: string) => value.replace(/\D/g, '').slice(0, 11);
+
 /* ── 배경 떠다니는 도형 ── */
 function FloatingShape({
   size,
@@ -263,8 +276,11 @@ export default function OnboardingScreen() {
   const [selected, setSelected] = useState<UserType | null>(null);
   const [displayName, setDisplayName] = useState('');
   const [realName, setRealName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const realNameRef = useRef<TextInput>(null);
+  const phoneRef = useRef<TextInput>(null);
 
   // 버튼 펄스
   const btnGlow = useSharedValue(0);
@@ -286,7 +302,28 @@ export default function OnboardingScreen() {
     }
   }, [user]);
 
-  const canProceed = step === 1 ? !!selected : !!displayName.trim() && !!realName.trim();
+  useEffect(() => {
+    const presetDisplayName = typeof user?.user_metadata?.name === 'string' ? user.user_metadata.name : '';
+    if (presetDisplayName && !displayName.trim()) {
+      setDisplayName(presetDisplayName);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    const presetPhoneNumber = typeof user?.user_metadata?.phone_number === 'string' ? user.user_metadata.phone_number : '';
+    if (presetPhoneNumber && !phoneNumber.trim()) {
+      setPhoneNumber(normalizePhoneNumber(presetPhoneNumber));
+    }
+  }, [user]);
+
+  const needsFieldSelection = selected === 'creator' || selected === 'aspiring';
+  const normalizedPhoneNumber = normalizePhoneNumber(phoneNumber);
+  const canProceed = step === 1
+    ? !!selected
+    : !!displayName.trim()
+      && !!realName.trim()
+      && normalizedPhoneNumber.length >= 9
+      && (!needsFieldSelection || selectedFields.length > 0);
 
   const btnGlowStyle = useAnimatedStyle(() => ({
     shadowOpacity: 0.15 + btnGlow.value * 0.15,
@@ -297,8 +334,15 @@ export default function OnboardingScreen() {
     if (step === 1 && selected) setStep(2);
   };
 
+  const toggleField = (key: string) => {
+    setSelectedFields((prev) =>
+      prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]
+    );
+  };
+
   const handleComplete = async () => {
-    if (!displayName.trim() || !realName.trim() || !selected || !user) return;
+    if (!displayName.trim() || !realName.trim() || normalizedPhoneNumber.length < 9 || !selected || !user) return;
+    if (needsFieldSelection && selectedFields.length === 0) return;
     setLoading(true);
     await supabase
       .from('profiles')
@@ -306,6 +350,8 @@ export default function OnboardingScreen() {
         user_type: selected,
         name: displayName.trim(),
         real_name: realName.trim(),
+        phone_number: normalizedPhoneNumber,
+        field: needsFieldSelection ? selectedFields.join(', ') : null,
       })
       .eq('id', user.id);
 
@@ -397,8 +443,8 @@ export default function OnboardingScreen() {
           {/* Step 2: 이름 입력 */}
           <Animated.View entering={FadeInDown.duration(400).springify()} style={styles.header}>
             <PlayfulDiamond />
-            <Text style={styles.title}>이름을 알려주세요</Text>
-            <Text style={styles.subtitle}>활동명은 프로필에 표시돼요</Text>
+            <Text style={styles.title}>기본 정보를 알려주세요</Text>
+            <Text style={styles.subtitle}>활동명은 프로필에 표시되고, 연락처는 공개되지 않아요</Text>
             <View style={styles.headerLine} />
           </Animated.View>
 
@@ -428,12 +474,55 @@ export default function OnboardingScreen() {
                 placeholderTextColor={C.mutedLight}
                 value={realName}
                 onChangeText={setRealName}
-                returnKeyType="done"
-                onSubmitEditing={handleComplete}
+                returnKeyType="next"
+                onSubmitEditing={() => phoneRef.current?.focus()}
                 maxLength={30}
               />
               <Text style={styles.inputHint}>본인인증을 위해 꼭 필요하며 외부에는 공개되지 않아요</Text>
             </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>전화번호 <Text style={styles.inputRequired}>(필수)</Text></Text>
+              <TextInput
+                ref={phoneRef}
+                style={styles.textInput}
+                placeholder="01012345678"
+                placeholderTextColor={C.mutedLight}
+                value={phoneNumber}
+                onChangeText={(value) => setPhoneNumber(normalizePhoneNumber(value))}
+                keyboardType="phone-pad"
+                autoComplete="tel"
+                returnKeyType="done"
+                onSubmitEditing={handleComplete}
+                maxLength={11}
+              />
+              <Text style={styles.inputHint}>하이픈 없이 입력해 주세요. 외부에는 공개되지 않아요</Text>
+            </View>
+
+            {needsFieldSelection && (
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>분야 <Text style={styles.inputRequired}>(필수)</Text></Text>
+                <View style={styles.chipGrid}>
+                  {FIELD_CATEGORIES.map((cat) => {
+                    const selectedField = selectedFields.includes(cat.key);
+                    return (
+                      <Pressable
+                        key={cat.key}
+                        onPress={() => toggleField(cat.key)}
+                        style={[
+                          styles.chip,
+                          selectedField && styles.chipSelected,
+                        ]}
+                      >
+                        <Text style={styles.chipIcon}>{cat.icon}</Text>
+                        <Text style={[styles.chipText, selectedField && styles.chipTextSelected]}>{cat.key}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Text style={styles.inputHint}>작가와 지망생은 최소 1개의 분야 선택이 꼭 필요해요</Text>
+              </View>
+            )}
           </Animated.View>
 
           <View style={{ flex: 1 }} />
@@ -693,6 +782,37 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: C.muted,
     marginLeft: 4,
+  },
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 999,
+    backgroundColor: C.inputBg,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  chipSelected: {
+    borderColor: C.gold,
+    backgroundColor: 'rgba(200,169,110,0.12)',
+  },
+  chipIcon: {
+    fontSize: 16,
+  },
+  chipText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: C.muted,
+  },
+  chipTextSelected: {
+    color: C.gold,
   },
 
   backBtn: {

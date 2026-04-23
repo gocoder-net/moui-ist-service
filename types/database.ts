@@ -16,6 +16,7 @@ export type Database = {
           user_type: "creator" | "aspiring" | "audience";
           name: string | null;
           real_name: string | null;
+          phone_number: string | null;
           bio: string | null;
           field: string | null;
           sns_links: Json;
@@ -30,6 +31,7 @@ export type Database = {
           user_type?: "creator" | "aspiring" | "audience";
           name?: string | null;
           real_name?: string | null;
+          phone_number?: string | null;
           bio?: string | null;
           field?: string | null;
           sns_links?: Json;
@@ -40,6 +42,7 @@ export type Database = {
           user_type?: "creator" | "aspiring" | "audience";
           name?: string | null;
           real_name?: string | null;
+          phone_number?: string | null;
           bio?: string | null;
           field?: string | null;
           sns_links?: Json;
