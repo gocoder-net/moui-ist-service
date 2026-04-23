@@ -33,13 +33,7 @@ function RootNavigator() {
       if (!inAuthGroup && !inPublic) {
         router.replace('/(auth)');
       }
-    } else if (!profile?.user_type || profile.user_type === 'audience') {
-      if (profile && !profile.name && !inOnboarding) {
-        router.replace('/(onboarding)');
-      } else if (profile && profile.name && (inAuthGroup || inOnboarding)) {
-        router.replace('/(tabs)');
-      }
-    } else if (profile?.user_type === 'creator') {
+    } else if (profile) {
       if (!profile.name && !inOnboarding) {
         router.replace('/(onboarding)');
       } else if (profile.name && (inAuthGroup || inOnboarding)) {
