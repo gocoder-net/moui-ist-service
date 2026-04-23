@@ -6,10 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { Brand } from '@/constants/theme';
+import { useThemeMode } from '@/contexts/theme-context';
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
   const insets = useSafeAreaInsets();
+  const { mode, colors: C } = useThemeMode();
   const paddingBottom = Math.max(insets.bottom, 8);
 
   const content = (
@@ -17,7 +18,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
       {state.routes.map((route: any, index: number) => {
         const { options } = descriptors[route.key];
         const isFocused = state.index === index;
-        const color = isFocused ? Brand.gold : '#6b7280';
+        const color = isFocused ? C.gold : C.mutedLight;
 
         const onPress = () => {
           const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
@@ -37,7 +38,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
           >
             {options.tabBarIcon?.({ color, focused: isFocused, size: 22 })}
             <Text style={[styles.tabLabel, { color }]}>{options.title ?? route.name}</Text>
-            {isFocused && <View style={styles.activeDot} />}
+            {isFocused && <View style={[styles.activeDot, { backgroundColor: C.gold }]} />}
           </Pressable>
         );
       })}
@@ -47,14 +48,16 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
   if (Platform.OS === 'web') {
     return (
       <View style={styles.wrapper}>
-        <View style={styles.blurFallback}>{content}</View>
+        <View style={[styles.blurFallback, {
+          backgroundColor: mode === 'dark' ? 'rgba(25, 31, 40, 0.85)' : 'rgba(245, 246, 248, 0.85)',
+        }]}>{content}</View>
       </View>
     );
   }
 
   return (
     <View style={styles.wrapper}>
-      <BlurView intensity={60} tint="dark" style={styles.blur}>
+      <BlurView intensity={60} tint={mode === 'dark' ? 'dark' : 'light'} style={styles.blur}>
         {content}
       </BlurView>
     </View>
@@ -74,6 +77,13 @@ export default function TabLayout() {
         options={{
           title: '홈',
           tabBarIcon: ({ color }) => <IconSymbol size={22} name="house.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="moui"
+        options={{
+          title: '작당모의',
+          tabBarIcon: ({ color }) => <IconSymbol size={22} name="bubble.left.and.bubble.right.fill" color={color} />,
         }}
       />
       <Tabs.Screen
@@ -105,7 +115,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   blurFallback: {
-    backgroundColor: 'rgba(25, 31, 40, 0.85)',
     backdropFilter: 'blur(20px)',
   } as any,
   tabRow: {
@@ -129,7 +138,6 @@ const styles = StyleSheet.create({
     width: 4,
     height: 4,
     borderRadius: 2,
-    backgroundColor: Brand.gold,
     marginTop: 2,
   },
 });

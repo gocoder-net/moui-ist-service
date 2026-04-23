@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
+import { spendPoints } from '@/lib/points';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -33,7 +34,7 @@ export default function CreateExhibitionScreen() {
   const insets = useSafeAreaInsets();
   const { width: screenWidth } = useWindowDimensions();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
   const { editId } = useLocalSearchParams<{ editId?: string }>();
   const isEditMode = !!editId;
 
@@ -174,36 +175,68 @@ export default function CreateExhibitionScreen() {
   const editorWidth = screenWidth - 48;
   const room = ROOM_TEMPLATES[roomType];
 
-  // 벽면 에디터에서 터치 → 이미지 피커 → 배치
-  const handlePlaceArtwork = async (wall: Wall, posXcm: number, posYcm: number) => {
-    // NaN 방어
+  // 벽면 에디터에서 터치 → 포트폴리오 피커 열기
+  const handlePlaceArtwork = (wall: Wall, posXcm: number, posYcm: number) => {
     const safeX = isNaN(posXcm) ? 300 : posXcm;
     const safeY = isNaN(posYcm) ? 150 : posYcm;
+    setPendingPlacement({ wall, posXcm: safeX, posYcm: safeY });
+    setPortfolioPickerVisible(true);
+  };
+
+  // 포트폴리오 작품 선택 시 배치
+  const handleSelectPortfolioArtwork = (pa: PortfolioArtwork) => {
+    if (!pendingPlacement) return;
+    const { wall, posXcm, posYcm } = pendingPlacement;
+
+    const wallH = room.height;
+    const baseHeight = Math.round(wallH * 0.4);
+    let artW = pa.width_cm ?? baseHeight;
+    let artH = pa.height_cm ?? baseHeight;
+
+    // 벽에 맞게 스케일
+    const scale = baseHeight / Math.max(artW, artH);
+    if (scale < 1) {
+      artW = Math.round(artW * scale);
+      artH = Math.round(artH * scale);
+    }
+    artW = Math.max(20, Math.min(artW, 300));
+    artH = Math.max(20, Math.min(artH, 300));
+
+    const newArt: PlacedArtwork = {
+      localId: Date.now().toString(),
+      uri: pa.image_url,
+      title: pa.title,
+      year: pa.year ?? undefined,
+      medium: pa.medium ?? undefined,
+      edition: pa.edition ?? undefined,
+      description: pa.description ?? undefined,
+      wall,
+      positionX: posXcm,
+      positionY: posYcm,
+      widthCm: artW,
+      heightCm: artH,
+      existingImageUrl: pa.image_url,
+    };
+    setArtworks(prev => [...prev, newArt]);
+    setSelectedArtworkId(newArt.localId);
+    setPortfolioPickerVisible(false);
+    setPendingPlacement(null);
+  };
+
+  // 기기에서 직접 이미지 선택 (폴백)
+  const handlePickFromDevice = async () => {
+    if (!pendingPlacement) return;
+    const { wall, posXcm, posYcm } = pendingPlacement;
 
     const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.8 });
     if (!result.canceled && result.assets[0]) {
       const asset = result.assets[0];
-      const imgW = asset.width || 1;
-      const imgH = asset.height || 1;
-      const aspect = imgW / imgH;
-
-      // 벽 높이의 ~40%를 기준 높이로 잡고, 비율에 맞게 계산
+      const aspect = (asset.width || 1) / (asset.height || 1);
       const wallH = room.height;
       const baseHeight = Math.round(wallH * 0.4);
-      let artH: number;
-      let artW: number;
-
-      if (aspect >= 1) {
-        // 가로가 긴 이미지: 너비 기준
-        artW = Math.round(baseHeight * aspect);
-        artH = baseHeight;
-      } else {
-        // 세로가 긴 이미지: 높이 기준
-        artH = baseHeight;
-        artW = Math.round(baseHeight * aspect);
-      }
-
-      // 너무 크거나 작지 않게 클램프
+      let artW: number, artH: number;
+      if (aspect >= 1) { artW = Math.round(baseHeight * aspect); artH = baseHeight; }
+      else { artH = baseHeight; artW = Math.round(baseHeight * aspect); }
       artW = Math.max(20, Math.min(artW, 300));
       artH = Math.max(20, Math.min(artH, 300));
 
@@ -212,14 +245,16 @@ export default function CreateExhibitionScreen() {
         uri: asset.uri,
         title: `작품 ${artworks.length + 1}`,
         wall,
-        positionX: safeX,
-        positionY: safeY,
+        positionX: posXcm,
+        positionY: posYcm,
         widthCm: artW,
         heightCm: artH,
       };
       setArtworks(prev => [...prev, newArt]);
       setSelectedArtworkId(newArt.localId);
     }
+    setPortfolioPickerVisible(false);
+    setPendingPlacement(null);
   };
 
   const pickAngleImage = async (angle: 'top' | 'bottom' | 'left' | 'right') => {
@@ -259,6 +294,16 @@ export default function CreateExhibitionScreen() {
 
     setLoading(true);
     try {
+      // 새 전시관 생성 시 50모의 차감
+      if (!isEditMode) {
+        const { error: pointErr } = await spendPoints(user.id, 50, '전시관 만들기');
+        if (pointErr) {
+          Alert.alert('모의 부족', pointErr);
+          setLoading(false);
+          return;
+        }
+      }
+
       const uploadImage = async (uri: string): Promise<string | null> => {
         // 이미 업로드된 URL이면 그대로 반환
         if (isExistingUrl(uri)) return uri;
@@ -399,6 +444,7 @@ export default function CreateExhibitionScreen() {
         });
       }
 
+      if (!isEditMode) await refreshProfile();
       setLoading(false);
       router.replace(`/exhibition/${exhibitionId}`);
     } catch (e: any) {
@@ -1029,9 +1075,151 @@ export default function CreateExhibitionScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
       )}
+      {/* 포트폴리오 피커 모달 */}
+      <Modal
+        visible={portfolioPickerVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { setPortfolioPickerVisible(false); setPendingPlacement(null); }}
+      >
+        <View style={pickerStyles.overlay}>
+          <View style={[pickerStyles.sheet, { paddingBottom: insets.bottom + 16 }]}>
+            <View style={pickerStyles.header}>
+              <Text style={pickerStyles.headerTitle}>작품 선택</Text>
+              <Pressable onPress={() => { setPortfolioPickerVisible(false); setPendingPlacement(null); }}>
+                <Text style={pickerStyles.headerClose}>✕</Text>
+              </Pressable>
+            </View>
+
+            {portfolioArtworks.length > 0 ? (
+              <FlatList
+                data={portfolioArtworks}
+                keyExtractor={(item) => item.id}
+                numColumns={3}
+                contentContainerStyle={pickerStyles.grid}
+                columnWrapperStyle={{ gap: 8 }}
+                renderItem={({ item }) => (
+                  <Pressable
+                    style={({ pressed }) => [pickerStyles.artItem, pressed && { opacity: 0.7 }]}
+                    onPress={() => handleSelectPortfolioArtwork(item)}
+                  >
+                    <Image source={{ uri: item.image_url }} style={pickerStyles.artImage} contentFit="cover" />
+                    <Text style={pickerStyles.artTitle} numberOfLines={1}>{item.title}</Text>
+                  </Pressable>
+                )}
+              />
+            ) : (
+              <View style={pickerStyles.empty}>
+                <Text style={pickerStyles.emptyText}>포트폴리오에 등록된 작품이 없습니다</Text>
+                <Pressable
+                  style={pickerStyles.emptyBtn}
+                  onPress={() => { setPortfolioPickerVisible(false); setPendingPlacement(null); router.push('/artwork/create'); }}
+                >
+                  <Text style={pickerStyles.emptyBtnText}>작품 업로드하기</Text>
+                </Pressable>
+              </View>
+            )}
+
+            <Pressable
+              style={({ pressed }) => [pickerStyles.deviceBtn, pressed && { opacity: 0.7 }]}
+              onPress={handlePickFromDevice}
+            >
+              <Text style={pickerStyles.deviceBtnText}>기기에서 직접 선택</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+const pickerStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#212a35',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '75%',
+    paddingTop: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#f2f4f6',
+  },
+  headerClose: {
+    fontSize: 18,
+    color: '#8b95a1',
+    padding: 4,
+  },
+  grid: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  artItem: {
+    flex: 1,
+    maxWidth: '33%',
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#191f28',
+  },
+  artImage: {
+    width: '100%',
+    aspectRatio: 1,
+  },
+  artTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#f2f4f6',
+    padding: 6,
+  },
+  empty: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 16,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#8b95a1',
+  },
+  emptyBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#C8A96E',
+  },
+  emptyBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#C8A96E',
+  },
+  deviceBtn: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333d4b',
+    alignItems: 'center',
+  },
+  deviceBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#8b95a1',
+  },
+});
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },

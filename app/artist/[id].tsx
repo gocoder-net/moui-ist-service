@@ -10,12 +10,14 @@ import {
   useWindowDimensions,
   Modal,
   FlatList,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useThemeMode } from '@/contexts/theme-context';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -42,16 +44,6 @@ type Artwork = Database['public']['Tables']['artworks']['Row'];
 const MAX_CONTENT_W = 680;
 const MAX_HERO_H = 320;
 
-const C = {
-  bg: '#191f28',
-  fg: '#f2f4f6',
-  gold: '#C8A96E',
-  goldLight: '#E0C992',
-  muted: '#8b95a1',
-  mutedLight: '#4e5968',
-  border: '#333d4b',
-};
-
 const Fonts = {
   serif: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
 };
@@ -66,6 +58,7 @@ const TAB_ITEMS = [
 function BottomTabBar() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { mode, colors: C } = useThemeMode();
   const paddingBottom = Math.max(insets.bottom, 8);
 
   const content = (
@@ -76,8 +69,8 @@ function BottomTabBar() {
           onPress={() => router.replace(tab.name as any)}
           style={({ pressed }) => [tabStyles.tab, pressed && { opacity: 0.6 }]}
         >
-          <IconSymbol size={22} name={tab.icon} color="#6b7280" />
-          <Text style={tabStyles.tabLabel}>{tab.label}</Text>
+          <IconSymbol size={22} name={tab.icon} color={C.mutedLight} />
+          <Text style={[tabStyles.tabLabel, { color: C.mutedLight }]}>{tab.label}</Text>
         </Pressable>
       ))}
     </View>
@@ -86,14 +79,16 @@ function BottomTabBar() {
   if (Platform.OS === 'web') {
     return (
       <View style={tabStyles.wrapper}>
-        <View style={tabStyles.blurFallback}>{content}</View>
+        <View style={[tabStyles.blurFallback, {
+          backgroundColor: mode === 'dark' ? 'rgba(25, 31, 40, 0.85)' : 'rgba(245, 246, 248, 0.85)',
+        }]}>{content}</View>
       </View>
     );
   }
 
   return (
     <View style={tabStyles.wrapper}>
-      <BlurView intensity={60} tint="dark" style={tabStyles.blur}>
+      <BlurView intensity={60} tint={mode === 'dark' ? 'dark' : 'light'} style={tabStyles.blur}>
         {content}
       </BlurView>
     </View>
@@ -118,13 +113,12 @@ function AnimatedCounter({ to, duration = 1200, style }: { to: number; duration?
     val.value = 0;
     val.value = withTiming(to, { duration, easing: Easing.out(Easing.cubic) });
 
-    // Poll the shared value to update display
     let frame: any;
     const start = Date.now();
     const tick = () => {
       const elapsed = Date.now() - start;
       const progress = Math.min(elapsed / duration, 1);
-      const eased = 1 - Math.pow(1 - progress, 3); // cubic ease out
+      const eased = 1 - Math.pow(1 - progress, 3);
       setDisplay(Math.round(eased * to));
       if (progress < 1) frame = requestAnimationFrame(tick);
     };
@@ -146,6 +140,7 @@ function ArtworkCard({
   cardH,
   viewH,
   onPress,
+  C,
 }: {
   artwork: Artwork;
   index: number;
@@ -156,6 +151,7 @@ function ArtworkCard({
   cardH: number;
   viewH: number;
   onPress: () => void;
+  C: any;
 }) {
   const scaleVal = useSharedValue(1);
 
@@ -197,7 +193,7 @@ function ArtworkCard({
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
         >
-          <View style={[styles.artCard, { height: cardH }]}>
+          <View style={[styles.artCard, { height: cardH, backgroundColor: C.card }]}>
             <Animated.View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }, parallaxStyle]}>
               <Image
                 source={{ uri: artwork.image_url }}
@@ -205,13 +201,11 @@ function ArtworkCard({
                 resizeMode="cover"
               />
             </Animated.View>
-            {/* gradient overlay */}
             <LinearGradient
               colors={['transparent', 'rgba(25,31,40,0.0)', 'rgba(25,31,40,0.7)', 'rgba(25,31,40,0.92)']}
               locations={[0, 0.35, 0.7, 1]}
               style={styles.artGradient}
             />
-            {/* metadata */}
             <View style={styles.artOverlay}>
               <Text style={styles.artTitle} numberOfLines={1}>{artwork.title}</Text>
               {(artwork.year || artwork.medium) && (
@@ -236,11 +230,17 @@ function ArtworkViewer({
   artworks,
   initialIndex,
   onClose,
+  isOwner,
+  onEdit,
+  onDelete,
 }: {
   visible: boolean;
   artworks: Artwork[];
   initialIndex: number;
   onClose: () => void;
+  isOwner?: boolean;
+  onEdit?: (artwork: Artwork) => void;
+  onDelete?: (artwork: Artwork) => void;
 }) {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -254,6 +254,27 @@ function ArtworkViewer({
   if (!visible) return null;
 
   const artwork = artworks[currentIndex];
+
+  const handleDelete = () => {
+    if (!artwork) return;
+    if (Platform.OS === 'web') {
+      if (window.confirm('이 작품을 삭제하시겠습니까?\n삭제된 작품은 복구할 수 없습니다.')) {
+        onDelete?.(artwork);
+      }
+    } else {
+      Alert.alert('작품 삭제', '이 작품을 삭제하시겠습니까?\n삭제된 작품은 복구할 수 없습니다.', [
+        { text: '취소', style: 'cancel' },
+        { text: '삭제', style: 'destructive', onPress: () => onDelete?.(artwork) },
+      ]);
+    }
+  };
+
+  const handleScroll = (e: any) => {
+    const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
+    if (idx !== currentIndex && idx >= 0 && idx < artworks.length) {
+      setCurrentIndex(idx);
+    }
+  };
 
   return (
     <Modal
@@ -281,10 +302,8 @@ function ArtworkViewer({
           showsHorizontalScrollIndicator={false}
           initialScrollIndex={initialIndex}
           getItemLayout={(_, i) => ({ length: screenW, offset: screenW * i, index: i })}
-          onMomentumScrollEnd={(e) => {
-            const idx = Math.round(e.nativeEvent.contentOffset.x / screenW);
-            setCurrentIndex(idx);
-          }}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <View style={{ width: screenW, height: screenH, justifyContent: 'center', alignItems: 'center' }}>
@@ -301,18 +320,41 @@ function ArtworkViewer({
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.85)']}
           style={[styles.viewerBottom, { paddingBottom: insets.bottom + 24 }]}
-          pointerEvents="none"
+          pointerEvents="box-none"
         >
-          <Text style={styles.viewerTitle}>{artwork?.title}</Text>
-          {(artwork?.year || artwork?.medium) && (
-            <Text style={styles.viewerMeta}>
-              {[artwork?.year, artwork?.medium].filter(Boolean).join(' · ')}
-            </Text>
-          )}
-          {artwork?.width_cm && artwork?.height_cm && (
-            <Text style={styles.viewerSize}>{artwork.width_cm} × {artwork.height_cm} cm</Text>
-          )}
-          {/* pagination dots */}
+          <View style={styles.viewerInfoRow}>
+            <View style={styles.viewerInfoLeft}>
+              <Text style={styles.viewerTitle}>{artwork?.title}</Text>
+              {(artwork?.year || artwork?.medium) && (
+                <Text style={styles.viewerMeta}>
+                  {[artwork?.year, artwork?.medium].filter(Boolean).join(' · ')}
+                </Text>
+              )}
+              {artwork?.width_cm && artwork?.height_cm && (
+                <Text style={styles.viewerSize}>{artwork.width_cm} × {artwork.height_cm} cm</Text>
+              )}
+            </View>
+
+            {/* Owner action buttons - small, bottom-right */}
+            {isOwner && artwork && (
+              <View style={styles.viewerActions}>
+                <Pressable
+                  style={({ pressed }) => [styles.viewerEditBtn, pressed && { opacity: 0.7 }]}
+                  onPress={() => onEdit?.(artwork)}
+                >
+                  <Text style={styles.viewerEditText}>수정</Text>
+                </Pressable>
+                <Pressable
+                  style={({ pressed }) => [styles.viewerDeleteBtn, pressed && { opacity: 0.7 }]}
+                  onPress={handleDelete}
+                >
+                  <Text style={styles.viewerDeleteText}>삭제</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+
+          {/* pagination */}
           {artworks.length > 1 && (
             <View style={styles.viewerDots}>
               <Text style={styles.viewerCounter}>
@@ -332,6 +374,7 @@ export default function ArtistPortfolioScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const { colors: C } = useThemeMode();
   const { width: screenW, height: screenH } = useWindowDimensions();
 
   const heroH = Math.min(screenH * 0.4, MAX_HERO_H);
@@ -431,9 +474,9 @@ export default function ArtistPortfolioScreen() {
 
   if (loading) {
     return (
-      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg }]}>
         <Animated.View style={diamondSpinStyle}>
-          <View style={styles.loadingDiamond} />
+          <View style={[styles.loadingDiamond, { borderColor: C.gold }]} />
         </Animated.View>
         <Text style={{ color: C.muted, marginTop: 16, letterSpacing: 2, fontSize: 12 }}>LOADING</Text>
       </View>
@@ -442,7 +485,7 @@ export default function ArtistPortfolioScreen() {
 
   if (!profile) {
     return (
-      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center' }]}>
+      <View style={[styles.root, { justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg }]}>
         <Text style={{ color: C.muted, fontSize: 16 }}>작가를 찾을 수 없습니다</Text>
         <Pressable onPress={() => router.back()} style={{ marginTop: 20 }}>
           <Text style={{ color: C.gold }}>돌아가기</Text>
@@ -460,9 +503,7 @@ export default function ArtistPortfolioScreen() {
   const galleryStartY = heroH + (profile?.bio ? 200 : 0) + 50;
 
   const rows: any[] = [];
-  let artworkIndexMap: number[] = []; // maps row artwork to global index
   let cumulativeY = galleryStartY;
-  let globalIdx = 0;
   for (let i = 0; i < artworks.length; ) {
     const cyclePos = i % 3;
     if (cyclePos === 0) {
@@ -481,19 +522,38 @@ export default function ArtistPortfolioScreen() {
     }
   }
 
+  const isOwner = user?.id === id;
+
   const openViewer = (artworkIndex: number) => {
     setViewerIndex(artworkIndex);
     setViewerVisible(true);
   };
 
+  const handleEditArtwork = (artwork: Artwork) => {
+    setViewerVisible(false);
+    router.push(`/artwork/create?artworkId=${artwork.id}`);
+  };
+
+  const handleDeleteArtwork = async (artwork: Artwork) => {
+    if (artwork.image_url) {
+      const parts = artwork.image_url.split('/artworks/');
+      if (parts[1]) {
+        await supabase.storage.from('artworks').remove([decodeURIComponent(parts[1])]);
+      }
+    }
+    await supabase.from('artworks').delete().eq('id', artwork.id);
+    setArtworks(prev => prev.filter(a => a.id !== artwork.id));
+    setViewerVisible(false);
+  };
+
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: C.bg }]}>
       {/* Back button */}
       <Pressable
-        style={[styles.backBtn, { top: insets.top + 8 }]}
+        style={[styles.backBtn, { top: insets.top + 8, borderColor: C.border }]}
         onPress={() => router.back()}
       >
-        <Text style={styles.backText}>←</Text>
+        <Text style={[styles.backText, { color: C.fg }]}>←</Text>
       </Pressable>
 
       <Animated.ScrollView
@@ -513,7 +573,6 @@ export default function ArtistPortfolioScreen() {
               />
             </Animated.View>
           )}
-          {/* gradient overlay */}
           <LinearGradient
             colors={['rgba(25,31,40,0.3)', 'rgba(25,31,40,0.65)', 'rgba(25,31,40,0.95)']}
             locations={[0, 0.5, 1]}
@@ -521,46 +580,43 @@ export default function ArtistPortfolioScreen() {
           />
 
           <Animated.View style={[styles.heroContent, heroContentStyle]}>
-            {/* diamond */}
-            <Animated.View style={[styles.heroDiamond, diamondSpinStyle]} />
+            <Animated.View style={[styles.heroDiamond, { borderColor: C.gold }, diamondSpinStyle]} />
 
-            <Text style={styles.heroName}>{profile.name ?? profile.username}</Text>
+            <Text style={[styles.heroName, { color: C.fg }]}>{profile.name ?? profile.username}</Text>
 
             {profile.field && (
-              <Text style={styles.heroField}>{profile.field}</Text>
+              <Text style={[styles.heroField, { color: C.gold }]}>{profile.field}</Text>
             )}
 
-            {/* diamond divider */}
             <View style={styles.heroDividerRow}>
-              <View style={styles.heroDividerLine} />
-              <View style={styles.heroDividerDiamond} />
-              <View style={styles.heroDividerLine} />
+              <View style={[styles.heroDividerLine, { backgroundColor: C.gold }]} />
+              <View style={[styles.heroDividerDiamond, { borderColor: C.gold }]} />
+              <View style={[styles.heroDividerLine, { backgroundColor: C.gold }]} />
             </View>
 
-            {/* stats row */}
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
-                <AnimatedCounter to={artworks.length} style={styles.statNumber} />
-                <Text style={styles.statLabel}>작품</Text>
+                <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: C.fg }]} />
+                <Text style={[styles.statLabel, { color: C.muted }]}>작품</Text>
               </View>
-              <View style={styles.statDot} />
+              <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
               <View style={styles.statItem}>
-                <AnimatedCounter to={followerCount} style={styles.statNumber} />
-                <Text style={styles.statLabel}>팔로워</Text>
+                <AnimatedCounter to={followerCount} style={[styles.statNumber, { color: C.fg }]} />
+                <Text style={[styles.statLabel, { color: C.muted }]}>팔로워</Text>
               </View>
             </View>
 
-            {/* follow button */}
             {user?.id && user.id !== id && (
               <Pressable
                 style={({ pressed }) => [
                   styles.followBtn,
-                  isFollowing && styles.followBtnActive,
+                  { borderColor: C.gold },
+                  isFollowing && { backgroundColor: C.gold },
                   pressed && { opacity: 0.8 },
                 ]}
                 onPress={toggleFollow}
               >
-                <Text style={[styles.followBtnText, isFollowing && styles.followBtnTextActive]}>
+                <Text style={[styles.followBtnText, { color: C.gold }, isFollowing && { color: C.bg }]}>
                   {isFollowing ? '팔로잉' : '팔로우'}
                 </Text>
               </Pressable>
@@ -571,18 +627,18 @@ export default function ArtistPortfolioScreen() {
         {/* ═══ BIO SECTION ═══ */}
         {profile.bio && (
           <Animated.View entering={FadeIn.delay(200).duration(500)} style={[styles.bioSection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-            <Text style={styles.bioQuote}>"</Text>
-            <Text style={styles.bioText}>{profile.bio}</Text>
-            <Text style={[styles.bioQuote, { alignSelf: 'flex-end' }]}>"</Text>
-            <View style={styles.bioDivider} />
+            <Text style={[styles.bioQuote, { color: C.gold }]}>"</Text>
+            <Text style={[styles.bioText, { color: C.fg }]}>{profile.bio}</Text>
+            <Text style={[styles.bioQuote, { color: C.gold, alignSelf: 'flex-end' }]}>"</Text>
+            <View style={[styles.bioDivider, { backgroundColor: C.gold }]} />
           </Animated.View>
         )}
 
         {/* ═══ GALLERY SECTION ═══ */}
         {artworks.length > 0 ? (
           <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-            <Text style={styles.sectionLabel}>WORKS</Text>
-            <View style={styles.sectionLabelLine} />
+            <Text style={[styles.sectionLabel, { color: C.muted }]}>WORKS</Text>
+            <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
 
             {rows.map((row: any, idx: number) => {
               if (row.type === 'hero') {
@@ -598,6 +654,7 @@ export default function ArtistPortfolioScreen() {
                     cardH={heroCardH}
                     viewH={screenH}
                     onPress={() => openViewer(row.globalIdx)}
+                    C={C}
                   />
                 );
               }
@@ -615,6 +672,7 @@ export default function ArtistPortfolioScreen() {
                       cardH={gridCardH}
                       viewH={screenH}
                       onPress={() => openViewer(row.globalIdx + gi)}
+                      C={C}
                     />
                   ))}
                 </View>
@@ -623,25 +681,25 @@ export default function ArtistPortfolioScreen() {
           </View>
         ) : (
           <View style={styles.emptySection}>
-            <View style={styles.emptyDiamond} />
-            <Text style={styles.emptyText}>아직 등록된 작품이 없습니다</Text>
+            <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
+            <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 작품이 없습니다</Text>
           </View>
         )}
 
         {/* ═══ SNS / CONTACT SECTION ═══ */}
         {snsEntries.length > 0 && (
           <View style={[styles.snsSection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-            <Text style={styles.sectionLabel}>CONTACT</Text>
-            <View style={styles.sectionLabelLine} />
+            <Text style={[styles.sectionLabel, { color: C.muted }]}>CONTACT</Text>
+            <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
             {snsEntries.map(([key, url]) => (
               <Pressable
                 key={key}
-                style={styles.snsRow}
+                style={[styles.snsRow, { borderBottomColor: C.border }]}
                 onPress={() => Linking.openURL(url)}
               >
                 <Text style={styles.snsIcon}>{snsIcon(key)}</Text>
-                <Text style={styles.snsKey}>{key}</Text>
-                <Text style={styles.snsArrow}>→</Text>
+                <Text style={[styles.snsKey, { color: C.fg }]}>{key}</Text>
+                <Text style={[styles.snsArrow, { color: C.gold }]}>→</Text>
               </Pressable>
             ))}
           </View>
@@ -649,8 +707,8 @@ export default function ArtistPortfolioScreen() {
 
         {/* footer */}
         <View style={styles.footer}>
-          <View style={styles.footerDiamond} />
-          <Text style={styles.footerText}>MOUI-IST</Text>
+          <View style={[styles.footerDiamond, { borderColor: C.gold }]} />
+          <Text style={[styles.footerText, { color: C.mutedLight }]}>MOUI-IST</Text>
         </View>
       </Animated.ScrollView>
 
@@ -663,6 +721,9 @@ export default function ArtistPortfolioScreen() {
         artworks={artworks}
         initialIndex={viewerIndex}
         onClose={() => setViewerVisible(false)}
+        isOwner={isOwner}
+        onEdit={handleEditArtwork}
+        onDelete={handleDeleteArtwork}
       />
     </View>
   );
@@ -671,7 +732,6 @@ export default function ArtistPortfolioScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: C.bg,
   },
 
   /* Back button */
@@ -686,10 +746,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: C.border,
   },
   backText: {
-    color: C.fg,
     fontSize: 20,
     fontWeight: '300',
   },
@@ -709,20 +767,17 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderWidth: 1.5,
-    borderColor: C.gold,
     marginBottom: 8,
   },
   heroName: {
     fontSize: 28,
     fontWeight: '900',
-    color: C.fg,
     letterSpacing: 6,
     textAlign: 'center',
   },
   heroField: {
     fontSize: 14,
     fontWeight: '600',
-    color: C.gold,
     letterSpacing: 3,
     textTransform: 'uppercase',
   },
@@ -735,13 +790,11 @@ const styles = StyleSheet.create({
   heroDividerLine: {
     width: 40,
     height: 1,
-    backgroundColor: C.gold,
   },
   heroDividerDiamond: {
     width: 6,
     height: 6,
     borderWidth: 1,
-    borderColor: C.gold,
     transform: [{ rotate: '45deg' }],
   },
 
@@ -759,19 +812,16 @@ const styles = StyleSheet.create({
   statNumber: {
     fontSize: 20,
     fontWeight: '900',
-    color: C.fg,
     letterSpacing: 1,
   },
   statLabel: {
     fontSize: 11,
-    color: C.muted,
     letterSpacing: 1,
   },
   statDot: {
     width: 3,
     height: 3,
     borderRadius: 1.5,
-    backgroundColor: C.mutedLight,
   },
 
   /* Follow */
@@ -780,20 +830,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 24,
     borderWidth: 1,
-    borderColor: C.gold,
     marginTop: 4,
-  },
-  followBtnActive: {
-    backgroundColor: C.gold,
   },
   followBtnText: {
     fontSize: 13,
     fontWeight: '700',
-    color: C.gold,
     letterSpacing: 1,
-  },
-  followBtnTextActive: {
-    color: C.bg,
   },
 
   /* Bio */
@@ -803,14 +845,12 @@ const styles = StyleSheet.create({
   },
   bioQuote: {
     fontSize: 48,
-    color: C.gold,
     fontFamily: Fonts.serif,
     lineHeight: 48,
     opacity: 0.5,
   },
   bioText: {
     fontSize: 18,
-    color: C.fg,
     fontFamily: Fonts.serif,
     lineHeight: 32,
     letterSpacing: 0.5,
@@ -819,7 +859,6 @@ const styles = StyleSheet.create({
   bioDivider: {
     width: 40,
     height: 1,
-    backgroundColor: C.gold,
     alignSelf: 'center',
     marginTop: 32,
   },
@@ -832,14 +871,12 @@ const styles = StyleSheet.create({
   sectionLabel: {
     fontSize: 11,
     fontWeight: '800',
-    color: C.muted,
     letterSpacing: 4,
     marginBottom: 8,
   },
   sectionLabelLine: {
     width: 24,
     height: 1,
-    backgroundColor: C.gold,
     marginBottom: 24,
   },
   gridRow: {
@@ -849,7 +886,6 @@ const styles = StyleSheet.create({
   artCard: {
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#212a35',
   },
   artGradient: {
     position: 'absolute',
@@ -872,7 +908,7 @@ const styles = StyleSheet.create({
   artTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: C.fg,
+    color: '#f2f4f6',
     letterSpacing: 0.5,
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
@@ -899,12 +935,10 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderWidth: 1,
-    borderColor: C.gold,
     transform: [{ rotate: '45deg' }],
   },
   emptyText: {
     fontSize: 14,
-    color: C.muted,
     letterSpacing: 1,
   },
 
@@ -918,7 +952,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: C.border,
     gap: 12,
   },
   snsIcon: { fontSize: 18 },
@@ -926,13 +959,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     fontWeight: '600',
-    color: C.fg,
     letterSpacing: 1,
     textTransform: 'capitalize',
   },
   snsArrow: {
     fontSize: 16,
-    color: C.gold,
   },
 
   /* Footer */
@@ -945,13 +976,11 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderWidth: 1,
-    borderColor: C.gold,
     transform: [{ rotate: '45deg' }],
   },
   footerText: {
     fontSize: 10,
     fontWeight: '800',
-    color: C.mutedLight,
     letterSpacing: 4,
   },
 
@@ -960,7 +989,6 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderWidth: 1.5,
-    borderColor: C.gold,
     transform: [{ rotate: '45deg' }],
   },
 
@@ -993,6 +1021,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
   },
+  viewerInfoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
+  viewerInfoLeft: {
+    flex: 1,
+  },
   viewerTitle: {
     fontSize: 20,
     fontWeight: '800',
@@ -1009,8 +1045,39 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.4)',
     marginTop: 2,
   },
+  viewerActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginLeft: 12,
+  },
+  viewerEditBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#C8A96E',
+    alignItems: 'center',
+  },
+  viewerEditText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#C8A96E',
+  },
+  viewerDeleteBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D94040',
+    alignItems: 'center',
+  },
+  viewerDeleteText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#D94040',
+  },
   viewerDots: {
-    marginTop: 16,
+    marginTop: 12,
     alignItems: 'center',
   },
   viewerCounter: {
@@ -1032,7 +1099,6 @@ const tabStyles = StyleSheet.create({
     overflow: 'hidden',
   },
   blurFallback: {
-    backgroundColor: 'rgba(25, 31, 40, 0.85)',
     backdropFilter: 'blur(20px)',
   } as any,
   tabRow: {
@@ -1051,6 +1117,5 @@ const tabStyles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     letterSpacing: 0.3,
-    color: '#6b7280',
   },
 });

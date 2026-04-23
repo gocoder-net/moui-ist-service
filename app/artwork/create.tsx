@@ -1,20 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, TextInput, Pressable, ScrollView,
   ActivityIndicator, Alert, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
+import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { spendPoints } from '@/lib/points';
 import * as ImagePicker from 'expo-image-picker';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
-
-const C = {
-  bg: '#191f28', fg: '#f2f4f6', gold: '#C8A96E', goldLight: '#E0C992',
-  muted: '#8b95a1', mutedLight: '#4e5968', border: '#333d4b', inputBg: '#212a35',
-};
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === 'web') {
@@ -27,17 +24,43 @@ function showAlert(title: string, message: string) {
 export default function CreateArtworkScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, refreshProfile } = useAuth();
+  const { colors: C } = useThemeMode();
+  const { artworkId } = useLocalSearchParams<{ artworkId?: string }>();
+
+  const isEditing = !!artworkId;
 
   const [imageUri, setImageUri] = useState<string | null>(null);
+  const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [year, setYear] = useState('');
   const [medium, setMedium] = useState('');
+  const [technique, setTechnique] = useState('');
   const [widthCm, setWidthCm] = useState('');
   const [heightCm, setHeightCm] = useState('');
   const [edition, setEdition] = useState('');
   const [description, setDescription] = useState('');
   const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(false);
+
+  useEffect(() => {
+    if (!artworkId) return;
+    setInitialLoading(true);
+    supabase.from('artworks').select('*').eq('id', artworkId).single().then(({ data }) => {
+      if (data) {
+        setTitle(data.title ?? '');
+        setYear(data.year ? String(data.year) : '');
+        setMedium(data.medium ?? '');
+        setWidthCm(data.width_cm ? String(data.width_cm) : '');
+        setHeightCm(data.height_cm ? String(data.height_cm) : '');
+        setEdition(data.edition ?? '');
+        setDescription(data.description ?? '');
+        setImageUri(data.image_url);
+        setOriginalImageUrl(data.image_url);
+      }
+      setInitialLoading(false);
+    });
+  }, [artworkId]);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -52,43 +75,88 @@ export default function CreateArtworkScreen() {
   const handleSave = async () => {
     if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
     if (!imageUri) { showAlert('알림', '이미지를 선택해주세요.'); return; }
-    if (!title.trim()) { showAlert('알림', '제목을 입력해주세요.'); return; }
+    if (!title.trim()) { showAlert('알림', '작품명을 입력해주세요.'); return; }
+    if (!year.trim()) { showAlert('알림', '제작연도를 입력해주세요.'); return; }
+    if (!medium.trim()) { showAlert('알림', '재료를 입력해주세요.'); return; }
+    if (!technique.trim()) { showAlert('알림', '기법을 입력해주세요.'); return; }
+    if (!widthCm.trim() || !heightCm.trim()) { showAlert('알림', '크기(가로, 세로)를 입력해주세요.'); return; }
+    if (!description.trim() || description.trim().length < 300) {
+      showAlert('알림', `설명은 300글자 이상 입력해주세요. (현재 ${description.trim().length}자)`);
+      return;
+    }
 
     setLoading(true);
     try {
-      // 1. Upload image
-      const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
-      const response = await fetch(imageUri);
-      const blob = await response.blob();
-      const { error: uploadError } = await supabase.storage
-        .from('artworks')
-        .upload(fileName, blob, { contentType: 'image/jpeg' });
-      if (uploadError) {
-        showAlert('오류', '이미지 업로드에 실패했습니다.');
-        setLoading(false);
-        return;
+      // 새 작품 등록 시 10모의 차감
+      if (!isEditing) {
+        const { error: pointErr } = await spendPoints(user.id, 10, '작품 업로드');
+        if (pointErr) {
+          showAlert('모의 부족', pointErr);
+          setLoading(false);
+          return;
+        }
       }
-      const publicUrl = supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
 
-      // 2. Insert DB
-      const { error: insertError } = await supabase.from('artworks').insert({
-        user_id: user.id,
+      let imageUrl = originalImageUrl;
+      const imageChanged = imageUri !== originalImageUrl;
+
+      if (imageChanged) {
+        const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+        const response = await fetch(imageUri);
+        const blob = await response.blob();
+        const { error: uploadError } = await supabase.storage
+          .from('artworks')
+          .upload(fileName, blob, { contentType: 'image/jpeg' });
+        if (uploadError) {
+          showAlert('오류', '이미지 업로드에 실패했습니다.');
+          setLoading(false);
+          return;
+        }
+        imageUrl = supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
+
+        if (isEditing && originalImageUrl) {
+          const parts = originalImageUrl.split('/artworks/');
+          if (parts[1]) {
+            await supabase.storage.from('artworks').remove([decodeURIComponent(parts[1])]);
+          }
+        }
+      }
+
+      const combinedMedium = `${medium.trim()}, ${technique.trim()}`;
+
+      const artworkData = {
         title: title.trim(),
-        image_url: publicUrl,
+        image_url: imageUrl!,
         year: year ? parseInt(year, 10) : null,
-        medium: medium.trim() || null,
+        medium: combinedMedium || null,
         width_cm: widthCm ? parseFloat(widthCm) : null,
         height_cm: heightCm ? parseFloat(heightCm) : null,
         edition: edition.trim() || null,
         description: description.trim() || null,
-      });
-      if (insertError) {
-        showAlert('오류', '저장에 실패했습니다: ' + insertError.message);
-        setLoading(false);
-        return;
+      };
+
+      if (isEditing) {
+        const { error: updateError } = await supabase.from('artworks')
+          .update(artworkData)
+          .eq('id', artworkId);
+        if (updateError) {
+          showAlert('오류', '수정에 실패했습니다: ' + updateError.message);
+          setLoading(false);
+          return;
+        }
+      } else {
+        const { error: insertError } = await supabase.from('artworks').insert({
+          user_id: user.id,
+          ...artworkData,
+        });
+        if (insertError) {
+          showAlert('오류', '저장에 실패했습니다: ' + insertError.message);
+          setLoading(false);
+          return;
+        }
       }
 
-      // 3. Success
+      if (!isEditing) await refreshProfile();
       router.back();
     } catch (err) {
       console.error('작품 저장 오류:', err);
@@ -98,26 +166,34 @@ export default function CreateArtworkScreen() {
     }
   };
 
+  if (initialLoading) {
+    return (
+      <View style={[styles.root, { paddingTop: insets.top, justifyContent: 'center', alignItems: 'center', backgroundColor: C.bg }]}>
+        <ActivityIndicator size="large" color={C.gold} />
+      </View>
+    );
+  }
+
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
       {/* 상단 바 */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, { borderBottomColor: C.border }]}>
         <Pressable
           style={({ pressed }) => [styles.backBtn, pressed && { opacity: 0.6 }]}
           onPress={() => router.back()}
         >
-          <Text style={styles.backText}>← 뒤로</Text>
+          <Text style={[styles.backText, { color: C.fg }]}>← 뒤로</Text>
         </Pressable>
-        <Text style={styles.topTitle}>작품 업로드</Text>
+        <Text style={[styles.topTitle, { color: C.fg }]}>{isEditing ? '작품 수정' : '작품 업로드'}</Text>
         <Pressable
-          style={({ pressed }) => [styles.saveBtn, pressed && { opacity: 0.6 }, loading && { opacity: 0.4 }]}
+          style={({ pressed }) => [styles.saveBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.6 }, loading && { opacity: 0.4 }]}
           onPress={handleSave}
           disabled={loading}
         >
           {loading ? (
             <ActivityIndicator size="small" color={C.bg} />
           ) : (
-            <Text style={styles.saveBtnText}>저장</Text>
+            <Text style={[styles.saveBtnText, { color: C.bg }]}>{isEditing ? '수정' : '저장'}</Text>
           )}
         </Pressable>
       </View>
@@ -125,9 +201,9 @@ export default function CreateArtworkScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 이미지 선택 */}
         <Animated.View entering={FadeInDown.delay(100).duration(400).springify()}>
-          <Text style={styles.label}>작품 이미지 <Text style={styles.required}>*</Text></Text>
+          <Text style={[styles.label, { color: C.fg }]}>작품 이미지 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
           <Pressable
-            style={({ pressed }) => [styles.imagePicker, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.imagePicker, { borderColor: C.border, backgroundColor: C.card }, pressed && { opacity: 0.7 }]}
             onPress={pickImage}
           >
             {imageUri ? (
@@ -135,7 +211,7 @@ export default function CreateArtworkScreen() {
             ) : (
               <View style={styles.imagePlaceholder}>
                 <Text style={styles.imagePlaceholderIcon}>🖼️</Text>
-                <Text style={styles.imagePlaceholderText}>탭하여 이미지 선택</Text>
+                <Text style={[styles.imagePlaceholderText, { color: C.muted }]}>탭하여 이미지 선택</Text>
               </View>
             )}
           </Pressable>
@@ -143,9 +219,9 @@ export default function CreateArtworkScreen() {
 
         {/* 제목 */}
         <Animated.View entering={FadeInDown.delay(200).duration(400).springify()}>
-          <Text style={styles.label}>제목 <Text style={styles.required}>*</Text></Text>
+          <Text style={[styles.label, { color: C.fg }]}>제목 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
             value={title}
             onChangeText={setTitle}
             placeholder="작품 제목"
@@ -153,11 +229,11 @@ export default function CreateArtworkScreen() {
           />
         </Animated.View>
 
-        {/* 연도 */}
+        {/* 제작연도 */}
         <Animated.View entering={FadeInDown.delay(250).duration(400).springify()}>
-          <Text style={styles.label}>연도</Text>
+          <Text style={[styles.label, { color: C.fg }]}>제작연도 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
             value={year}
             onChangeText={setYear}
             placeholder="예: 2024"
@@ -166,11 +242,11 @@ export default function CreateArtworkScreen() {
           />
         </Animated.View>
 
-        {/* 재료/기법 */}
+        {/* 재료 */}
         <Animated.View entering={FadeInDown.delay(300).duration(400).springify()}>
-          <Text style={styles.label}>재료 / 기법</Text>
+          <Text style={[styles.label, { color: C.fg }]}>재료 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
             value={medium}
             onChangeText={setMedium}
             placeholder="예: 캔버스에 유채"
@@ -178,35 +254,44 @@ export default function CreateArtworkScreen() {
           />
         </Animated.View>
 
-        {/* 크기 (가로 x 세로) */}
+        {/* 기법 */}
         <Animated.View entering={FadeInDown.delay(350).duration(400).springify()}>
-          <Text style={styles.label}>크기 (cm)</Text>
-          <View style={styles.sizeRow}>
-            <TextInput
-              style={[styles.input, styles.sizeInput]}
-              value={widthCm}
-              onChangeText={setWidthCm}
-              placeholder="가로"
-              placeholderTextColor={C.mutedLight}
-              keyboardType="decimal-pad"
-            />
-            <Text style={styles.sizeX}>×</Text>
-            <TextInput
-              style={[styles.input, styles.sizeInput]}
-              value={heightCm}
-              onChangeText={setHeightCm}
-              placeholder="세로"
-              placeholderTextColor={C.mutedLight}
-              keyboardType="decimal-pad"
-            />
-          </View>
+          <Text style={[styles.label, { color: C.fg }]}>기법 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
+            value={technique}
+            onChangeText={setTechnique}
+            placeholder="예: 임파스토, 글레이징"
+            placeholderTextColor={C.mutedLight}
+          />
+        </Animated.View>
+
+        {/* 크기 (가로 / 세로 세로 배치) */}
+        <Animated.View entering={FadeInDown.delay(400).duration(400).springify()}>
+          <Text style={[styles.label, { color: C.fg }]}>크기 (cm) <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg, marginBottom: 8 }]}
+            value={widthCm}
+            onChangeText={setWidthCm}
+            placeholder="가로 (cm)"
+            placeholderTextColor={C.mutedLight}
+            keyboardType="decimal-pad"
+          />
+          <TextInput
+            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
+            value={heightCm}
+            onChangeText={setHeightCm}
+            placeholder="세로 (cm)"
+            placeholderTextColor={C.mutedLight}
+            keyboardType="decimal-pad"
+          />
         </Animated.View>
 
         {/* 에디션 */}
-        <Animated.View entering={FadeInDown.delay(400).duration(400).springify()}>
-          <Text style={styles.label}>에디션</Text>
+        <Animated.View entering={FadeInDown.delay(450).duration(400).springify()}>
+          <Text style={[styles.label, { color: C.fg }]}>에디션 <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
           <TextInput
-            style={styles.input}
+            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
             value={edition}
             onChangeText={setEdition}
             placeholder="예: 1/10"
@@ -215,13 +300,18 @@ export default function CreateArtworkScreen() {
         </Animated.View>
 
         {/* 설명 */}
-        <Animated.View entering={FadeInDown.delay(450).duration(400).springify()}>
-          <Text style={styles.label}>설명</Text>
+        <Animated.View entering={FadeInDown.delay(500).duration(400).springify()}>
+          <View style={styles.labelRow}>
+            <Text style={[styles.label, { color: C.fg, marginTop: 0 }]}>설명 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+            <Text style={[styles.charCount, { color: description.trim().length >= 300 ? C.gold : C.danger }]}>
+              {description.trim().length}/300
+            </Text>
+          </View>
           <TextInput
-            style={[styles.input, styles.textArea]}
+            style={[styles.input, styles.textArea, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
             value={description}
             onChangeText={setDescription}
-            placeholder="작품에 대한 설명을 입력하세요"
+            placeholder="작품에 대한 설명을 입력하세요 (300자 이상)"
             placeholderTextColor={C.mutedLight}
             multiline
             textAlignVertical="top"
@@ -237,7 +327,6 @@ export default function CreateArtworkScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: C.bg,
   },
   topBar: {
     flexDirection: 'row',
@@ -246,7 +335,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: C.border,
   },
   backBtn: {
     paddingVertical: 4,
@@ -255,16 +343,13 @@ const styles = StyleSheet.create({
   backText: {
     fontSize: 14,
     fontWeight: '600',
-    color: C.fg,
   },
   topTitle: {
     fontSize: 15,
     fontWeight: '800',
-    color: C.fg,
     letterSpacing: 1,
   },
   saveBtn: {
-    backgroundColor: C.gold,
     paddingHorizontal: 18,
     paddingVertical: 8,
     borderRadius: 12,
@@ -274,7 +359,6 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 13,
     fontWeight: '800',
-    color: C.bg,
     letterSpacing: 0.5,
   },
   scroll: {
@@ -285,47 +369,43 @@ const styles = StyleSheet.create({
   label: {
     fontSize: 13,
     fontWeight: '700',
-    color: C.fg,
     letterSpacing: 0.5,
     marginTop: 20,
     marginBottom: 8,
   },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 8,
+  },
   required: {
-    color: C.gold,
+    fontWeight: '700',
+  },
+  optional: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  charCount: {
+    fontSize: 12,
+    fontWeight: '700',
   },
   input: {
-    backgroundColor: C.inputBg,
     borderWidth: 1,
-    borderColor: C.border,
     borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 14,
-    color: C.fg,
   },
   textArea: {
-    minHeight: 100,
+    minHeight: 140,
     paddingTop: 14,
-  },
-  sizeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  sizeInput: {
-    flex: 1,
-  },
-  sizeX: {
-    fontSize: 16,
-    color: C.muted,
-    fontWeight: '600',
   },
   imagePicker: {
     borderWidth: 1,
-    borderColor: C.border,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: C.inputBg,
   },
   imagePreview: {
     width: '100%',
@@ -342,7 +422,6 @@ const styles = StyleSheet.create({
   },
   imagePlaceholderText: {
     fontSize: 13,
-    color: C.muted,
     letterSpacing: 0.5,
   },
 });

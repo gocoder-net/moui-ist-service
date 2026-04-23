@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
+import { useThemeMode } from '@/contexts/theme-context';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -23,17 +24,6 @@ import Animated, {
   FadeInDown,
 } from 'react-native-reanimated';
 import { supabase } from '@/lib/supabase';
-
-const C = {
-  bg: '#191f28',
-  fg: '#f2f4f6',
-  gold: '#C8A96E',
-  goldLight: '#E0C992',
-  muted: '#8b95a1',
-  mutedLight: '#4e5968',
-  border: '#333d4b',
-  white: '#f2f4f6',
-};
 
 type ArtistCard = {
   id: string;
@@ -99,7 +89,7 @@ function FloatingShape({
 }
 
 /* ── PlayfulDiamond ── */
-function PlayfulDiamond() {
+function PlayfulDiamond({ color = '#C8A96E' }: { color?: string }) {
   const rot = useSharedValue(0);
   const scale = useSharedValue(1);
 
@@ -140,7 +130,7 @@ function PlayfulDiamond() {
   }));
 
   return (
-    <Animated.View style={[{ width: 16, height: 16, borderWidth: 1.5, borderColor: C.gold, transform: [{ rotate: '45deg' }] }, animStyle]} />
+    <Animated.View style={[{ width: 16, height: 16, borderWidth: 1.5, borderColor: color, transform: [{ rotate: '45deg' }] }, animStyle]} />
   );
 }
 
@@ -148,14 +138,13 @@ function PlayfulDiamond() {
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { colors: C } = useThemeMode();
   const [artists, setArtists] = useState<ArtistCard[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
 
   const loadArtists = useCallback(async () => {
     setLoading(true);
-
-    // Fetch all creators/aspirings with at least 1 artwork
     const { data: profiles } = await supabase
       .from('profiles')
       .select('id, name, username, field, avatar_url, user_type')
@@ -167,7 +156,6 @@ export default function ExploreScreen() {
       return;
     }
 
-    // Fetch artwork counts per user
     const { data: artworks } = await supabase
       .from('artworks')
       .select('user_id, image_url');
@@ -223,10 +211,9 @@ export default function ExploreScreen() {
   const renderArtistCard = ({ item, index }: { item: ArtistCard; index: number }) => (
     <Animated.View entering={FadeInDown.delay(100 + index * 60).duration(400).springify()}>
       <Pressable
-        style={({ pressed }) => [styles.artistCard, pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }]}
+        style={({ pressed }) => [styles.artistCard, { borderColor: C.border, backgroundColor: C.card }, pressed && { opacity: 0.8, transform: [{ scale: 0.98 }] }]}
         onPress={() => router.push(`/artist/${item.id}`)}
       >
-        {/* cover background */}
         {item.coverImage && (
           <Image
             source={{ uri: item.coverImage }}
@@ -235,29 +222,27 @@ export default function ExploreScreen() {
             resizeMode="cover"
           />
         )}
-        <View style={styles.artistCoverOverlay} />
+        <View style={[styles.artistCoverOverlay, { backgroundColor: C.bg === '#191f28' ? 'rgba(25,31,40,0.75)' : 'rgba(245,246,248,0.75)' }]} />
 
         <View style={styles.artistCardContent}>
-          {/* avatar */}
-          <View style={styles.artistAvatar}>
+          <View style={[styles.artistAvatar, { backgroundColor: C.bg, borderColor: C.gold }]}>
             <Text style={styles.artistAvatarText}>
               {item.user_type === 'creator' ? '🎨' : '✏️'}
             </Text>
           </View>
 
           <View style={styles.artistInfo}>
-            <Text style={styles.artistName} numberOfLines={1}>
+            <Text style={[styles.artistName, { color: C.fg }]} numberOfLines={1}>
               {item.name ?? item.username}
             </Text>
             {item.field && (
-              <Text style={styles.artistField} numberOfLines={1}>{item.field}</Text>
+              <Text style={[styles.artistField, { color: C.gold }]} numberOfLines={1}>{item.field}</Text>
             )}
           </View>
 
-          {/* artwork count badge */}
           <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>{item.artworkCount}</Text>
-            <Text style={styles.countBadgeLabel}>작품</Text>
+            <Text style={[styles.countBadgeText, { color: C.gold }]}>{item.artworkCount}</Text>
+            <Text style={[styles.countBadgeLabel, { color: C.muted }]}>작품</Text>
           </View>
         </View>
       </Pressable>
@@ -265,7 +250,7 @@ export default function ExploreScreen() {
   );
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
       {/* 배경 */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <FloatingShape shape="ring" size={100} color={C.gold} opacity={0.08} top="8%" left="5%" duration={6000} delay={0} />
@@ -279,25 +264,25 @@ export default function ExploreScreen() {
 
       {/* 상단 바 */}
       <Animated.View entering={FadeIn.delay(100).duration(300)} style={styles.topBar}>
-        <Text style={styles.enLogo}>
+        <Text style={[styles.enLogo, { color: C.fg }]}>
           MOUI<Text style={{ color: C.gold }}>-</Text>IST
         </Text>
       </Animated.View>
 
       {/* 헤더 */}
       <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.header}>
-        <PlayfulDiamond />
-        <Text style={styles.title}>탐색</Text>
-        <Text style={styles.subtitle}>다양한 작가들을 만나보세요</Text>
-        <View style={styles.headerLine} />
+        <PlayfulDiamond color={C.gold} />
+        <Text style={[styles.title, { color: C.fg }]}>탐색</Text>
+        <Text style={[styles.subtitle, { color: C.muted }]}>다양한 작가들을 만나보세요</Text>
+        <View style={[styles.headerLine, { backgroundColor: C.gold }]} />
       </Animated.View>
 
       {/* 검색 바 */}
       <Animated.View entering={FadeInDown.delay(350).duration(400).springify()} style={styles.searchWrap}>
-        <View style={styles.searchBar}>
+        <View style={[styles.searchBar, { borderColor: C.border, backgroundColor: C.card }]}>
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
-            style={styles.searchInput}
+            style={[styles.searchInput, { color: C.fg }]}
             placeholder="작가, 분야 검색..."
             placeholderTextColor={C.mutedLight}
             value={search}
@@ -315,16 +300,16 @@ export default function ExploreScreen() {
       {/* 작가 리스트 */}
       {loading ? (
         <View style={styles.loadingWrap}>
-          <View style={styles.loadingDiamond} />
+          <View style={[styles.loadingDiamond, { borderColor: C.gold }]} />
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <View style={styles.emptyDiamond} />
-          <Text style={styles.emptyText}>
+          <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
+          <Text style={[styles.emptyText, { color: C.muted }]}>
             {search.trim() ? '검색 결과가 없습니다' : '아직 등록된 작가가 없습니다'}
           </Text>
           {!search.trim() && (
-            <Text style={styles.emptySubtext}>첫 번째 작품을 업로드해보세요!</Text>
+            <Text style={[styles.emptySubtext, { color: C.mutedLight }]}>첫 번째 작품을 업로드해보세요!</Text>
           )}
         </View>
       ) : (
@@ -343,7 +328,6 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: C.bg,
   },
 
   topBar: {
@@ -354,7 +338,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 5,
-    color: C.fg,
   },
 
   header: {
@@ -366,20 +349,17 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '900',
-    color: C.fg,
     letterSpacing: 3,
     marginTop: 12,
   },
   subtitle: {
     fontSize: 14,
     fontWeight: '300',
-    color: C.muted,
     letterSpacing: 1,
   },
   headerLine: {
     width: 28,
     height: 1,
-    backgroundColor: C.gold,
     marginTop: 4,
   },
 
@@ -391,12 +371,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: C.border,
     borderRadius: 16,
     paddingHorizontal: 18,
     paddingVertical: 12,
     gap: 10,
-    backgroundColor: '#212a35',
   },
   searchIcon: {
     fontSize: 16,
@@ -404,7 +382,6 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontSize: 14,
-    color: C.fg,
     padding: 0,
   },
 
@@ -420,8 +397,6 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: C.border,
-    backgroundColor: '#212a35',
   },
   artistCover: {
     ...StyleSheet.absoluteFillObject,
@@ -430,7 +405,6 @@ const styles = StyleSheet.create({
   },
   artistCoverOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(25,31,40,0.75)',
   },
   artistCardContent: {
     flex: 1,
@@ -443,9 +417,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: C.bg,
     borderWidth: 1,
-    borderColor: C.gold,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -459,12 +431,10 @@ const styles = StyleSheet.create({
   artistName: {
     fontSize: 16,
     fontWeight: '800',
-    color: C.fg,
     letterSpacing: 0.5,
   },
   artistField: {
     fontSize: 12,
-    color: C.gold,
     fontWeight: '600',
     letterSpacing: 1,
   },
@@ -479,11 +449,9 @@ const styles = StyleSheet.create({
   countBadgeText: {
     fontSize: 16,
     fontWeight: '900',
-    color: C.gold,
   },
   countBadgeLabel: {
     fontSize: 9,
-    color: C.muted,
     fontWeight: '600',
     letterSpacing: 1,
   },
@@ -498,7 +466,6 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     borderWidth: 1.5,
-    borderColor: C.gold,
     transform: [{ rotate: '45deg' }],
   },
   emptyWrap: {
@@ -512,17 +479,14 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderWidth: 1,
-    borderColor: C.gold,
     transform: [{ rotate: '45deg' }],
   },
   emptyText: {
     fontSize: 14,
-    color: C.muted,
     letterSpacing: 1,
   },
   emptySubtext: {
     fontSize: 12,
-    color: C.mutedLight,
     letterSpacing: 0.5,
   },
 });

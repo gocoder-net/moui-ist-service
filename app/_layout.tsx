@@ -1,4 +1,4 @@
-import { DarkTheme, ThemeProvider } from '@react-navigation/native';
+import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
@@ -13,11 +13,12 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 
-
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
+import { ThemeModeProvider, useThemeMode } from '@/contexts/theme-context';
 
 function RootNavigator() {
   const { session, profile, loading } = useAuth();
+  const { mode, colors } = useThemeMode();
   const segments = useSegments();
   const router = useRouter();
 
@@ -29,14 +30,10 @@ function RootNavigator() {
     const inPublic = segments[0] === 'exhibition' || segments[0] === 'artist';
 
     if (!session) {
-      // 공개 경로(전시관 뷰어)는 인증 없이 접근 허용
       if (!inAuthGroup && !inPublic) {
         router.replace('/(auth)');
       }
     } else if (!profile?.user_type || profile.user_type === 'audience') {
-      // 프로필이 아직 로드되지 않았을 수 있으므로 user_type 체크
-      // handle_new_user 트리거가 기본값 'audience'를 설정하므로
-      // 온보딩 완료 여부는 name 필드로 판단 (온보딩에서 설정)
       if (profile && !profile.name && !inOnboarding) {
         router.replace('/(onboarding)');
       } else if (profile && profile.name && (inAuthGroup || inOnboarding)) {
@@ -61,21 +58,12 @@ function RootNavigator() {
   const splashOpacity = useSharedValue(1);
 
   useEffect(() => {
-    // 다이아몬드 등장
     diamondOpacity.value = withDelay(50, withTiming(1, { duration: 100 }));
     diamondRotate.value = withDelay(50, withTiming(360, { duration: 200, easing: Easing.out(Easing.cubic) }));
-
-    // 로고 등장
     logoOpacity.value = withDelay(125, withTiming(1, { duration: 150, easing: Easing.out(Easing.cubic) }));
     logoScale.value = withDelay(125, withTiming(1, { duration: 150, easing: Easing.out(Easing.back(1.5)) }));
-
-    // 대시 등장
     dashOpacity.value = withDelay(225, withTiming(1, { duration: 100 }));
-
-    // 태그라인 등장
     taglineOpacity.value = withDelay(300, withTiming(1, { duration: 125 }));
-
-    // 페이드 아웃
     splashOpacity.value = withDelay(550, withTiming(0, { duration: 125 }, () => {
       runOnJS(setSplashDone)(true);
     }));
@@ -85,62 +73,49 @@ function RootNavigator() {
     opacity: logoOpacity.value,
     transform: [{ scale: logoScale.value }],
   }));
-
-  const dashAnimStyle = useAnimatedStyle(() => ({
-    opacity: dashOpacity.value,
-  }));
-
+  const dashAnimStyle = useAnimatedStyle(() => ({ opacity: dashOpacity.value }));
   const diamondAnimStyle = useAnimatedStyle(() => ({
     opacity: diamondOpacity.value,
     transform: [{ rotate: `${diamondRotate.value}deg` }],
   }));
+  const taglineAnimStyle = useAnimatedStyle(() => ({ opacity: taglineOpacity.value }));
+  const splashAnimStyle = useAnimatedStyle(() => ({ opacity: splashOpacity.value }));
 
-  const taglineAnimStyle = useAnimatedStyle(() => ({
-    opacity: taglineOpacity.value,
-  }));
-
-  const splashAnimStyle = useAnimatedStyle(() => ({
-    opacity: splashOpacity.value,
-  }));
+  const navTheme = mode === 'dark' ? DarkTheme : DefaultTheme;
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#191f28' }}>
-      <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#191f28' } }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(onboarding)" />
-        <Stack.Screen name="(tabs)" />
-        <Stack.Screen name="exhibition/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="artist/[id]" options={{ headerShown: false }} />
-        <Stack.Screen name="artwork/create" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
-      </Stack>
+    <ThemeProvider value={navTheme}>
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(onboarding)" />
+          <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="exhibition/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="artist/[id]" options={{ headerShown: false }} />
+          <Stack.Screen name="artwork/create" options={{ headerShown: false }} />
+          <Stack.Screen name="profile/detail" options={{ headerShown: false }} />
+          <Stack.Screen name="profile/points" options={{ headerShown: false }} />
+          <Stack.Screen name="profile/settings" options={{ headerShown: false }} />
+          <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
+        </Stack>
 
-      {(!splashDone || loading) && (
-        <Animated.View style={[splash.container, splashAnimStyle, StyleSheet.absoluteFill]}>
-          <View style={splash.content}>
-            <Animated.View style={[splash.diamond, diamondAnimStyle]} />
-
-            <View style={splash.logoRow}>
-              <Animated.Text style={[splash.logoText, logoAnimStyle]}>
-                MOUI
-              </Animated.Text>
-              <Animated.Text style={[splash.logoDash, dashAnimStyle]}>
-                -
-              </Animated.Text>
-              <Animated.Text style={[splash.logoText, logoAnimStyle]}>
-                IST
-              </Animated.Text>
+        {(!splashDone || loading) && (
+          <Animated.View style={[splash.container, splashAnimStyle, StyleSheet.absoluteFill]}>
+            <View style={splash.content}>
+              <Animated.View style={[splash.diamond, diamondAnimStyle]} />
+              <View style={splash.logoRow}>
+                <Animated.Text style={[splash.logoText, logoAnimStyle]}>MOUI</Animated.Text>
+                <Animated.Text style={[splash.logoDash, dashAnimStyle]}>-</Animated.Text>
+                <Animated.Text style={[splash.logoText, logoAnimStyle]}>IST</Animated.Text>
+              </View>
+              <Animated.View style={[splash.divider, dashAnimStyle]} />
             </View>
-
-            <Animated.View style={[splash.divider, dashAnimStyle]} />
-          </View>
-
-          <Animated.Text style={[splash.bottomText, taglineAnimStyle]}>
-            모의스트
-          </Animated.Text>
-        </Animated.View>
-      )}
-    </View>
+            <Animated.Text style={[splash.bottomText, taglineAnimStyle]}>모의스트</Animated.Text>
+          </Animated.View>
+        )}
+      </View>
+      <StatusBar style={mode === 'dark' ? 'light' : 'dark'} />
+    </ThemeProvider>
   );
 }
 
@@ -197,10 +172,9 @@ const splash = StyleSheet.create({
 export default function RootLayout() {
   return (
     <AuthProvider>
-      <ThemeProvider value={DarkTheme}>
+      <ThemeModeProvider>
         <RootNavigator />
-        <StatusBar style="light" />
-      </ThemeProvider>
+      </ThemeModeProvider>
     </AuthProvider>
   );
 }

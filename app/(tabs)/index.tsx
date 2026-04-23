@@ -1,13 +1,18 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
   Text,
   Pressable,
   ScrollView,
+  Platform,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
+import { useAuth } from '@/contexts/auth-context';
+import { useThemeMode } from '@/contexts/theme-context';
+import { supabase } from '@/lib/supabase';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -20,17 +25,6 @@ import Animated, {
   FadeIn,
   FadeInDown,
 } from 'react-native-reanimated';
-
-const C = {
-  bg: '#191f28',
-  fg: '#f2f4f6',
-  gold: '#C8A96E',
-  goldLight: '#E0C992',
-  goldDim: 'rgba(200,169,110,0.12)',
-  muted: '#8b95a1',
-  mutedLight: '#4e5968',
-  border: '#333d4b',
-};
 
 /* ── 배경 떠다니는 도형 ── */
 function FloatingShape({
@@ -85,7 +79,7 @@ function FloatingShape({
 }
 
 /* ── PlayfulDiamond ── */
-function PlayfulDiamond({ size = 14 }: { size?: number }) {
+function PlayfulDiamond({ size = 14, color = '#C8A96E' }: { size?: number; color?: string }) {
   const rot = useSharedValue(0);
   const scale = useSharedValue(1);
 
@@ -126,40 +120,162 @@ function PlayfulDiamond({ size = 14 }: { size?: number }) {
   }));
 
   return (
-    <Animated.View style={[{ width: size, height: size, borderWidth: 1.5, borderColor: C.gold, transform: [{ rotate: '45deg' }] }, animStyle]} />
+    <Animated.View style={[{ width: size, height: size, borderWidth: 1.5, borderColor: color, transform: [{ rotate: '45deg' }] }, animStyle]} />
   );
 }
 
-/* ── 퀵 액션 카드 ── */
+/* ── 퀵 액션 카드 (보상 표시 포함) ── */
 function QuickCard({
-  icon, title, desc, delay: d, onPress,
+  icon, title, desc, delay: d, onPress, done, C,
 }: {
-  icon: string; title: string; desc: string; delay: number; onPress?: () => void;
+  icon: string; title: string; desc: string; delay: number; onPress?: () => void; done?: boolean; C: any;
 }) {
   return (
     <Animated.View entering={FadeInDown.delay(d).duration(400).springify()}>
       <Pressable
-        style={({ pressed }) => [styles.quickCard, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }]}
+        style={({ pressed }) => [styles.quickCard, { borderColor: C.border, backgroundColor: C.card }, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }, done && { opacity: 0.7, borderColor: 'rgba(200,169,110,0.25)' }]}
         onPress={onPress}
       >
-        <Text style={styles.quickIcon}>{icon}</Text>
+        <Text style={[styles.quickIcon, done && { opacity: 0.4 }]}>{icon}</Text>
         <View style={{ flex: 1 }}>
-          <Text style={styles.quickTitle}>{title}</Text>
-          <Text style={styles.quickDesc}>{desc}</Text>
+          <Text style={[styles.quickTitle, { color: C.fg }, done && { textDecorationLine: 'line-through', color: C.muted }]}>{title}</Text>
+          <Text style={[styles.quickDesc, { color: C.muted }, done && { opacity: 0.4 }]}>{desc}</Text>
         </View>
-        <Text style={{ color: C.mutedLight, fontSize: 14 }}>→</Text>
+        <View style={done ? styles.rewardBadgeDone : styles.rewardBadge}>
+          <Text style={done ? [styles.rewardTextDone, { color: C.mutedLight }] : [styles.rewardText, { color: C.gold }]}>
+            {done ? '1,000모의 획득!' : '+1,000모의'}
+          </Text>
+        </View>
       </Pressable>
     </Animated.View>
   );
+}
+
+/* ── 출석 보상 ── */
+const ATTENDANCE_REWARDS = [50, 50, 50, 50, 50, 50, 500]; // 1~7일
+
+function getToday(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getYesterday(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 /* ── 메인 화면 ── */
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user, refreshProfile } = useAuth();
+  const { colors: C } = useThemeMode();
+
+  const [hasExhibition, setHasExhibition] = useState(false);
+  const [hasArtwork, setHasArtwork] = useState(false);
+
+  // 출석
+  const [attendanceDay, setAttendanceDay] = useState(0); // 현재까지 출석한 일수 (0~7)
+  const [checkedToday, setCheckedToday] = useState(false);
+  const [checkingIn, setCheckingIn] = useState(false);
+
+  const checkProgress = useCallback(async () => {
+    if (!user) return;
+    const [exRes, artRes] = await Promise.all([
+      supabase.from('exhibitions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      supabase.from('artworks').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+    ]);
+    setHasExhibition((exRes.count ?? 0) > 0);
+    setHasArtwork((artRes.count ?? 0) > 0);
+  }, [user]);
+
+  // 출석 정보 가져오기
+  const fetchAttendance = useCallback(async () => {
+    if (!user) return;
+    const { data } = await (supabase as any)
+      .from('attendance')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('checked_date', { ascending: false })
+      .limit(7);
+    if (!data || data.length === 0) {
+      setAttendanceDay(0);
+      setCheckedToday(false);
+      return;
+    }
+    const today = getToday();
+    const yesterday = getYesterday();
+    const latest = data[0];
+
+    if (latest.checked_date === today) {
+      // 오늘 이미 출석함
+      setCheckedToday(true);
+      setAttendanceDay(latest.day_number);
+    } else if (latest.checked_date === yesterday) {
+      // 어제 출석함 → 연속 출석 가능
+      setCheckedToday(false);
+      setAttendanceDay(latest.day_number >= 7 ? 0 : latest.day_number);
+    } else {
+      // 연속 끊김 → 리셋
+      setCheckedToday(false);
+      setAttendanceDay(0);
+    }
+  }, [user]);
+
+  useFocusEffect(useCallback(() => {
+    checkProgress();
+    fetchAttendance();
+  }, [checkProgress, fetchAttendance]));
+
+  const handleCheckIn = async () => {
+    if (!user || checkedToday || checkingIn) return;
+    setCheckingIn(true);
+    const nextDay = attendanceDay + 1;
+    const reward = ATTENDANCE_REWARDS[nextDay - 1] ?? 50;
+    const today = getToday();
+
+    // 1. 출석 기록
+    const { error } = await (supabase as any).from('attendance').insert({
+      user_id: user.id,
+      checked_date: today,
+      day_number: nextDay,
+      reward,
+    });
+    if (error) {
+      const msg = '출석 체크에 실패했습니다.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('오류', msg);
+      setCheckingIn(false);
+      return;
+    }
+
+    // 2. 포인트 지급
+    const { data: prof } = await supabase.from('profiles').select('points').eq('id', user.id).single();
+    const currentPoints = prof?.points ?? 0;
+    await supabase.from('profiles').update({ points: currentPoints + reward }).eq('id', user.id);
+
+    // 3. 내역 기록
+    await (supabase as any).from('point_history').insert({
+      user_id: user.id,
+      amount: reward,
+      balance: currentPoints + reward,
+      type: 'reward',
+      description: `출석 ${nextDay}일차 보상`,
+    });
+
+    await refreshProfile();
+    setAttendanceDay(nextDay);
+    setCheckedToday(true);
+    setCheckingIn(false);
+
+    const msg = nextDay === 7
+      ? `🎉 7일 연속 출석! ${reward}모의를 받았습니다!`
+      : `✅ ${nextDay}일차 출석! ${reward}모의를 받았습니다.`;
+    Platform.OS === 'web' ? window.alert(msg) : Alert.alert('출석 완료', msg);
+  };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
+    <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
       {/* 배경 */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <FloatingShape shape="ring" size={50} color={C.gold} opacity={0.08} top="5%" left="2%" duration={6000} delay={0} />
@@ -177,35 +293,91 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 히어로 배너 */}
         <Animated.View entering={FadeInDown.delay(100).duration(600).springify()} style={styles.heroBanner}>
-          <Text style={styles.heroLogo}>
+          <Text style={[styles.heroLogo, { color: C.fg }]}>
             MOUI<Text style={{ color: C.gold }}>-</Text>IST
           </Text>
-          <Text style={styles.heroSub}>세상 모든 예술가를 위한 서비스</Text>
+          <Text style={[styles.heroSub, { color: C.muted }]}>세상 모든 예술가를 위한 서비스</Text>
         </Animated.View>
 
         {/* 퀵 액션 */}
         <View style={styles.sectionHeader}>
-          <Animated.Text entering={FadeIn.delay(350).duration(300)} style={styles.sectionTitle}>
+          <Animated.Text entering={FadeIn.delay(200).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
             시작하기
           </Animated.Text>
         </View>
 
         <View style={styles.quickGrid}>
-          <QuickCard icon="🏛️" title="전시관 만들기" desc="나만의 가상 전시 공간을 만드세요" delay={400} onPress={() => router.push('/exhibition/create')} />
-          <QuickCard icon="🎨" title="작품 업로드" desc="포트폴리오에 작품을 등록하세요" delay={480} onPress={() => router.push('/artwork/create')} />
+          <QuickCard
+            icon="🎨" title="작품 업로드" desc="포트폴리오에 작품을 등록하세요"
+            delay={250} done={hasArtwork} C={C}
+            onPress={() => router.push('/artwork/create')}
+          />
+          <QuickCard
+            icon="🏛️" title="전시관 만들기" desc="나만의 가상 전시 공간을 만드세요"
+            delay={330} done={hasExhibition} C={C}
+            onPress={() => router.push('/exhibition/create')}
+          />
         </View>
 
+        {/* 출석 이벤트 */}
+        {user && (
+          <Animated.View entering={FadeInDown.delay(400).duration(400).springify()} style={[styles.attendCard, { backgroundColor: C.card, borderColor: C.gold }]}>
+            <View style={styles.attendHeader}>
+              <Text style={[styles.attendTitle, { color: C.fg }]}>📅 출석 이벤트</Text>
+              <Text style={[styles.attendSub, { color: C.muted }]}>7일 연속 출석하고 보상 받기!</Text>
+            </View>
+            <View style={styles.attendDays}>
+              {ATTENDANCE_REWARDS.map((reward, i) => {
+                const dayNum = i + 1;
+                const checked = dayNum <= attendanceDay;
+                const isCurrent = dayNum === attendanceDay + 1 && !checkedToday;
+                return (
+                  <View key={dayNum} style={styles.attendDayCol}>
+                    <View style={[
+                      styles.attendDayCircle,
+                      { borderColor: checked ? C.gold : C.border },
+                      checked && { backgroundColor: C.gold },
+                      isCurrent && { borderColor: C.gold, borderWidth: 2 },
+                    ]}>
+                      <Text style={[
+                        styles.attendDayNum,
+                        { color: checked ? C.bg : isCurrent ? C.gold : C.mutedLight },
+                      ]}>{checked ? '✓' : dayNum}</Text>
+                    </View>
+                    <Text style={[styles.attendReward, { color: dayNum === 7 ? C.gold : C.mutedLight }]}>
+                      {reward}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+            {!checkedToday ? (
+              <Pressable
+                onPress={handleCheckIn}
+                disabled={checkingIn}
+                style={({ pressed }) => [styles.attendBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.7 }, checkingIn && { opacity: 0.5 }]}
+              >
+                <Text style={[styles.attendBtnText, { color: C.bg }]}>{checkingIn ? '출석 중...' : '출석하기'}</Text>
+              </Pressable>
+            ) : (
+              <View style={[styles.attendBtn, { backgroundColor: C.border }]}>
+                <Text style={[styles.attendBtnText, { color: C.muted }]}>오늘 출석 완료!</Text>
+              </View>
+            )}
+          </Animated.View>
+        )}
+
         {/* 안내 카드 */}
-        <Animated.View entering={FadeInDown.delay(600).duration(400).springify()} style={styles.infoCard}>
+        <Animated.View entering={FadeInDown.delay(600).duration(400).springify()} style={[styles.infoCard, { borderColor: C.gold, backgroundColor: C.card }]}>
           <View style={styles.infoIconWrap}>
-            <PlayfulDiamond size={12} />
+            <PlayfulDiamond size={12} color={C.gold} />
           </View>
-          <Text style={styles.infoTitle}>곧 더 많은 기능이 찾아옵니다</Text>
-          <Text style={styles.infoDesc}>
+          <Text style={[styles.infoTitle, { color: C.fg }]}>곧 더 많은 기능이 찾아옵니다</Text>
+          <Text style={[styles.infoDesc, { color: C.muted }]}>
             피드, 팔로우, 알림 등{'\n'}다양한 기능이 준비 중입니다
           </Text>
-          <View style={styles.infoBadge}>
-            <Text style={styles.infoBadgeText}>Coming Soon</Text>
+          <View style={[styles.infoBadge, { backgroundColor: C.border }]}>
+            <Text style={[styles.infoBadgeText, { color: C.gold }]}>Coming Soon</Text>
           </View>
         </Animated.View>
 
@@ -218,7 +390,6 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: C.bg,
   },
   scroll: {
     paddingHorizontal: 24,
@@ -234,12 +405,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '900',
     letterSpacing: 10,
-    color: C.fg,
   },
   heroSub: {
     fontSize: 13,
     fontWeight: '500',
-    color: C.muted,
     letterSpacing: 3,
   },
 
@@ -250,7 +419,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: C.fg,
     letterSpacing: 2,
   },
 
@@ -261,11 +429,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: C.border,
     borderRadius: 18,
     padding: 18,
     gap: 14,
-    backgroundColor: '#212a35',
   },
   quickIcon: {
     fontSize: 28,
@@ -273,24 +439,44 @@ const styles = StyleSheet.create({
   quickTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: C.fg,
     letterSpacing: 0.5,
   },
   quickDesc: {
     fontSize: 12,
-    color: C.muted,
     lineHeight: 16,
+  },
+
+  /* 보상 뱃지 */
+  rewardBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: 'rgba(200,169,110,0.15)',
+  },
+  rewardText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  rewardBadgeDone: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+    backgroundColor: 'rgba(200,169,110,0.08)',
+  },
+  rewardTextDone: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
 
   infoCard: {
     marginTop: 24,
     borderWidth: 1,
-    borderColor: C.gold,
     borderRadius: 20,
     padding: 28,
     alignItems: 'center',
     gap: 10,
-    backgroundColor: '#212a35',
   },
   infoIconWrap: {
     marginBottom: 4,
@@ -298,12 +484,10 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 16,
     fontWeight: '800',
-    color: C.fg,
     letterSpacing: 1,
   },
   infoDesc: {
     fontSize: 13,
-    color: C.muted,
     textAlign: 'center',
     lineHeight: 21,
   },
@@ -312,12 +496,65 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 5,
     borderRadius: 12,
-    backgroundColor: '#333d4b',
   },
   infoBadgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: C.gold,
     letterSpacing: 2,
+  },
+
+  /* 출석 이벤트 */
+  attendCard: {
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 8,
+  },
+  attendHeader: {
+    alignItems: 'center',
+    marginBottom: 16,
+    gap: 4,
+  },
+  attendTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  attendSub: {
+    fontSize: 12,
+  },
+  attendDays: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  attendDayCol: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  attendDayCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  attendDayNum: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  attendReward: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  attendBtn: {
+    paddingVertical: 12,
+    borderRadius: 14,
+    alignItems: 'center',
+  },
+  attendBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
   },
 });

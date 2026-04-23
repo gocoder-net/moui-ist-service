@@ -12,20 +12,9 @@ import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
+import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-
-const C = {
-  bg: '#191f28',
-  fg: '#f2f4f6',
-  gold: '#C8A96E',
-  goldLight: '#E0C992',
-  muted: '#8b95a1',
-  mutedLight: '#4e5968',
-  border: '#333d4b',
-  card: '#212a35',
-  danger: '#D94040',
-};
 
 const USER_TYPE_LABELS = { creator: '작가', aspiring: '지망생', audience: '감상자' } as const;
 const USER_TYPE_EMOJI = { creator: '🎨', aspiring: '✏️', audience: '👀' } as const;
@@ -64,39 +53,39 @@ const ROOM_EMOJI: Record<string, string> = { small: '🏠', medium: '🏛️', l
 const ROOM_LABEL: Record<string, string> = { small: '소형', medium: '중형', large: '대형' };
 
 /* ── 전시관 카드 ── */
-function ExhibitionCard({ item, onPress, onEdit, onDelete }: { item: Exhibition; onPress: () => void; onEdit: () => void; onDelete: () => void }) {
+function ExhibitionCard({ item, onPress, onEdit, onDelete, C }: { item: Exhibition; onPress: () => void; onEdit: () => void; onDelete: () => void; C: any }) {
   return (
-    <View style={styles.exCard}>
+    <View style={[s.exCard, { borderColor: C.border, backgroundColor: C.bg }]}>
       <Pressable style={({ pressed }) => [pressed && { opacity: 0.7 }]} onPress={onPress}>
-        <View style={styles.exPosterWrap}>
+        <View style={s.exPosterWrap}>
           {item.poster_image_url ? (
-            <Image source={{ uri: item.poster_image_url }} style={styles.exPoster} contentFit="cover" />
+            <Image source={{ uri: item.poster_image_url }} style={s.exPoster} contentFit="cover" />
           ) : (
-            <View style={styles.exPosterPlaceholder}>
-              <Text style={styles.exPosterEmoji}>{ROOM_EMOJI[item.room_type] ?? '🏛️'}</Text>
+            <View style={[s.exPosterPlaceholder, { backgroundColor: C.bg }]}>
+              <Text style={s.exPosterEmoji}>{ROOM_EMOJI[item.room_type] ?? '🏛️'}</Text>
             </View>
           )}
-          <View style={styles.exBadgeRow}>
-            <View style={styles.exBadge}>
-              <Text style={styles.exBadgeText}>{ROOM_LABEL[item.room_type] ?? item.room_type}</Text>
+          <View style={s.exBadgeRow}>
+            <View style={s.exBadge}>
+              <Text style={[s.exBadgeText, { color: C.muted }]}>{ROOM_LABEL[item.room_type] ?? item.room_type}</Text>
             </View>
-            <View style={[styles.exBadge, item.is_published && styles.exBadgePublished]}>
-              <Text style={[styles.exBadgeText, item.is_published && { color: C.gold }]}>
+            <View style={[s.exBadge, item.is_published && s.exBadgePublished]}>
+              <Text style={[s.exBadgeText, { color: C.muted }, item.is_published && { color: C.gold }]}>
                 {item.is_published ? '공개' : '비공개'}
               </Text>
             </View>
           </View>
         </View>
-        <View style={styles.exTitleWrap}>
-          <Text style={styles.exTitle} numberOfLines={1}>{item.title}</Text>
+        <View style={s.exTitleWrap}>
+          <Text style={[s.exTitle, { color: C.fg }]} numberOfLines={1}>{item.title}</Text>
         </View>
       </Pressable>
-      <View style={styles.exBtnRow}>
-        <TouchableOpacity style={styles.exEditBtn} activeOpacity={0.5} onPress={onEdit}>
-          <Text style={styles.exEditText}>수정</Text>
+      <View style={s.exBtnRow}>
+        <TouchableOpacity style={[s.exEditBtn, { borderColor: C.gold }]} activeOpacity={0.5} onPress={onEdit}>
+          <Text style={[s.exEditText, { color: C.gold }]}>수정</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.exDeleteBtn} activeOpacity={0.5} onPress={onDelete}>
-          <Text style={styles.exDeleteText}>삭제</Text>
+        <TouchableOpacity style={[s.exDeleteBtn, { borderColor: C.danger }]} activeOpacity={0.5} onPress={onDelete}>
+          <Text style={[s.exDeleteText, { color: C.danger }]}>삭제</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -106,28 +95,28 @@ function ExhibitionCard({ item, onPress, onEdit, onDelete }: { item: Exhibition;
 /* ── 메뉴 행/섹션 컴포넌트 ── */
 type MenuItem = { icon: string; label: string; onPress: () => void; color?: string };
 
-function MenuRow({ item, isLast }: { item: MenuItem; isLast: boolean }) {
+function MenuRow({ item, isLast, C }: { item: MenuItem; isLast: boolean; C: any }) {
   return (
     <>
       <Pressable
-        style={({ pressed }) => [styles.menuRow, pressed && { opacity: 0.7 }]}
+        style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
         onPress={item.onPress}
       >
-        <Text style={styles.menuIcon}>{item.icon}</Text>
-        <Text style={[styles.menuLabel, item.color ? { color: item.color } : undefined]}>{item.label}</Text>
-        <Text style={[styles.menuArrow, item.color ? { color: item.color } : undefined]}>›</Text>
+        {item.icon ? <Text style={s.menuIcon}>{item.icon}</Text> : null}
+        <Text style={[s.menuLabel, { color: C.fg }, item.color ? { color: item.color } : undefined]}>{item.label}</Text>
+        <Text style={[s.menuArrow, { color: C.muted }, item.color ? { color: item.color } : undefined]}>›</Text>
       </Pressable>
-      {!isLast && <View style={styles.menuDivider} />}
+      {!isLast && <View style={[s.menuDivider, { backgroundColor: C.border }, !item.icon && { marginLeft: 16 }]} />}
     </>
   );
 }
 
-function MenuSection({ title, items, delay }: { title: string; items: MenuItem[]; delay: number }) {
+function MenuSection({ title, items, delay, C }: { title: string; items: MenuItem[]; delay: number; C: any }) {
   return (
-    <Animated.View entering={FadeInDown.delay(delay).duration(400).springify()} style={styles.section}>
-      <Text style={styles.sectionHeader}>{title}</Text>
+    <Animated.View entering={FadeInDown.delay(delay).duration(400).springify()} style={[s.section, { backgroundColor: C.card }]}>
+      <Text style={[s.sectionHeader, { color: C.muted }]}>{title}</Text>
       {items.map((item, i) => (
-        <MenuRow key={item.label} item={item} isLast={i === items.length - 1} />
+        <MenuRow key={item.label} item={item} isLast={i === items.length - 1} C={C} />
       ))}
     </Animated.View>
   );
@@ -138,10 +127,12 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile, signOut } = useAuth();
+  const { colors: C } = useThemeMode();
 
   const userType = profile?.user_type ?? 'audience';
   const emoji = USER_TYPE_EMOJI[userType];
   const label = USER_TYPE_LABELS[userType];
+  const avatarUrl = profile?.avatar_url;
 
   /* 전시관 데이터 */
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
@@ -211,95 +202,116 @@ export default function ProfileScreen() {
 
   /* 메뉴 아이템 */
   const workItems: MenuItem[] = [
-    { icon: '🖼', label: '내 포트폴리오 보기', onPress: () => router.push(`/artist/${user?.id}`) },
-    { icon: '＋', label: '작품 추가', onPress: () => router.push('/artwork/create') },
-  ];
-
-  const accountItems: MenuItem[] = [
-    { icon: '🚪', label: '로그아웃', onPress: signOut, color: C.danger },
+    { icon: '', label: '내 작품 보기', onPress: () => router.push(`/artist/${user?.id}`) },
+    { icon: '', label: '작품 추가', onPress: () => router.push('/artwork/create') },
   ];
 
   let delayCounter = 300;
   const nextDelay = () => { delayCounter += 80; return delayCounter; };
 
   return (
-    <View style={[styles.root, { paddingTop: insets.top }]}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+    <View style={[s.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
+      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {/* 헤더 */}
-        <Animated.View entering={FadeIn.delay(100).duration(300)} style={styles.header}>
-          <Text style={styles.headerTitle}>내 정보</Text>
-          <Text style={styles.headerIcon}>⚙</Text>
+        <Animated.View entering={FadeIn.delay(100).duration(300)} style={s.header}>
+          <Text style={[s.headerTitle, { color: C.fg }]}>내 정보</Text>
+          <Pressable
+            onPress={() => router.push('/profile/settings')}
+            style={({ pressed }) => [s.settingsBtn, pressed && { opacity: 0.6 }]}
+          >
+            <Text style={[s.settingsIcon, { color: C.muted }]}>⚙</Text>
+          </Pressable>
         </Animated.View>
 
         {/* 프로필 카드 */}
-        <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.profileCard}>
-          <View style={styles.profileRow}>
-            <View style={styles.avatarWrap}>
-              <Text style={styles.avatarEmoji}>{emoji}</Text>
+        <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={[s.profileCard, { backgroundColor: C.card }]}>
+          <Pressable
+            style={({ pressed }) => [s.profileRow, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push('/profile/detail')}
+          >
+            <View style={[s.avatarWrap, { backgroundColor: C.bg, borderColor: C.gold }]}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={s.avatarImage} contentFit="cover" />
+              ) : (
+                <Text style={s.avatarEmoji}>{emoji}</Text>
+              )}
             </View>
-            <View style={styles.profileInfo}>
-              <View style={styles.nameRow}>
-                <Text style={styles.name}>{profile?.name ?? '회원'}</Text>
-                <View style={styles.badge}>
-                  <Text style={styles.badgeText}>{label}</Text>
+            <View style={s.profileInfo}>
+              <View style={s.nameRow}>
+                <Text style={[s.name, { color: C.fg }]}>{profile?.name ?? '회원'}</Text>
+                <View style={[s.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
+                  <Text style={[s.badgeText, { color: C.gold }]}>{label}</Text>
                 </View>
+                {userType === 'creator' && (
+                  <View style={[s.badge, { backgroundColor: C.bg, borderColor: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
+                    <Text style={[s.badgeText, { color: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
+                      {(profile as any)?.verified ? '인증' : '미인증'}
+                    </Text>
+                  </View>
+                )}
               </View>
-              <Text style={styles.email}>{user?.email}</Text>
+              <Text style={[s.email, { color: C.muted }]}>{user?.email}</Text>
             </View>
-          </View>
+            <Text style={[s.profileArrow, { color: C.muted }]}>›</Text>
+          </Pressable>
         </Animated.View>
 
         {/* 모의 포인트 */}
-        <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={styles.pointsCard}>
-          <View style={styles.pointsRow}>
-            <View style={styles.pointsLeft}>
-              <Text style={styles.pointsLabel}>◆ 모의</Text>
-              <Text style={styles.pointsAmount}>
+        <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.pointsCard, { backgroundColor: C.card }]}>
+          <View style={s.pointsRow}>
+            <View style={s.pointsLeft}>
+              <Text style={[s.pointsLabel, { color: C.gold }]}>◆ 모의</Text>
+              <Text style={[s.pointsAmount, { color: C.fg }]}>
                 {(profile?.points ?? 0).toLocaleString()}
-                <Text style={styles.pointsUnit}> 모의</Text>
+                <Text style={[s.pointsUnit, { color: C.muted }]}> 모의</Text>
               </Text>
             </View>
             <Pressable
-              style={({ pressed }) => [styles.pointsDetailBtn, pressed && { opacity: 0.7 }]}
-              onPress={() => {}}
+              style={({ pressed }) => [s.pointsDetailBtn, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
+              onPress={() => router.push('/profile/points')}
             >
-              <Text style={styles.pointsDetailText}>내역</Text>
+              <Text style={[s.pointsDetailText, { color: C.muted }]}>내역</Text>
             </Pressable>
           </View>
-          <View style={styles.pointsInfo}>
-            <Text style={styles.pointsInfoText}>1모의 = 100원</Text>
+          <View style={[s.pointsInfo, { borderTopColor: C.border }]}>
+            <Text style={[s.pointsInfoText, { color: C.mutedLight }]}>1모의 = 100원</Text>
           </View>
         </Animated.View>
 
+        {/* 나의 작품 (creator only) */}
+        {userType === 'creator' && user?.id && (
+          <MenuSection title="🎨 나의 작품" items={workItems} delay={nextDelay()} C={C} />
+        )}
+
         {/* 내 전시관 */}
         {exhibitions.length > 0 && (
-          <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={styles.exSection}>
-            <View style={styles.exSectionHeader}>
-              <Text style={styles.sectionHeaderText}>🏛️ 내 전시관</Text>
-              <View style={styles.exHeaderRight}>
+          <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
+            <View style={s.exSectionHeader}>
+              <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>🏛️ 내 전시관</Text>
+              <View style={s.exHeaderRight}>
                 {Platform.OS === 'web' && exhibitions.length > 1 && (
-                  <View style={styles.exScrollBtns}>
+                  <View style={s.exScrollBtns}>
                     <TouchableOpacity
-                      style={styles.exScrollBtn}
+                      style={[s.exScrollBtn, { borderColor: C.border }]}
                       activeOpacity={0.5}
                       onPress={() => exScrollRef.current?.scrollTo({ x: Math.max(0, exScrollX.current - 172), animated: true })}
                     >
-                      <Text style={styles.exScrollBtnText}>←</Text>
+                      <Text style={[s.exScrollBtnText, { color: C.muted }]}>←</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.exScrollBtn}
+                      style={[s.exScrollBtn, { borderColor: C.border }]}
                       activeOpacity={0.5}
                       onPress={() => exScrollRef.current?.scrollTo({ x: exScrollX.current + 172, animated: true })}
                     >
-                      <Text style={styles.exScrollBtnText}>→</Text>
+                      <Text style={[s.exScrollBtnText, { color: C.muted }]}>→</Text>
                     </TouchableOpacity>
                   </View>
                 )}
                 <Pressable
-                  style={({ pressed }) => [styles.exNewBtn, pressed && { opacity: 0.7 }]}
+                  style={({ pressed }) => [s.exNewBtn, { borderColor: C.gold }, pressed && { opacity: 0.7 }]}
                   onPress={() => router.push('/exhibition/create')}
                 >
-                  <Text style={styles.exNewBtnText}>+ 새 전시관</Text>
+                  <Text style={[s.exNewBtnText, { color: C.gold }]}>+ 새 전시관</Text>
                 </Pressable>
               </View>
             </View>
@@ -307,7 +319,7 @@ export default function ProfileScreen() {
               ref={exScrollRef}
               horizontal
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.exList}
+              contentContainerStyle={s.exList}
               onScroll={(e) => { exScrollX.current = e.nativeEvent.contentOffset.x; }}
               scrollEventThrottle={16}
             >
@@ -315,6 +327,7 @@ export default function ProfileScreen() {
                 <ExhibitionCard
                   key={item.id}
                   item={item}
+                  C={C}
                   onPress={() => router.push(`/exhibition/${item.id}`)}
                   onEdit={() => router.push(`/exhibition/create?editId=${item.id}`)}
                   onDelete={() => handleDelete(item.id)}
@@ -323,23 +336,14 @@ export default function ProfileScreen() {
             </ScrollView>
           </Animated.View>
         )}
-
-        {/* 나의 작품 (creator only) */}
-        {userType === 'creator' && user?.id && (
-          <MenuSection title="나의 작품" items={workItems} delay={nextDelay()} />
-        )}
-
-        {/* 계정 */}
-        <MenuSection title="계정" items={accountItems} delay={nextDelay()} />
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   root: {
     flex: 1,
-    backgroundColor: C.bg,
   },
   scroll: {
     paddingHorizontal: 16,
@@ -356,16 +360,20 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: C.fg,
   },
-  headerIcon: {
-    fontSize: 20,
-    color: C.muted,
+  settingsBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  settingsIcon: {
+    fontSize: 24,
   },
 
   /* 프로필 카드 */
   profileCard: {
-    backgroundColor: C.card,
     borderRadius: 16,
     marginBottom: 12,
   },
@@ -379,11 +387,15 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: C.bg,
     borderWidth: 1.5,
-    borderColor: C.gold,
     justifyContent: 'center',
     alignItems: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   avatarEmoji: { fontSize: 24 },
   profileInfo: {
@@ -399,12 +411,9 @@ const styles = StyleSheet.create({
   name: {
     fontSize: 17,
     fontWeight: '800',
-    color: C.fg,
   },
   badge: {
-    backgroundColor: C.bg,
     borderWidth: 1,
-    borderColor: C.gold,
     borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 2,
@@ -412,16 +421,17 @@ const styles = StyleSheet.create({
   badgeText: {
     fontSize: 11,
     fontWeight: '700',
-    color: C.gold,
   },
   email: {
     fontSize: 13,
-    color: C.muted,
+  },
+  profileArrow: {
+    fontSize: 22,
+    marginLeft: 4,
   },
 
   /* 포인트 카드 */
   pointsCard: {
-    backgroundColor: C.card,
     borderRadius: 16,
     marginBottom: 12,
     padding: 16,
@@ -437,53 +447,44 @@ const styles = StyleSheet.create({
   pointsLabel: {
     fontSize: 12,
     fontWeight: '700',
-    color: C.gold,
     letterSpacing: 1,
   },
   pointsAmount: {
     fontSize: 24,
     fontWeight: '900',
-    color: C.fg,
   },
   pointsUnit: {
     fontSize: 14,
     fontWeight: '600',
-    color: C.muted,
   },
   pointsDetailBtn: {
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: C.border,
   },
   pointsDetailText: {
     fontSize: 13,
     fontWeight: '600',
-    color: C.muted,
   },
   pointsInfo: {
     marginTop: 12,
     paddingTop: 12,
     borderTopWidth: 1,
-    borderTopColor: C.border,
   },
   pointsInfoText: {
     fontSize: 11,
-    color: C.mutedLight,
     letterSpacing: 0.5,
   },
 
   /* 메뉴 섹션 */
   section: {
-    backgroundColor: C.card,
     borderRadius: 16,
     marginBottom: 12,
   },
   sectionHeader: {
     fontSize: 11,
     fontWeight: '800',
-    color: C.muted,
     letterSpacing: 2,
     paddingTop: 16,
     paddingLeft: 16,
@@ -502,23 +503,19 @@ const styles = StyleSheet.create({
   },
   menuLabel: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
-    color: C.fg,
   },
   menuArrow: {
     fontSize: 18,
-    color: C.muted,
   },
   menuDivider: {
     height: 1,
-    backgroundColor: C.border,
     marginLeft: 48,
   },
 
   /* 내 전시관 섹션 */
   exSection: {
-    backgroundColor: C.card,
     borderRadius: 16,
     marginBottom: 12,
     paddingBottom: 16,
@@ -530,12 +527,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 12,
-  },
-  sectionHeaderText: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: C.fg,
-    letterSpacing: 1,
   },
   exHeaderRight: {
     flexDirection: 'row',
@@ -551,25 +542,21 @@ const styles = StyleSheet.create({
     height: 28,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: C.border,
     justifyContent: 'center',
     alignItems: 'center',
   },
   exScrollBtnText: {
     fontSize: 14,
-    color: C.muted,
   },
   exNewBtn: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: C.gold,
   },
   exNewBtnText: {
     fontSize: 12,
     fontWeight: '700',
-    color: C.gold,
     letterSpacing: 0.5,
   },
   exList: {
@@ -580,9 +567,7 @@ const styles = StyleSheet.create({
   exCard: {
     width: 160,
     borderWidth: 1,
-    borderColor: C.border,
     borderRadius: 16,
-    backgroundColor: C.bg,
     overflow: 'hidden',
   },
   exPosterWrap: {
@@ -595,7 +580,6 @@ const styles = StyleSheet.create({
   exPosterPlaceholder: {
     width: '100%',
     height: 110,
-    backgroundColor: C.bg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -621,7 +605,6 @@ const styles = StyleSheet.create({
   exBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: C.muted,
     letterSpacing: 0.3,
   },
   exTitleWrap: {
@@ -632,7 +615,6 @@ const styles = StyleSheet.create({
   exTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: C.fg,
     letterSpacing: 0.3,
   },
   exBtnRow: {
@@ -647,13 +629,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: C.gold,
     backgroundColor: 'rgba(200,169,110,0.08)',
   },
   exEditText: {
     fontSize: 10,
     fontWeight: '700',
-    color: C.gold,
     letterSpacing: 0.5,
   },
   exDeleteBtn: {
@@ -662,13 +642,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: C.danger,
     backgroundColor: 'rgba(217,64,64,0.08)',
   },
   exDeleteText: {
     fontSize: 10,
     fontWeight: '700',
-    color: C.danger,
     letterSpacing: 0.5,
   },
 });

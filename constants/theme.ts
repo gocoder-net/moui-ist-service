@@ -13,6 +13,45 @@ export const Brand = {
   border: '#333d4b',
 };
 
+export type ThemeColors = {
+  bg: string;
+  fg: string;
+  gold: string;
+  goldLight: string;
+  goldDim: string;
+  muted: string;
+  mutedLight: string;
+  border: string;
+  card: string;
+  danger: string;
+};
+
+export const DarkColors: ThemeColors = {
+  bg: '#191f28',
+  fg: '#f2f4f6',
+  gold: '#C8A96E',
+  goldLight: '#E0C992',
+  goldDim: 'rgba(200,169,110,0.12)',
+  muted: '#8b95a1',
+  mutedLight: '#4e5968',
+  border: '#333d4b',
+  card: '#212a35',
+  danger: '#D94040',
+};
+
+export const LightColors: ThemeColors = {
+  bg: '#f5f6f8',
+  fg: '#191f28',
+  gold: '#C8A96E',
+  goldLight: '#E0C992',
+  goldDim: 'rgba(200,169,110,0.12)',
+  muted: '#6b7280',
+  mutedLight: '#9ca3af',
+  border: '#e5e7eb',
+  card: '#ffffff',
+  danger: '#D94040',
+};
+
 const tintColor = Brand.gold;
 
 export const Colors = {
