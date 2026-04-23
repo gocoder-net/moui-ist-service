@@ -588,12 +588,6 @@ export default function ArtistPortfolioScreen() {
               <Text style={[styles.heroField, { color: C.gold }]}>{profile.field}</Text>
             )}
 
-            <View style={styles.heroDividerRow}>
-              <View style={[styles.heroDividerLine, { backgroundColor: C.gold }]} />
-              <View style={[styles.heroDividerDiamond, { borderColor: C.gold }]} />
-              <View style={[styles.heroDividerLine, { backgroundColor: C.gold }]} />
-            </View>
-
             <View style={styles.statsRow}>
               <View style={styles.statItem}>
                 <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: C.fg }]} />
@@ -780,22 +774,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     letterSpacing: 3,
     textTransform: 'uppercase',
-  },
-  heroDividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginVertical: 4,
-  },
-  heroDividerLine: {
-    width: 40,
-    height: 1,
-  },
-  heroDividerDiamond: {
-    width: 6,
-    height: 6,
-    borderWidth: 1,
-    transform: [{ rotate: '45deg' }],
   },
 
   /* Stats */

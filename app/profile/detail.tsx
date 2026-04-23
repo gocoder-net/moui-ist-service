@@ -281,8 +281,17 @@ export default function ProfileDetailScreen() {
                   <Text style={[styles.name, { color: C.fg }]}>{profile?.name ?? '회원'}</Text>
                   <Text style={[styles.username, { color: C.mutedLight }]}>@{profile?.username}</Text>
                 </View>
-                <View style={[styles.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
-                  <Text style={[styles.badgeText, { color: C.gold }]}>{label}</Text>
+                <View style={styles.badgeGroup}>
+                  <View style={[styles.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
+                    <Text style={[styles.badgeText, { color: C.gold }]}>{label}</Text>
+                  </View>
+                  {userType === 'creator' && (
+                    <View style={[styles.badge, { backgroundColor: C.bg, borderColor: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
+                      <Text style={[styles.badgeText, { color: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
+                        {(profile as any)?.verified ? '인증' : '미인증'}
+                      </Text>
+                    </View>
+                  )}
                 </View>
               </View>
 
@@ -615,6 +624,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
+  },
+  badgeGroup: {
+    alignItems: 'flex-end',
+    gap: 6,
   },
   badgeText: {
     fontSize: 11,
