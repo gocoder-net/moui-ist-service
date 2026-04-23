@@ -321,53 +321,66 @@ export default function HomeScreen() {
 
         {/* 출석 이벤트 */}
         {user && (
-          <Animated.View entering={FadeInDown.delay(400).duration(400).springify()} style={[styles.attendCard, { backgroundColor: C.card, borderColor: C.gold }]}>
-            <View style={styles.attendHeader}>
-              <Text style={[styles.attendTitle, { color: C.fg }]}>📅 출석 이벤트</Text>
-              <Text style={[styles.attendSub, { color: C.muted }]}>7일 연속 출석하고 보상 받기!</Text>
+          <>
+            <View style={styles.sectionHeader}>
+              <Animated.Text entering={FadeIn.delay(360).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
+                출석 이벤트
+              </Animated.Text>
             </View>
-            <View style={styles.attendDays}>
-              {ATTENDANCE_REWARDS.map((reward, i) => {
-                const dayNum = i + 1;
-                const checked = dayNum <= attendanceDay;
-                const isCurrent = dayNum === attendanceDay + 1 && !checkedToday;
-                return (
-                  <View key={dayNum} style={styles.attendDayCol}>
-                    <View style={[
-                      styles.attendDayCircle,
-                      { borderColor: checked ? C.gold : C.border },
-                      checked && { backgroundColor: C.gold },
-                      isCurrent && { borderColor: C.gold, borderWidth: 2 },
-                    ]}>
-                      <Text style={[
-                        styles.attendDayNum,
-                        { color: checked ? C.bg : isCurrent ? C.gold : C.mutedLight },
-                      ]}>{checked ? '✓' : dayNum}</Text>
-                    </View>
-                    <Text style={[styles.attendReward, { color: dayNum === 7 ? C.gold : C.mutedLight }]}>
-                      {reward}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-            {!checkedToday ? (
-              <Pressable
-                onPress={handleCheckIn}
-                disabled={checkingIn}
-                style={({ pressed }) => [styles.attendBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.7 }, checkingIn && { opacity: 0.5 }]}
-              >
-                <Text style={[styles.attendBtnText, { color: C.bg }]}>{checkingIn ? '출석 중...' : '출석하기'}</Text>
-              </Pressable>
-            ) : (
-              <View style={[styles.attendBtn, { backgroundColor: C.border }]}>
-                <Text style={[styles.attendBtnText, { color: C.muted }]}>오늘 출석 완료!</Text>
+
+            <Animated.View entering={FadeInDown.delay(400).duration(400).springify()} style={[styles.attendCard, { backgroundColor: C.card, borderColor: C.gold }]}>
+              <View style={styles.attendHeader}>
+                <Text style={[styles.attendSub, styles.attendSubLead, { color: C.muted }]}>7일 연속 출석하고 보상 받기!</Text>
               </View>
-            )}
-          </Animated.View>
+              <View style={styles.attendDays}>
+                {ATTENDANCE_REWARDS.map((reward, i) => {
+                  const dayNum = i + 1;
+                  const checked = dayNum <= attendanceDay;
+                  const isCurrent = dayNum === attendanceDay + 1 && !checkedToday;
+                  return (
+                    <View key={dayNum} style={styles.attendDayCol}>
+                      <View style={[
+                        styles.attendDayCircle,
+                        { borderColor: checked ? C.gold : C.border },
+                        checked && { backgroundColor: C.gold },
+                        isCurrent && { borderColor: C.gold, borderWidth: 2 },
+                      ]}>
+                        <Text style={[
+                          styles.attendDayNum,
+                          { color: checked ? C.bg : isCurrent ? C.gold : C.mutedLight },
+                        ]}>{checked ? '✓' : dayNum}</Text>
+                      </View>
+                      <Text style={[styles.attendReward, { color: dayNum === 7 ? C.gold : C.mutedLight }]}>
+                        {reward}
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {!checkedToday ? (
+                <Pressable
+                  onPress={handleCheckIn}
+                  disabled={checkingIn}
+                  style={({ pressed }) => [styles.attendBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.7 }, checkingIn && { opacity: 0.5 }]}
+                >
+                  <Text style={[styles.attendBtnText, { color: C.bg }]}>{checkingIn ? '출석 중...' : '출석하기'}</Text>
+                </Pressable>
+              ) : (
+                <View style={[styles.attendBtn, { backgroundColor: C.border }]}>
+                  <Text style={[styles.attendBtnText, { color: C.muted }]}>오늘 출석 완료!</Text>
+                </View>
+              )}
+            </Animated.View>
+          </>
         )}
 
         {/* 안내 카드 */}
+        <View style={styles.sectionHeader}>
+          <Animated.Text entering={FadeIn.delay(520).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
+            Coming Soon
+          </Animated.Text>
+        </View>
+
         <Animated.View entering={FadeInDown.delay(600).duration(400).springify()} style={[styles.infoCard, { borderColor: C.gold, backgroundColor: C.card }]}>
           <View style={styles.infoIconWrap}>
             <PlayfulDiamond size={12} color={C.gold} />
@@ -376,9 +389,6 @@ export default function HomeScreen() {
           <Text style={[styles.infoDesc, { color: C.muted }]}>
             피드, 팔로우, 알림 등{'\n'}다양한 기능이 준비 중입니다
           </Text>
-          <View style={[styles.infoBadge, { backgroundColor: C.border }]}>
-            <Text style={[styles.infoBadgeText, { color: C.gold }]}>Coming Soon</Text>
-          </View>
         </Animated.View>
 
         <View style={{ height: 24 }} />
@@ -471,7 +481,6 @@ const styles = StyleSheet.create({
   },
 
   infoCard: {
-    marginTop: 24,
     borderWidth: 1,
     borderRadius: 20,
     padding: 28,
@@ -491,18 +500,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 21,
   },
-  infoBadge: {
-    marginTop: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 12,
-  },
-  infoBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 2,
-  },
-
   /* 출석 이벤트 */
   attendCard: {
     borderWidth: 1,
@@ -515,10 +512,9 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     gap: 4,
   },
-  attendTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    letterSpacing: 1,
+  attendSubLead: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   attendSub: {
     fontSize: 12,
