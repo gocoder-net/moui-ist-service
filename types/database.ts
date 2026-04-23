@@ -21,6 +21,7 @@ export type Database = {
           field: string | null;
           sns_links: Json;
           avatar_url: string | null;
+          region: string | null;
           points: number;
           created_at: string;
           updated_at: string;
@@ -36,6 +37,7 @@ export type Database = {
           field?: string | null;
           sns_links?: Json;
           avatar_url?: string | null;
+          region?: string | null;
           points?: number;
         };
         Update: {
@@ -48,6 +50,7 @@ export type Database = {
           field?: string | null;
           sns_links?: Json;
           avatar_url?: string | null;
+          region?: string | null;
           points?: number;
           verified?: boolean;
         };

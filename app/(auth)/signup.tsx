@@ -471,7 +471,7 @@ export default function SignUpScreen() {
                 usernameStatus === 'taken' && { color: C.error },
                 usernameStatus === 'available' && { color: '#22c55e' },
               ]}>
-                {usernameStatus === 'idle' && '프로필 URL에 사용됩니다. (예: moui-ist.com/artist/myid)'}
+                {usernameStatus === 'idle' && '프로필 URL에 사용됩니다. (예: mouiist.com/artist/myid)'}
                 {usernameStatus === 'invalid' && '영문 소문자, 숫자, 밑줄(_), 점(.)만 가능 (2~20자)'}
                 {usernameStatus === 'checking' && '확인 중...'}
                 {usernameStatus === 'available' && '✓ 사용 가능한 아이디입니다.'}

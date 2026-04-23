@@ -19,6 +19,7 @@ create table public.profiles (
   field text,
   sns_links jsonb default '{}',
   avatar_url text,
+  region text,
   points integer not null default 0,
   verified boolean not null default false,
   created_at timestamptz default now(),
