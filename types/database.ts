@@ -239,6 +239,70 @@ export type Database = {
           },
         ];
       };
+      chat_requests: {
+        Row: {
+          id: string;
+          sender_id: string;
+          receiver_id: string;
+          message: string;
+          status: "pending" | "accepted" | "rejected";
+          created_at: string;
+        };
+        Insert: {
+          sender_id: string;
+          receiver_id: string;
+          message: string;
+          status?: "pending" | "accepted" | "rejected";
+        };
+        Update: {
+          status?: "pending" | "accepted" | "rejected";
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_requests_sender_id_fkey";
+            columns: ["sender_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chat_requests_receiver_id_fkey";
+            columns: ["receiver_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      chat_messages: {
+        Row: {
+          id: string;
+          request_id: string;
+          sender_id: string;
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          request_id: string;
+          sender_id: string;
+          content: string;
+        };
+        Update: {
+          content?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_request_id_fkey";
+            columns: ["request_id"];
+            referencedRelation: "chat_requests";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chat_messages_sender_id_fkey";
+            columns: ["sender_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: {
       [_ in never]: never;

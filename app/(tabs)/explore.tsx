@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
+import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -302,23 +303,27 @@ export default function ExploreScreen() {
             </Text>
 
             <View style={styles.badgeRow}>
-              <View style={[styles.typeBadge, { borderColor: C.gold, backgroundColor: C.goldDim }]}>
-                <Text style={[styles.badgeText, { color: C.gold }]}>
-                  {USER_TYPE_LABELS[item.user_type] ?? item.user_type}
-                </Text>
-              </View>
-              {item.user_type === 'creator' && (
+              {item.user_type === 'creator' ? (
                 <View
                   style={[
                     styles.verifyBadge,
                     {
-                      borderColor: item.verified ? '#22c55e' : C.danger,
-                      backgroundColor: item.verified ? 'rgba(34,197,94,0.12)' : 'rgba(217,64,64,0.12)',
+                      borderColor: C.gold,
+                      backgroundColor: C.goldDim,
                     },
                   ]}
                 >
-                  <Text style={[styles.badgeText, { color: item.verified ? '#22c55e' : C.danger }]}>
-                    {item.verified ? '인증' : '미인증'}
+                  <Text style={[styles.badgeText, { color: C.gold }]}>
+                    작가{' '}
+                    <Text style={{ color: item.verified ? '#22c55e' : C.danger }}>
+                      {getCreatorVerificationStatusText(item.verified)}
+                    </Text>
+                  </Text>
+                </View>
+              ) : (
+                <View style={[styles.typeBadge, { borderColor: C.gold, backgroundColor: C.goldDim }]}>
+                  <Text style={[styles.badgeText, { color: C.gold }]}>
+                    {USER_TYPE_LABELS[item.user_type] ?? item.user_type}
                   </Text>
                 </View>
               )}
@@ -355,7 +360,7 @@ export default function ExploreScreen() {
 
       {/* 상단 타이틀 */}
       <Animated.View entering={FadeIn.delay(100).duration(300)} style={styles.topHeader}>
-        <Text style={[styles.topTitle, { color: C.fg }]}>탐색모의</Text>
+        <Text style={[styles.topTitle, { color: C.fg }]}>작품구경</Text>
       </Animated.View>
 
       {/* 유형 탭 (작가 / 지망생 / 감상자) */}

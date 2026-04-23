@@ -124,6 +124,26 @@ create table public.attendance (
   unique (user_id, checked_date)
 );
 
+-- 채팅 요청
+create table public.chat_requests (
+  id uuid default gen_random_uuid() primary key,
+  sender_id uuid references public.profiles(id) on delete cascade not null,
+  receiver_id uuid references public.profiles(id) on delete cascade not null,
+  message text not null,
+  status text not null default 'pending'
+    check (status in ('pending', 'accepted', 'rejected')),
+  created_at timestamptz default now()
+);
+
+-- 채팅 메시지
+create table public.chat_messages (
+  id uuid default gen_random_uuid() primary key,
+  request_id uuid references public.chat_requests(id) on delete cascade not null,
+  sender_id uuid references public.profiles(id) on delete cascade not null,
+  content text not null,
+  created_at timestamptz default now()
+);
+
 -- =========================
 -- 2. Indexes
 -- =========================
@@ -135,6 +155,9 @@ create index idx_exhibitions_user_id on public.exhibitions(user_id);
 create index idx_exhibitions_published on public.exhibitions(is_published) where is_published = true;
 create index idx_exhibition_artworks_exhibition_id on public.exhibition_artworks(exhibition_id);
 create index idx_point_history_user on public.point_history(user_id, created_at desc);
+create index idx_chat_requests_receiver on public.chat_requests(receiver_id);
+create index idx_chat_requests_sender on public.chat_requests(sender_id);
+create index idx_chat_messages_request on public.chat_messages(request_id);
 
 -- =========================
 -- 3. RLS
@@ -148,6 +171,8 @@ alter table public.exhibition_artworks enable row level security;
 alter table public.point_history enable row level security;
 alter table public.moui_posts enable row level security;
 alter table public.attendance enable row level security;
+alter table public.chat_requests enable row level security;
+alter table public.chat_messages enable row level security;
 
 -- Profiles
 create policy "profiles_select" on public.profiles for select using (true);
@@ -192,6 +217,19 @@ create policy "Users can update own moui_posts" on public.moui_posts for update 
 -- Attendance
 create policy "Users can read own attendance" on public.attendance for select using (auth.uid() = user_id);
 create policy "Users can insert own attendance" on public.attendance for insert with check (auth.uid() = user_id);
+
+-- Chat Requests
+create policy "chat_requests_select" on public.chat_requests for select using (auth.uid() = sender_id or auth.uid() = receiver_id);
+create policy "chat_requests_insert" on public.chat_requests for insert with check (auth.uid() = sender_id);
+create policy "chat_requests_update" on public.chat_requests for update using (auth.uid() = receiver_id);
+
+-- Chat Messages
+create policy "chat_messages_select" on public.chat_messages for select using (
+  exists (select 1 from public.chat_requests r where r.id = request_id and (r.sender_id = auth.uid() or r.receiver_id = auth.uid()))
+);
+create policy "chat_messages_insert" on public.chat_messages for insert with check (
+  auth.uid() = sender_id and exists (select 1 from public.chat_requests r where r.id = request_id and r.status = 'accepted' and (r.sender_id = auth.uid() or r.receiver_id = auth.uid()))
+);
 
 -- =========================
 -- 4. Triggers

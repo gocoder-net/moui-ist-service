@@ -9,6 +9,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { parseRegion } from '@/constants/regions';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 type MouiPost = {
@@ -32,11 +33,25 @@ function showAlert(title: string, message: string) {
   else Alert.alert(title, message);
 }
 
+function formatRegionLabel(region: string | null | undefined) {
+  const parsed = parseRegion(region);
+  if (!parsed) return region?.trim() ?? '';
+
+  const compactProvince = parsed.province
+    .replace('특별시', '시')
+    .replace('광역시', '시')
+    .replace('특별자치시', '시')
+    .replace('특별자치도', '도');
+
+  return `${compactProvince} ${parsed.district}`;
+}
+
 export default function MouiScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user, profile } = useAuth();
   const { colors: C } = useThemeMode();
+  const activityRegion = formatRegionLabel(profile?.region);
 
   const [posts, setPosts] = useState<MouiPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,7 +179,29 @@ export default function MouiScreen() {
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
       {/* 헤더 */}
       <Animated.View entering={FadeIn.delay(50).duration(200)} style={[styles.header, { borderBottomColor: C.border }]}>
-        <Text style={[styles.headerTitle, { color: C.fg }]}>모임</Text>
+        <View style={styles.headerLeft}>
+          <Text style={[styles.headerTitle, { color: C.fg }]}>모임</Text>
+          <Pressable
+            onPress={() => router.push('/profile/detail?focus=region')}
+            style={({ pressed }) => [
+              styles.regionChip,
+              {
+                backgroundColor: activityRegion ? C.gold + '14' : C.card,
+                borderColor: activityRegion ? C.gold + '55' : C.border,
+              },
+              pressed && { opacity: 0.75 },
+            ]}
+          >
+            <Text
+              style={[
+                styles.regionChipText,
+                { color: activityRegion ? C.gold : C.muted },
+              ]}
+            >
+              {activityRegion ? `📍 ${activityRegion}` : '📍 활동 지역 설정'}
+            </Text>
+          </Pressable>
+        </View>
         <Pressable
           onPress={() => {
             if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
@@ -252,10 +289,27 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderBottomWidth: 1,
   },
+  headerLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingRight: 12,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 1,
+  },
+  regionChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  regionChipText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   headerBtn: {
     paddingHorizontal: 16,

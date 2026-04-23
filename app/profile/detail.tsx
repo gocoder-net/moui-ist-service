@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { getCreatorVerificationStatusText, getCreatorVerificationResetLabel } from '@/constants/creator-verification';
 import { REGIONS, PROVINCE_LIST, parseRegion } from '@/constants/regions';
 
 const USER_TYPE_LABELS = { creator: '작가', aspiring: '지망생', audience: '감상자' } as const;
@@ -186,11 +187,11 @@ export default function ProfileDetailScreen() {
     const isVerified = !!(profile as any)?.verified;
     if (userType === 'creator' && isVerified && newType !== 'creator') {
       const confirmed = Platform.OS === 'web'
-        ? window.confirm(`유형을 변경하면 인증 작가 상태가 미인증으로 초기화됩니다.\n${COST} MOUI가 차감됩니다.\n계속하시겠습니까?`)
+        ? window.confirm(`유형을 변경하면 인증 작가 상태가 ${getCreatorVerificationResetLabel()} 상태로 초기화됩니다.\n${COST} MOUI가 차감됩니다.\n계속하시겠습니까?`)
         : await new Promise<boolean>((resolve) => {
             Alert.alert(
               '인증 초기화 경고',
-              `유형을 변경하면 인증 작가 상태가 미인증으로 초기화됩니다.\n${COST} MOUI가 차감됩니다.`,
+              `유형을 변경하면 인증 작가 상태가 ${getCreatorVerificationResetLabel()} 상태로 초기화됩니다.\n${COST} MOUI가 차감됩니다.`,
               [{ text: '취소', style: 'cancel', onPress: () => resolve(false) }, { text: '변경', style: 'destructive', onPress: () => resolve(true) }],
             );
           });
@@ -397,14 +398,18 @@ export default function ProfileDetailScreen() {
                   <Text style={[styles.username, { color: C.mutedLight }]}>@{profile?.username}</Text>
                 </View>
                 <View style={styles.badgeGroup}>
-                  <View style={[styles.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
-                    <Text style={[styles.badgeText, { color: C.gold }]}>{label}</Text>
-                  </View>
-                  {userType === 'creator' && (
-                    <View style={[styles.badge, { backgroundColor: C.bg, borderColor: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
-                      <Text style={[styles.badgeText, { color: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
-                        {(profile as any)?.verified ? '인증' : '미인증'}
+                  {userType === 'creator' ? (
+                    <View style={[styles.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
+                      <Text style={[styles.badgeText, { color: C.gold }]}>
+                        작가{' '}
+                        <Text style={{ color: (profile as any)?.verified ? '#22c55e' : C.danger }}>
+                          {getCreatorVerificationStatusText((profile as any)?.verified)}
+                        </Text>
                       </Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
+                      <Text style={[styles.badgeText, { color: C.gold }]}>{label}</Text>
                     </View>
                   )}
                 </View>

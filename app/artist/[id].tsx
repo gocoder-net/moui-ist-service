@@ -11,12 +11,17 @@ import {
   Modal,
   FlatList,
   Alert,
+  TextInput,
+  ActivityIndicator,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
+import { APP_TAB_ITEMS } from '@/constants/tab-navigation';
 import { useThemeMode } from '@/contexts/theme-context';
 import Animated, {
   useSharedValue,
@@ -36,6 +41,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/auth-context';
+import { spendPoints } from '@/lib/points';
 import type { Database } from '@/types/database';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -49,13 +55,6 @@ const Fonts = {
   serif: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
 };
 
-const TAB_ITEMS = [
-  { name: '/(tabs)', icon: 'house.fill' as const, label: '홈' },
-  { name: '/(tabs)/moui', icon: 'bubble.left.and.bubble.right.fill' as const, label: '작당모의' },
-  { name: '/(tabs)/explore', icon: 'paperplane.fill' as const, label: '탐색모의' },
-  { name: '/(tabs)/profile', icon: 'person.fill' as const, label: '내 정보' },
-];
-
 /* ── Bottom Tab Bar ── */
 function BottomTabBar() {
   const insets = useSafeAreaInsets();
@@ -65,10 +64,10 @@ function BottomTabBar() {
 
   const content = (
     <View style={[tabStyles.tabRow, { paddingBottom }]}>
-      {TAB_ITEMS.map((tab) => (
+      {APP_TAB_ITEMS.map((tab) => (
         <Pressable
-          key={tab.name}
-          onPress={() => router.replace(tab.name as any)}
+          key={tab.path}
+          onPress={() => router.replace(tab.path as any)}
           style={({ pressed }) => [tabStyles.tab, pressed && { opacity: 0.6 }]}
         >
           <IconSymbol size={22} name={tab.icon} color={C.mutedLight} />
@@ -473,6 +472,11 @@ export default function ArtistPortfolioScreen() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'works' | 'exhibitions'>(tab === 'exhibitions' ? 'exhibitions' : 'works');
 
+  // Chat request state
+  const [chatModalVisible, setChatModalVisible] = useState(false);
+  const [chatMessage, setChatMessage] = useState('');
+  const [chatSending, setChatSending] = useState(false);
+
   // Viewer state
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
@@ -579,6 +583,30 @@ export default function ArtistPortfolioScreen() {
       setFollowerCount((c) => c + 1);
     }
     setIsFollowing(!isFollowing);
+  };
+
+  const sendChatRequest = async () => {
+    if (!user?.id || !resolvedId || !chatMessage.trim()) return;
+    setChatSending(true);
+    const { error } = await spendPoints(user.id, 300, '채팅 요청', 'chat_request');
+    if (error) {
+      Alert.alert('모의 부족', error);
+      setChatSending(false);
+      return;
+    }
+    const { error: insertErr } = await supabase.from('chat_requests').insert({
+      sender_id: user.id,
+      receiver_id: resolvedId,
+      message: chatMessage.trim(),
+    });
+    setChatSending(false);
+    if (insertErr) {
+      Alert.alert('오류', '채팅 요청에 실패했습니다.');
+      return;
+    }
+    setChatModalVisible(false);
+    setChatMessage('');
+    Alert.alert('완료', '채팅 요청을 보냈습니다!');
   };
 
   /* ── Parallax styles ── */
@@ -750,21 +778,20 @@ export default function ArtistPortfolioScreen() {
                   <Text style={[styles.heroName, { color: C.fg }]} numberOfLines={1}>{artistName}</Text>
                   {isCreator && (
                     <View style={styles.heroBadgeRow}>
-                      <View style={[styles.heroBadge, styles.heroTypeBadge, { borderColor: C.gold }]}>
-                        <Text style={[styles.heroBadgeText, { color: C.gold }]}>작가</Text>
-                      </View>
                       <View
                         style={[
                           styles.heroBadge,
-                          styles.heroVerifyBadge,
                           {
-                            borderColor: isVerifiedCreator ? '#22c55e' : '#ff4d4f',
-                            backgroundColor: isVerifiedCreator ? 'rgba(34,197,94,0.1)' : 'rgba(255,77,79,0.1)',
+                            borderColor: C.gold,
+                            backgroundColor: 'rgba(200,169,110,0.1)',
                           },
                         ]}
                       >
-                        <Text style={[styles.heroBadgeText, { color: isVerifiedCreator ? '#22c55e' : '#ff4d4f' }]}>
-                          {isVerifiedCreator ? '인증' : '미인증'}
+                        <Text style={[styles.heroBadgeText, { color: C.gold }]}>
+                          작가{' '}
+                          <Text style={{ color: isVerifiedCreator ? '#22c55e' : C.danger }}>
+                            {getCreatorVerificationStatusText(isVerifiedCreator)}
+                          </Text>
                         </Text>
                       </View>
                     </View>
@@ -812,19 +839,31 @@ export default function ArtistPortfolioScreen() {
               </View>
 
               {user?.id && user.id !== resolvedId && (
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.followBtn,
-                    { borderColor: C.gold },
-                    isFollowing && { backgroundColor: C.gold },
-                    pressed && { opacity: 0.8 },
-                  ]}
-                  onPress={toggleFollow}
-                >
-                  <Text style={[styles.followBtnText, { color: C.gold }, isFollowing && { color: C.bg }]}>
-                    {isFollowing ? '팔로잉' : '팔로우'}
-                  </Text>
-                </Pressable>
+                <View style={styles.actionRow}>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.followBtn,
+                      { borderColor: C.gold },
+                      isFollowing && { backgroundColor: C.gold },
+                      pressed && { opacity: 0.8 },
+                    ]}
+                    onPress={toggleFollow}
+                  >
+                    <Text style={[styles.followBtnText, { color: C.gold }, isFollowing && { color: C.bg }]}>
+                      {isFollowing ? '팔로잉' : '팔로우'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [
+                      styles.followBtn,
+                      { borderColor: C.gold, backgroundColor: C.gold },
+                      pressed && { opacity: 0.8 },
+                    ]}
+                    onPress={() => setChatModalVisible(true)}
+                  >
+                    <Text style={[styles.followBtnText, { color: C.bg }]}>채팅걸기</Text>
+                  </Pressable>
+                </View>
               )}
             </LinearGradient>
           </Animated.View>
@@ -987,6 +1026,42 @@ export default function ArtistPortfolioScreen() {
         onDelete={handleDeleteArtwork}
         onIndexChange={(idx) => updateUrlArtwork(idx)}
       />
+
+      {/* Chat request modal */}
+      <Modal visible={chatModalVisible} transparent animationType="fade" onRequestClose={() => setChatModalVisible(false)}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.chatModalOverlay}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setChatModalVisible(false)} />
+          <View style={[styles.chatModalBox, { backgroundColor: C.card }]}>
+            <Text style={[styles.chatModalTitle, { color: C.fg }]}>채팅 요청</Text>
+            <Text style={[styles.chatModalDesc, { color: C.muted }]}>
+              {profile?.name ?? profile?.username}님에게 채팅을 요청합니다.{'\n'}300 MOUI가 차감됩니다.
+            </Text>
+            <TextInput
+              style={[styles.chatModalInput, { color: C.fg, borderColor: C.border, backgroundColor: C.bg }]}
+              placeholder="채팅을 요청하는 이유를 적어주세요"
+              placeholderTextColor={C.muted}
+              value={chatMessage}
+              onChangeText={setChatMessage}
+              multiline
+              maxLength={200}
+            />
+            <Pressable
+              style={({ pressed }) => [
+                styles.chatModalBtn,
+                { backgroundColor: C.gold, opacity: (!chatMessage.trim() || chatSending) ? 0.5 : pressed ? 0.8 : 1 },
+              ]}
+              onPress={sendChatRequest}
+              disabled={!chatMessage.trim() || chatSending}
+            >
+              {chatSending ? (
+                <ActivityIndicator color={C.bg} size="small" />
+              ) : (
+                <Text style={[styles.chatModalBtnText, { color: C.bg }]}>300 MOUI로 채팅 요청</Text>
+              )}
+            </Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -1172,19 +1247,68 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  /* Action row */
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 10,
+    marginTop: 10,
+  },
+
   /* Follow */
   followBtn: {
-    alignSelf: 'center',
     paddingHorizontal: 24,
     paddingVertical: 8,
     borderRadius: 20,
     borderWidth: 1,
-    marginTop: 10,
   },
   followBtnText: {
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 1,
+  },
+
+  /* Chat Modal */
+  chatModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  chatModalBox: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 16,
+    padding: 24,
+    gap: 14,
+  },
+  chatModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  chatModalDesc: {
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  chatModalInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 14,
+    minHeight: 80,
+    textAlignVertical: 'top',
+  },
+  chatModalBtn: {
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+  chatModalBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 
   /* Bio */

@@ -8,6 +8,7 @@ export async function spendPoints(
   userId: string,
   amount: number,
   description: string,
+  type: string = 'spend',
 ): Promise<{ error: string | null }> {
   // 1. 현재 잔액 조회
   const { data: profile, error: fetchErr } = await supabase
@@ -42,7 +43,7 @@ export async function spendPoints(
     user_id: userId,
     amount: -amount,
     balance: newBalance,
-    type: 'spend',
+    type,
     description,
   });
 

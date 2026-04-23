@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { APP_TAB_ITEMS } from '@/constants/tab-navigation';
 import { useThemeMode } from '@/contexts/theme-context';
 
 function CustomTabBar({ state, descriptors, navigation }: any) {
@@ -72,41 +73,16 @@ export default function TabLayout() {
         headerShown: false,
       }}
     >
-      <Tabs.Screen
-        name="index"
-        options={{
-          title: '홈',
-          tabBarIcon: ({ color }) => <IconSymbol size={22} name="house.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="moui"
-        options={{
-          title: '모임',
-          tabBarIcon: ({ color }) => <IconSymbol size={22} name="bubble.left.and.bubble.right.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="explore"
-        options={{
-          title: '탐색모의',
-          tabBarIcon: ({ color }) => <IconSymbol size={22} name="paperplane.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="chat"
-        options={{
-          title: '작당모의',
-          tabBarIcon: ({ color }) => <IconSymbol size={22} name="chat.fill" color={color} />,
-        }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: '내 정보',
-          tabBarIcon: ({ color }) => <IconSymbol size={22} name="person.fill" color={color} />,
-        }}
-      />
+      {APP_TAB_ITEMS.map((tab) => (
+        <Tabs.Screen
+          key={tab.tabName}
+          name={tab.tabName}
+          options={{
+            title: tab.label,
+            tabBarIcon: ({ color }) => <IconSymbol size={22} name={tab.icon} color={color} />,
+          }}
+        />
+      ))}
     </Tabs>
   );
 }

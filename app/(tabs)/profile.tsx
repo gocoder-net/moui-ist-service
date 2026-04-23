@@ -14,6 +14,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -379,14 +380,18 @@ export default function ProfileScreen() {
             <View style={s.profileInfo}>
               <View style={s.nameRow}>
                 <Text style={[s.name, { color: C.fg }]}>{profile?.name ?? '회원'}</Text>
-                <View style={[s.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
-                  <Text style={[s.badgeText, { color: C.gold }]}>{label}</Text>
-                </View>
-                {userType === 'creator' && (
-                  <View style={[s.badge, { backgroundColor: C.bg, borderColor: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
-                    <Text style={[s.badgeText, { color: (profile as any)?.verified ? '#22c55e' : C.danger }]}>
-                      {(profile as any)?.verified ? '인증' : '미인증'}
+                {userType === 'creator' ? (
+                  <View style={[s.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
+                    <Text style={[s.badgeText, { color: C.gold }]}>
+                      작가{' '}
+                      <Text style={{ color: (profile as any)?.verified ? '#22c55e' : C.danger }}>
+                        {getCreatorVerificationStatusText((profile as any)?.verified)}
+                      </Text>
                     </Text>
+                  </View>
+                ) : (
+                  <View style={[s.badge, { backgroundColor: C.bg, borderColor: C.gold }]}>
+                    <Text style={[s.badgeText, { color: C.gold }]}>{label}</Text>
                   </View>
                 )}
               </View>
