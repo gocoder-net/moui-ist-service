@@ -561,8 +561,8 @@ export default function ArtistPortfolioScreen() {
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'works' | 'exhibitions'>(
-    tab === 'exhibitions' ? 'exhibitions' : 'works',
+  const [activeTab, setActiveTab] = useState<'works' | 'collections' | 'exhibitions'>(
+    tab === 'exhibitions' ? 'exhibitions' : tab === 'collections' ? 'collections' : 'works',
   );
 
   // Collections
@@ -575,6 +575,7 @@ export default function ArtistPortfolioScreen() {
   };
   const [collections, setCollections] = useState<CollectionWithArtworks[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  const [colVisibleCounts, setColVisibleCounts] = useState<Record<string, number>>({});
   const colFilterScrollRef = useRef<ScrollView>(null);
   const colFilterScrollX = useRef(0);
 
@@ -1026,6 +1027,12 @@ export default function ArtistPortfolioScreen() {
                   {activeTab === 'works' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
                 </Pressable>
                 <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
+                <Pressable style={styles.statItem} onPress={() => setActiveTab('collections')}>
+                  <AnimatedCounter to={collections.length} style={[styles.statNumber, { color: activeTab === 'collections' ? C.gold : C.fg }]} />
+                  <Text style={[styles.statLabel, { color: activeTab === 'collections' ? C.gold : C.muted }]}>아카이브</Text>
+                  {activeTab === 'collections' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
+                </Pressable>
+                <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
                 <Pressable style={styles.statItem} onPress={() => setActiveTab('exhibitions')}>
                   <AnimatedCounter to={exhibitions.length} style={[styles.statNumber, { color: activeTab === 'exhibitions' ? C.gold : C.fg }]} />
                   <Text style={[styles.statLabel, { color: activeTab === 'exhibitions' ? C.gold : C.muted }]}>3D전시관</Text>
@@ -1174,6 +1181,73 @@ export default function ArtistPortfolioScreen() {
               );
             })()}
           </>
+        ) : activeTab === 'collections' ? (
+          collections.length > 0 ? (
+            <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
+              <Text style={[styles.sectionLabel, { color: C.muted }]}>ARCHIVE</Text>
+              <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
+
+              {collections.map((col) => {
+                const visibleCount = colVisibleCounts[col.id] ?? 3;
+                const visibleArtworks = col.artworks.slice(0, visibleCount);
+                const hasMore = col.artworks.length > visibleCount;
+                return (
+                <View key={col.id} style={[styles.colSection, { backgroundColor: C.card }]}>
+                  <View style={styles.colHeader}>
+                    {col.cover_image_url ? (
+                      <Image
+                        source={{ uri: col.cover_image_url }}
+                        style={styles.colCoverImg}
+                        resizeMode="cover"
+                      />
+                    ) : null}
+                    <View style={styles.colHeaderText}>
+                      <Text style={[styles.colTitle, { color: C.fg }]}>{col.title}</Text>
+                      {col.description ? (
+                        <Text style={[styles.colDesc, { color: C.muted }]} numberOfLines={2}>{col.description}</Text>
+                      ) : null}
+                      <Text style={[styles.colCount, { color: C.mutedLight }]}>{col.artworks.length}개 작품</Text>
+                    </View>
+                  </View>
+                  <View style={styles.colGrid}>
+                    {visibleArtworks.map((aw) => (
+                      <Pressable
+                        key={aw.id}
+                        style={({ pressed }) => [styles.colGridItem, pressed && { opacity: 0.8 }]}
+                        onPress={() => {
+                          const colIdx = col.artworks.findIndex(a => a.id === aw.id);
+                          setViewerArtworks(col.artworks);
+                          setViewerIndex(colIdx >= 0 ? colIdx : 0);
+                          setViewerVisible(true);
+                        }}
+                      >
+                        <Image
+                          source={{ uri: aw.image_url }}
+                          style={styles.colGridImage}
+                          resizeMode="cover"
+                        />
+                        <Text style={[styles.colGridTitle, { color: C.fg }]} numberOfLines={1}>{aw.title}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  {hasMore && (
+                    <Pressable
+                      style={({ pressed }) => [styles.colMoreBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
+                      onPress={() => setColVisibleCounts(prev => ({ ...prev, [col.id]: visibleCount + 3 }))}
+                    >
+                      <Text style={[styles.colMoreText, { color: C.gold }]}>+ {Math.min(3, col.artworks.length - visibleCount)}개 더보기</Text>
+                    </Pressable>
+                  )}
+                </View>
+                );
+              })}
+            </View>
+          ) : (
+            <View style={styles.emptySection}>
+              <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
+              <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 아카이브가 없습니다</Text>
+            </View>
+          )
         ) : (
           exhibitions.length > 0 ? (
             <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
@@ -2011,6 +2085,19 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     paddingHorizontal: 6,
     paddingVertical: 5,
+  },
+  colMoreBtn: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginHorizontal: 12,
+    marginBottom: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  colMoreText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 });
 
