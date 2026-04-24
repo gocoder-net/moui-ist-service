@@ -24,6 +24,8 @@ type ChatProfile = {
   avatar_url: string | null;
   user_type: 'creator' | 'aspiring' | 'audience';
   verified: boolean;
+  field: string | null;
+  region: string | null;
 };
 
 type ChatRequestRow = {
@@ -56,7 +58,7 @@ export default function ChatScreen() {
     // Received pending requests
     const { data: receivedData } = await supabase
       .from('chat_requests')
-      .select('*, sender:profiles!chat_requests_sender_id_fkey(id, name, username, avatar_url, user_type, verified)')
+      .select('*, sender:profiles!chat_requests_sender_id_fkey(id, name, username, avatar_url, user_type, verified, field, region)')
       .eq('receiver_id', user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
@@ -64,7 +66,7 @@ export default function ChatScreen() {
     // Active (accepted) chats
     const { data: activeData } = await supabase
       .from('chat_requests')
-      .select('*, sender:profiles!chat_requests_sender_id_fkey(id, name, username, avatar_url, user_type, verified), receiver:profiles!chat_requests_receiver_id_fkey(id, name, username, avatar_url, user_type, verified)')
+      .select('*, sender:profiles!chat_requests_sender_id_fkey(id, name, username, avatar_url, user_type, verified, field, region), receiver:profiles!chat_requests_receiver_id_fkey(id, name, username, avatar_url, user_type, verified, field, region)')
       .eq('status', 'accepted')
       .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
@@ -72,7 +74,7 @@ export default function ChatScreen() {
     // Sent pending requests
     const { data: sentData } = await supabase
       .from('chat_requests')
-      .select('*, receiver:profiles!chat_requests_receiver_id_fkey(id, name, username, avatar_url, user_type, verified)')
+      .select('*, receiver:profiles!chat_requests_receiver_id_fkey(id, name, username, avatar_url, user_type, verified, field, region)')
       .eq('sender_id', user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
@@ -161,6 +163,15 @@ export default function ChatScreen() {
     return null;
   };
 
+  const ProfileMeta = ({ profile }: { profile?: ChatProfile | null }) => {
+    if (!profile) return null;
+    const parts: string[] = [];
+    if (profile.field) parts.push(profile.field);
+    if (profile.region) parts.push(`📍 ${profile.region}`);
+    if (parts.length === 0) return null;
+    return <Text style={[styles.cardMeta, { color: C.mutedLight }]} numberOfLines={1}>{parts.join(' · ')}</Text>;
+  };
+
   const Avatar = ({ profile }: { profile?: ChatProfile | null }) => (
     profile?.avatar_url ? (
       <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
@@ -225,6 +236,7 @@ export default function ChatScreen() {
                         <Text style={[styles.cardName, { color: C.fg }]}>{sender?.name ?? sender?.username}</Text>
                         <Badge profile={sender} />
                       </View>
+                      <ProfileMeta profile={sender} />
                       <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={2}>{item.message}</Text>
                     </Pressable>
                   </View>
@@ -262,6 +274,7 @@ export default function ChatScreen() {
                         <Text style={[styles.cardName, { color: C.fg }]}>{other?.name ?? other?.username}</Text>
                         <Badge profile={other} />
                       </View>
+                      <ProfileMeta profile={other} />
                       <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={1}>
                         {item.last_message ?? item.message}
                       </Text>
@@ -284,6 +297,7 @@ export default function ChatScreen() {
                       <Text style={[styles.cardName, { color: C.fg }]}>{receiver?.name ?? receiver?.username}</Text>
                       <Badge profile={receiver} />
                     </View>
+                    <ProfileMeta profile={receiver} />
                     <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={2}>{item.message}</Text>
                   </Pressable>
                   <View style={[styles.pendingBadge, { backgroundColor: C.goldDim }]}>
