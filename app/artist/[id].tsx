@@ -269,6 +269,7 @@ function ArtworkViewer({
   onEdit,
   onDelete,
   onIndexChange,
+  artistProfile,
 }: {
   visible: boolean;
   artworks: Artwork[];
@@ -278,6 +279,7 @@ function ArtworkViewer({
   onEdit?: (artwork: Artwork) => void;
   onDelete?: (artwork: Artwork) => void;
   onIndexChange?: (index: number) => void;
+  artistProfile?: Profile | null;
 }) {
   const insets = useSafeAreaInsets();
   const { width: screenW, height: screenH } = useWindowDimensions();
@@ -423,6 +425,25 @@ function ArtworkViewer({
           style={[styles.viewerBottom, { paddingBottom: insets.bottom + 24 }]}
           pointerEvents="box-none"
         >
+          {artistProfile && (
+            <Pressable
+              style={styles.viewerArtistRow}
+              onPress={() => { onClose(); }}
+            >
+              {artistProfile.avatar_url ? (
+                <Image source={{ uri: artistProfile.avatar_url }} style={styles.viewerArtistAvatar} />
+              ) : (
+                <View style={[styles.viewerArtistAvatar, { backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
+                    {(artistProfile.name ?? artistProfile.username ?? '?').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <Text style={styles.viewerArtistName}>
+                {artistProfile.name ?? artistProfile.username}
+              </Text>
+            </Pressable>
+          )}
           <View style={styles.viewerInfoRow}>
             <View style={styles.viewerInfoLeft}>
               <Text style={styles.viewerTitle}>{artwork?.title}</Text>
@@ -1055,6 +1076,7 @@ export default function ArtistPortfolioScreen() {
         onEdit={handleEditArtwork}
         onDelete={handleDeleteArtwork}
         onIndexChange={(idx) => updateUrlArtwork(idx)}
+        artistProfile={profile}
       />
 
       {/* Chat request modal */}
@@ -1607,6 +1629,22 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 24,
     paddingTop: 60,
+  },
+  viewerArtistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  viewerArtistAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 8,
+  },
+  viewerArtistName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.8)',
   },
   viewerInfoRow: {
     flexDirection: 'row',
