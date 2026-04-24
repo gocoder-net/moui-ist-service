@@ -111,8 +111,6 @@ export default function MouiScreen() {
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [selectedDistance, setSelectedDistance] = useState<string | null>(null);
-  const [showMyJoined, setShowMyJoined] = useState(false);
-  const [showMyPosts, setShowMyPosts] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'available' | 'joined' | 'mine'>('all');
 
   const myRegion = parseRegion(profile?.region);
@@ -196,6 +194,18 @@ export default function MouiScreen() {
     fetchPosts();
   };
 
+  const availableCount = useMemo(() => {
+    if (!user) return 0;
+    return posts.filter(p => {
+      const deadlineExpired = p.recruit_deadline && new Date(p.recruit_deadline) < new Date();
+      const isClosed = p.status === 'closed' || !!deadlineExpired;
+      const isOwner = p.user_id === user.id;
+      const isJoined = p.moui_participants?.some(pt => pt.user_id === user.id);
+      const isFull = (p.moui_participants?.length ?? 0) >= 30;
+      return !isClosed && !isOwner && !isJoined && !isFull;
+    }).length;
+  }, [posts, user]);
+
   const myJoinedCount = useMemo(() => {
     if (!user) return 0;
     return posts.filter(p => p.user_id !== user.id && p.moui_participants?.some(pt => pt.user_id === user.id)).length;
@@ -224,10 +234,8 @@ export default function MouiScreen() {
       const distMap: Record<string, string> = { near: '📍 근처', close: '🚶 가까운', far: '🚀 먼' };
       tags.push({ label: distMap[selectedDistance], clear: () => setSelectedDistance(null) });
     }
-    if (showMyJoined) tags.push({ label: '참여중', clear: () => setShowMyJoined(false) });
-    if (showMyPosts) tags.push({ label: '내 모임', clear: () => setShowMyPosts(false) });
     return tags;
-  }, [selectedCategories, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts]);
+  }, [selectedCategories, selectedDistance, selectedField, selectedTarget]);
 
   const activeFilterCount = activeFilterTags.length;
   const filterButtonActive = showFilterPanel || activeFilterCount > 0;
@@ -242,8 +250,6 @@ export default function MouiScreen() {
     setSelectedField(null);
     setSelectedTarget(null);
     setSelectedDistance(null);
-    setShowMyJoined(false);
-    setShowMyPosts(false);
   };
 
   const sections = useMemo(() => {
@@ -277,14 +283,6 @@ export default function MouiScreen() {
       });
     }
 
-    if ((showMyJoined || showMyPosts) && user) {
-      filtered = filtered.filter(p => {
-        const joined = showMyJoined && p.moui_participants?.some(pt => pt.user_id === user.id);
-        const owned = showMyPosts && p.user_id === user.id;
-        return joined || owned;
-      });
-    }
-
     // 탭 필터
     if (activeTab === 'available') {
       filtered = filtered.filter(p => {
@@ -301,7 +299,7 @@ export default function MouiScreen() {
       filtered = filtered.filter(p => p.user_id === user.id);
     }
 
-    const sectionTitle = activeTab === 'available' ? '참여가능 모임' : activeTab === 'joined' ? '참여중 모임' : activeTab === 'mine' ? '만든 모임' : showMyJoined && showMyPosts ? '내 모임' : showMyJoined ? '참여중 모임' : showMyPosts ? '내가 만든 모임' : '모든 모임';
+    const sectionTitle = activeTab === 'available' ? '참여가능 모임' : activeTab === 'joined' ? '참여중 모임' : activeTab === 'mine' ? '만든 모임' : '모든 모임';
 
     if (!myProvince || !myDistrict) {
       return filtered.length > 0 ? [{ title: sectionTitle, data: filtered }] : [];
@@ -330,7 +328,7 @@ export default function MouiScreen() {
     if (close.length > 0) result.push({ title: '🚶 가까운 모임', data: close });
     if (far.length > 0) result.push({ title: '🚀 먼 모임', data: far });
     return result;
-  }, [posts, myDistrict, myProvince, selectedCategories, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts, user, searchQuery, activeTab]);
+  }, [posts, myDistrict, myProvince, selectedCategories, selectedDistance, selectedField, selectedTarget, user, searchQuery, activeTab]);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -753,7 +751,7 @@ export default function MouiScreen() {
           <Ionicons name="search" size={14} color={searchQuery ? C.gold : C.muted} style={{ marginRight: 6 }} />
           <TextInput
             value={searchQuery}
-            onChangeText={setSearchQuery}
+            onChangeText={(text) => { setSearchQuery(text); if (text.trim()) setActiveTab('all'); }}
             placeholder="모임을 검색하세요"
             placeholderTextColor={C.muted}
             style={[styles.searchBarInput, { color: C.fg }]}
@@ -768,13 +766,13 @@ export default function MouiScreen() {
         </View>
       </Animated.View>
 
-      {/* 탭바: 전체 / 참여중 / 만든 모임 */}
-      <View style={styles.tabBar}>
+      {/* 탭바: 전체 / 참여중 / 만든 모임 — 검색 중이면 숨김 */}
+      {!searchQuery.trim() && <View style={styles.tabBar}>
         {([
-          { key: 'all' as const, label: '전체' },
-          { key: 'available' as const, label: '참여가능' },
-          { key: 'joined' as const, label: `참여중${user && myJoinedCount > 0 ? ` (${myJoinedCount})` : ''}` },
-          { key: 'mine' as const, label: `만든 모임${user && myPostsCount > 0 ? ` (${myPostsCount})` : ''}` },
+          { key: 'all' as const, label: `전체 (${posts.length})` },
+          { key: 'available' as const, label: `모집중${user && availableCount > 0 ? ` (${availableCount})` : ''}` },
+          { key: 'joined' as const, label: `참여${user && myJoinedCount > 0 ? ` (${myJoinedCount})` : ''}` },
+          { key: 'mine' as const, label: `내 모임${user && myPostsCount > 0 ? ` (${myPostsCount})` : ''}` },
         ]).map(tab => {
           const isActive = activeTab === tab.key;
           return (
@@ -795,7 +793,7 @@ export default function MouiScreen() {
             </Pressable>
           );
         })}
-      </View>
+      </View>}
 
       {/* 필터 오버레이 */}
       <Modal
@@ -861,30 +859,7 @@ export default function MouiScreen() {
               </View>
             )}
 
-            {/* 내 모임 */}
-            {user && (myJoinedCount > 0 || myPostsCount > 0) && (
-              <View style={styles.filterSection}>
-                <Text style={[styles.filterSectionLabel, { color: C.muted }]}>내 모임</Text>
-                <View style={styles.filterChipRow}>
-                  {myJoinedCount > 0 && (
-                    <Pressable
-                      onPress={() => setShowMyJoined(v => !v)}
-                      style={[styles.filterChip, { backgroundColor: showMyJoined ? C.gold + '18' : C.bg, borderColor: showMyJoined ? C.gold : C.border }]}
-                    >
-                      <Text style={[styles.filterChipText, { color: showMyJoined ? C.gold : C.muted }]}>참여중 ({myJoinedCount})</Text>
-                    </Pressable>
-                  )}
-                  {myPostsCount > 0 && (
-                    <Pressable
-                      onPress={() => setShowMyPosts(v => !v)}
-                      style={[styles.filterChip, { backgroundColor: showMyPosts ? C.gold + '18' : C.bg, borderColor: showMyPosts ? C.gold : C.border }]}
-                    >
-                      <Text style={[styles.filterChipText, { color: showMyPosts ? C.gold : C.muted }]}>내가 만든 ({myPostsCount})</Text>
-                    </Pressable>
-                  )}
-                </View>
-              </View>
-            )}
+
 
             {/* 활성 필터 태그 + 초기화 + 닫기 */}
             <View style={styles.activeFilterRow}>
