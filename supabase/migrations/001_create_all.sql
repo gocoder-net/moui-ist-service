@@ -297,3 +297,46 @@ create policy "bgm_select" on storage.objects for select using (bucket_id = 'bgm
 create policy "bgm_insert" on storage.objects for insert with check (bucket_id = 'bgm' and auth.role() = 'authenticated');
 create policy "bgm_update" on storage.objects for update using (bucket_id = 'bgm' and auth.uid()::text = (storage.foldername(name))[1]);
 create policy "bgm_delete" on storage.objects for delete using (bucket_id = 'bgm' and auth.uid()::text = (storage.foldername(name))[1]);
+
+
+ALTER TABLE moui_posts
+    ADD COLUMN frequency text,
+    ADD COLUMN recruit_deadline timestamptz;
+
+ALTER TABLE moui_posts
+    ADD COLUMN address text,
+    ADD COLUMN recruit_start timestamptz;
+
+
+ALTER TABLE moui_posts
+    ADD COLUMN target_types text,
+    ADD COLUMN map_url text,
+    ADD COLUMN meeting_date timestamptz,
+    ADD COLUMN address text,
+    ADD COLUMN frequency text,
+    ADD COLUMN recruit_start timestamptz,
+    ADD COLUMN recruit_deadline timestamptz;
+
+
+
+ALTER TABLE moui_posts
+    ADD COLUMN category text,
+    ADD COLUMN region text;
+
+-- 모임 참석자
+CREATE TABLE public.moui_participants (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  moui_post_id uuid NOT NULL REFERENCES public.moui_posts(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(moui_post_id, user_id)
+);
+
+ALTER TABLE public.moui_participants ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can read moui_participants"
+  ON public.moui_participants FOR SELECT USING (true);
+CREATE POLICY "Authenticated users can insert moui_participants"
+  ON public.moui_participants FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can delete own moui_participants"
+  ON public.moui_participants FOR DELETE USING (auth.uid() = user_id);

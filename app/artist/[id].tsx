@@ -157,10 +157,19 @@ function ArtworkCard({
   C: any;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const rawRatio = artwork.width_cm && artwork.height_cm
-    ? artwork.width_cm / artwork.height_cm
-    : 1;
-  const imgH = Math.max(cardW * 0.6, Math.min(cardW / rawRatio, cardW * 1.4));
+  const [imgRatio, setImgRatio] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (artwork.image_url) {
+      Image.getSize(artwork.image_url, (w, h) => {
+        if (w && h) setImgRatio(w / h);
+      });
+    }
+  }, [artwork.image_url]);
+
+  const ratio = imgRatio
+    ?? (artwork.width_cm && artwork.height_cm ? artwork.width_cm / artwork.height_cm : 1);
+  const imgH = Math.max(cardW * 0.4, Math.min(cardW / ratio, cardW * 1.6));
 
   return (
     <View style={{ width: '100%', marginBottom: 20 }}>
@@ -169,7 +178,7 @@ function ArtworkCard({
           <Image
             source={{ uri: artwork.image_url }}
             style={{ width: '100%', height: imgH }}
-            resizeMode="cover"
+            resizeMode="contain"
           />
         </View>
       </Pressable>

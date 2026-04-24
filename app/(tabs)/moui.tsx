@@ -1,6 +1,6 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
-  StyleSheet, View, Text, Pressable, FlatList, ActivityIndicator,
+  StyleSheet, View, Text, Pressable, SectionList, ActivityIndicator,
   Platform, Alert, Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -10,8 +10,18 @@ import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import { parseRegion } from '@/constants/regions';
-import { MOUI_CATEGORIES, TARGET_OPTIONS } from '@/constants/moui';
+import { MOUI_CATEGORIES, TARGET_OPTIONS, FIELD_OPTIONS } from '@/constants/moui';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+
+type MouiParticipant = {
+  user_id: string;
+  profiles: {
+    name: string | null;
+    username: string;
+    avatar_url: string | null;
+    user_type: string;
+  };
+};
 
 type MouiPost = {
   id: string;
@@ -23,7 +33,11 @@ type MouiPost = {
   region: string | null;
   target_types: string | null;
   map_url: string | null;
+  address: string | null;
   meeting_date: string | null;
+  frequency: string | null;
+  recruit_start: string | null;
+  recruit_deadline: string | null;
   status: 'open' | 'closed';
   created_at: string;
   profiles?: {
@@ -32,7 +46,9 @@ type MouiPost = {
     avatar_url: string | null;
     field: string | null;
     user_type: 'creator' | 'aspiring' | 'audience';
+    verified: boolean;
   };
+  moui_participants?: MouiParticipant[];
 };
 
 function showAlert(title: string, message: string) {
@@ -51,6 +67,16 @@ function formatRegionLabel(region: string | null | undefined) {
     .replace('특별자치도', '도');
 
   return `${compactProvince} ${parsed.district}`;
+}
+
+function formatRecruitPeriod(start: string | null, end: string | null) {
+  if (!end) return null;
+  const fmt = (s: string) => {
+    const d = new Date(s);
+    return `${d.getMonth() + 1}/${d.getDate()}`;
+  };
+  if (start) return `${fmt(start)} ~ ${fmt(end)}`;
+  return `~ ${fmt(end)}`;
 }
 
 function formatMeetingDate(dateStr: string) {
@@ -77,11 +103,16 @@ export default function MouiScreen() {
   const [posts, setPosts] = useState<MouiPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedDistance, setSelectedDistance] = useState<string | null>(null);
+  const [showMyJoined, setShowMyJoined] = useState(false);
+  const [showMyPosts, setShowMyPosts] = useState(false);
+
+  const myRegion = parseRegion(profile?.region);
 
   const fetchPosts = async () => {
     let query = (supabase as any)
       .from('moui_posts')
-      .select('*, profiles(name, username, avatar_url, field, user_type)')
+      .select('*, profiles(name, username, avatar_url, field, user_type, verified), moui_participants(user_id, profiles(name, username, avatar_url, user_type))')
       .order('created_at', { ascending: false });
     if (selectedCategory) {
       query = query.eq('category', selectedCategory);
@@ -92,6 +123,76 @@ export default function MouiScreen() {
   };
 
   useFocusEffect(useCallback(() => { fetchPosts(); }, [selectedCategory]));
+
+  const MAX_PARTICIPANTS = 30;
+
+  const handleJoin = async (postId: string) => {
+    if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
+    const post = posts.find(p => p.id === postId);
+    if (post && (post.moui_participants?.length ?? 0) >= MAX_PARTICIPANTS) {
+      showAlert('알림', `참여 인원이 최대 ${MAX_PARTICIPANTS}명에 도달했습니다.`);
+      return;
+    }
+    await (supabase as any).from('moui_participants').insert({ moui_post_id: postId, user_id: user.id });
+    fetchPosts();
+  };
+
+  const handleLeave = async (postId: string) => {
+    if (!user) return;
+    await (supabase as any).from('moui_participants').delete().eq('moui_post_id', postId).eq('user_id', user.id);
+    fetchPosts();
+  };
+
+  const myJoinedCount = useMemo(() => {
+    if (!user) return 0;
+    return posts.filter(p => p.moui_participants?.some(pt => pt.user_id === user.id)).length;
+  }, [posts, user]);
+
+  const myPostsCount = useMemo(() => {
+    if (!user) return 0;
+    return posts.filter(p => p.user_id === user.id).length;
+  }, [posts, user]);
+
+  const sections = useMemo(() => {
+    let filtered = posts;
+    if ((showMyJoined || showMyPosts) && user) {
+      filtered = filtered.filter(p => {
+        const joined = showMyJoined && p.moui_participants?.some(pt => pt.user_id === user.id);
+        const owned = showMyPosts && p.user_id === user.id;
+        return joined || owned;
+      });
+    }
+
+    const sectionTitle = showMyJoined && showMyPosts ? '내 모임' : showMyJoined ? '참여중 모임' : showMyPosts ? '내가 만든 모임' : '모든 모임';
+
+    if (!myRegion) {
+      return filtered.length > 0 ? [{ title: sectionTitle, data: filtered }] : [];
+    }
+    const near: MouiPost[] = [];
+    const close: MouiPost[] = [];
+    const far: MouiPost[] = [];
+    for (const p of filtered) {
+      const pr = parseRegion(p.region);
+      if (!pr) { far.push(p); continue; }
+      if (pr.province === myRegion.province && pr.district === myRegion.district) {
+        near.push(p);
+      } else if (pr.province === myRegion.province) {
+        close.push(p);
+      } else {
+        far.push(p);
+      }
+    }
+
+    if (selectedDistance === 'near') return near.length > 0 ? [{ title: '📍 근처 모임', data: near }] : [];
+    if (selectedDistance === 'close') return close.length > 0 ? [{ title: '🚶 가까운 모임', data: close }] : [];
+    if (selectedDistance === 'far') return far.length > 0 ? [{ title: '🚀 먼 모임', data: far }] : [];
+
+    const result: { title: string; data: MouiPost[] }[] = [];
+    if (near.length > 0) result.push({ title: '📍 근처 모임', data: near });
+    if (close.length > 0) result.push({ title: '🚶 가까운 모임', data: close });
+    if (far.length > 0) result.push({ title: '🚀 먼 모임', data: far });
+    return result;
+  }, [posts, myRegion?.province, myRegion?.district, selectedDistance, showMyJoined, showMyPosts, user]);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -110,105 +211,264 @@ export default function MouiScreen() {
   const renderPost = ({ item, index }: { item: MouiPost; index: number }) => {
     const author = item.profiles;
     const isOwner = item.user_id === user?.id;
-    const isClosed = item.status === 'closed';
+    const deadlineExpired = item.recruit_deadline && new Date(item.recruit_deadline) < new Date();
+    const isClosed = item.status === 'closed' || !!deadlineExpired;
+    const participants = item.moui_participants ?? [];
+    const isJoined = user ? participants.some(pt => pt.user_id === user.id) : false;
 
     const targetKeys = item.target_types?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
 
+    const remainingDays = item.recruit_deadline
+      ? Math.max(0, Math.ceil((new Date(item.recruit_deadline).getTime() - Date.now()) / 86400000))
+      : null;
+
     return (
       <Animated.View entering={FadeInDown.delay(index * 60).duration(300)}>
-        <View style={[styles.postCard, { backgroundColor: C.card }, isClosed && { opacity: 0.5 }]}>
-          {/* 작성자 */}
-          <View style={styles.postHeader}>
-            <View style={[styles.postAvatar, { backgroundColor: C.bg }]}>
-              {author?.avatar_url ? (
-                <Image source={{ uri: author.avatar_url }} style={styles.postAvatarImg} contentFit="cover" />
-              ) : (
-                <Text style={styles.postAvatarEmoji}>{author?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+        <View style={[styles.postCard, { backgroundColor: C.card, borderColor: C.border }, isClosed && { opacity: 0.85 }]}>
+          {/* 상단: 카테고리 + 참석취소 + 상태 배지 */}
+          <View style={styles.cardTopRow}>
+            {item.category && (() => {
+              const cat = MOUI_CATEGORIES.find(c => c.key === item.category);
+              return cat ? (
+                <View style={[styles.categorChipSmall, { backgroundColor: C.gold + '22', borderColor: C.gold + '55' }]}>
+                  <Text style={[styles.categorChipSmallText, { color: C.gold }]}>{cat.icon} {cat.label}</Text>
+                </View>
+              ) : <View />;
+            })()}
+            <View style={styles.cardTopRight}>
+              {isJoined && (
+                <Pressable
+                  onPress={() => handleLeave(item.id)}
+                  style={({ pressed }) => [styles.leaveBadge, { backgroundColor: C.danger + '15', borderColor: C.danger + '44' }, pressed && { opacity: 0.6 }]}
+                >
+                  <Text style={[styles.leaveBadgeText, { color: C.danger }]}>참석 취소</Text>
+                </Pressable>
               )}
+              <View style={[styles.statusBadge, { backgroundColor: isClosed ? C.danger + '22' : '#22c55e22' }]}>
+                <Text style={[styles.statusText, { color: isClosed ? C.danger : '#22c55e' }]}>
+                  {isClosed ? (deadlineExpired ? '모집 마감' : '마감') : remainingDays !== null ? `D-${remainingDays}` : '모집 중'}
+                </Text>
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.postAuthor, { color: C.fg }]}>{author?.name ?? '회원'}</Text>
-              <Text style={[styles.postAuthorSub, { color: C.mutedLight }]}>
-                @{author?.username}{author?.field ? ` · ${author.field}` : ''}
-              </Text>
-            </View>
-            <Text style={[styles.postTime, { color: C.mutedLight }]}>{formatDate(item.created_at)}</Text>
           </View>
 
-          {/* 카테고리 칩 */}
-          {item.category && (() => {
-            const cat = MOUI_CATEGORIES.find(c => c.key === item.category);
-            return cat ? (
-              <View style={[styles.categorChipSmall, { backgroundColor: C.gold + '18' }]}>
-                <Text style={styles.categorChipSmallText}>{cat.icon} {cat.label}</Text>
+          {/* 제목 */}
+          <Text style={[styles.postTitle, { color: C.fg }]}>{item.title}</Text>
+
+          {/* 본문 */}
+          <Text style={[styles.postDesc, { color: C.fg, opacity: 0.7 }]} numberOfLines={3}>{item.description}</Text>
+
+          {/* 정보 박스 */}
+          <View style={[styles.infoBox, { backgroundColor: C.bg, borderColor: C.border }]}>
+            {item.meeting_date && (
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: C.muted }]}>일시</Text>
+                <Text style={[styles.infoValue, { color: C.fg }]}>
+                  {formatMeetingDate(item.meeting_date)}
+                  {item.frequency && (item.frequency === 'regular' ? '  ·  정기' : '  ·  1회성')}
+                </Text>
+              </View>
+            )}
+            {(item.region || item.address) && (() => {
+              const regionLabel = formatRegionLabel(item.region);
+              const locationText = [regionLabel, item.address].filter(Boolean).join(' ');
+              return locationText ? (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.infoLabel, { color: C.muted }]}>장소</Text>
+                  {item.map_url ? (
+                    <Pressable onPress={() => { Linking.openURL(item.map_url!); }}>
+                      <Text style={[styles.infoValue, { color: C.gold, textDecorationLine: 'underline' }]} numberOfLines={1}>{locationText}</Text>
+                    </Pressable>
+                  ) : (
+                    <Text style={[styles.infoValue, { color: C.fg }]} numberOfLines={1}>{locationText}</Text>
+                  )}
+                </View>
+              ) : null;
+            })()}
+            {(() => {
+              const period = formatRecruitPeriod(item.recruit_start, item.recruit_deadline);
+              return period ? (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.infoLabel, { color: C.muted }]}>모집</Text>
+                  <Text style={[styles.infoValue, { color: C.fg }]}>{period}</Text>
+                </View>
+              ) : null;
+            })()}
+          </View>
+
+          {/* 태그 영역: 분야 + 대상 */}
+          <View style={styles.postTagRow}>
+            {item.fields && (
+              item.fields.trim() === '전체' ? (
+                <View style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                  <Text style={[styles.postTagText, { color: C.gold }]}>🌐 전체 분야</Text>
+                </View>
+              ) : (
+                item.fields.split(',').map(f => {
+                  const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
+                  return (
+                    <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                      <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
+                    </View>
+                  );
+                })
+              )
+            )}
+            {targetKeys.map(key => {
+              const t = TARGET_OPTIONS.find(o => o.key === key);
+              return t ? (
+                <View key={key} style={[styles.postTag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22' }]}>
+                  <Text style={[styles.postTagText, { color: C.fg, opacity: 0.7 }]}>{t.icon} {t.label}</Text>
+                </View>
+              ) : null;
+            })}
+          </View>
+
+          {/* 참여자 */}
+          {(() => {
+            const isFull = participants.length >= MAX_PARTICIPANTS;
+            const showJoinBtn = user && !isOwner && !isClosed && !isJoined && !isFull;
+            const displayParticipants = participants.slice(0, 6);
+            const moreCount = participants.length - 6;
+
+            return (participants.length > 0 || showJoinBtn || (isFull && user && !isOwner && !isJoined)) ? (
+              <View style={[styles.participantsSection, { borderTopColor: C.border }]}>
+                {participants.length > 0 && (
+                  <View style={styles.participantsList}>
+                    <Text style={[styles.participantsLabel, { color: C.muted }]}>참여자 ({participants.length}/{MAX_PARTICIPANTS})</Text>
+                    <View style={styles.participantAvatars}>
+                      {displayParticipants.map(pt => (
+                        <Pressable
+                          key={pt.user_id}
+                          onPress={() => pt.profiles?.username && router.push(`/artist/${pt.profiles.username}`)}
+                          style={styles.participantItem}
+                        >
+                          <View style={[styles.participantAvatar, { backgroundColor: C.bg, borderColor: C.border }]}>
+                            {pt.profiles?.avatar_url ? (
+                              <Image source={{ uri: pt.profiles.avatar_url }} style={styles.participantAvatarImg} contentFit="cover" />
+                            ) : (
+                              <Text style={{ fontSize: 10 }}>{pt.profiles?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+                            )}
+                          </View>
+                          <Text style={[styles.participantName, { color: C.fg }]} numberOfLines={1}>
+                            {pt.profiles?.name ?? pt.profiles?.username ?? ''}
+                          </Text>
+                        </Pressable>
+                      ))}
+                      {moreCount > 0 && (
+                        <View style={styles.participantItem}>
+                          <View style={[styles.participantAvatar, { backgroundColor: C.card, borderColor: C.border }]}>
+                            <Text style={[{ fontSize: 10, fontWeight: '700', color: C.muted }]}>+{moreCount}</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                )}
+                {showJoinBtn ? (
+                  <Pressable
+                    onPress={() => handleJoin(item.id)}
+                    style={({ pressed }) => [
+                      styles.joinBtn,
+                      { backgroundColor: C.gold, borderColor: C.gold },
+                      pressed && { opacity: 0.7 },
+                    ]}
+                  >
+                    <Text style={[styles.joinBtnText, { color: C.bg }]}>참석하기</Text>
+                  </Pressable>
+                ) : isFull && user && !isOwner && !isJoined ? (
+                  <Text style={[styles.participantsLabel, { color: C.danger }]}>인원이 가득 찼습니다</Text>
+                ) : null}
               </View>
             ) : null;
           })()}
 
-          {/* 본문 */}
-          <Text style={[styles.postTitle, { color: C.fg }]}>{item.title}</Text>
-          <Text style={[styles.postDesc, { color: C.muted }]} numberOfLines={4}>{item.description}</Text>
-
-          {/* 분야 태그 */}
-          {item.fields && (
-            <View style={styles.postTagRow}>
-              {item.fields.split(',').map(f => (
-                <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '22', borderColor: C.gold }]}>
-                  <Text style={[styles.postTagText, { color: C.gold }]}>{f.trim()}</Text>
+          {/* 작성자 + 액션 */}
+          <View style={[styles.postFooter, { borderTopColor: C.border }]}>
+            <Pressable
+              onPress={() => author?.username && router.push(`/artist/${author.username}`)}
+              style={styles.authorRow}
+            >
+              <View style={[styles.postAvatar, { backgroundColor: C.bg }]}>
+                {author?.avatar_url ? (
+                  <Image source={{ uri: author.avatar_url }} style={styles.postAvatarImg} contentFit="cover" />
+                ) : (
+                  <Text style={styles.postAvatarEmoji}>{author?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+                )}
+              </View>
+              <Text style={[styles.postAuthor, { color: C.muted }]}>{author?.name ?? '회원'}</Text>
+              {author && (
+                <View style={[styles.userTypeBadge, { borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.1)' }]}>
+                  {author.user_type === 'creator' ? (
+                    <Text style={[styles.userTypeBadgeText, { color: C.gold }]}>
+                      작가 <Text style={{ color: author.verified ? '#22c55e' : C.danger }}>
+                        {author.verified ? '인증' : '인증 전'}
+                      </Text>
+                    </Text>
+                  ) : (
+                    <Text style={[styles.userTypeBadgeText, { color: C.gold }]}>
+                      {author.user_type === 'aspiring' ? '지망생' : '감상자'}
+                    </Text>
+                  )}
                 </View>
-              ))}
-            </View>
-          )}
-
-          {/* 모집 대상 */}
-          {targetKeys.length > 0 && (
-            <View style={styles.postTagRow}>
-              {targetKeys.map(key => {
-                const t = TARGET_OPTIONS.find(o => o.key === key);
-                return t ? (
-                  <View key={key} style={[styles.postTag, { backgroundColor: C.card, borderColor: C.border }]}>
-                    <Text style={[styles.postTagText, { color: C.muted }]}>{t.icon} {t.label}</Text>
-                  </View>
-                ) : null;
-              })}
-            </View>
-          )}
-
-          {/* 모임 일시 & 지도 링크 */}
-          {(item.meeting_date || item.map_url) && (
-            <View style={styles.metaRow}>
-              {item.meeting_date && (
-                <Text style={[styles.metaText, { color: C.muted }]}>
-                  📅 {formatMeetingDate(item.meeting_date)}
-                </Text>
               )}
-              {item.map_url && (
-                <Pressable onPress={() => { Linking.openURL(item.map_url!); }}>
-                  <Text style={[styles.metaText, { color: C.gold }]}>
-                    📍 지도 보기
-                  </Text>
+              <Text style={[styles.postTime, { color: C.muted }]}>· {formatDate(item.created_at)}</Text>
+            </Pressable>
+            {isOwner && (
+              <>
+                <Pressable
+                  onPress={() => router.push(`/moui/create?edit=${item.id}`)}
+                  style={({ pressed }) => [styles.closeBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
+                >
+                  <Text style={[styles.closeBtnText, { color: C.muted }]}>수정하기</Text>
                 </Pressable>
-              )}
-            </View>
-          )}
-
-          {/* 상태 */}
-          <View style={styles.postFooter}>
-            <View style={[styles.statusBadge, { backgroundColor: isClosed ? C.danger + '22' : '#22c55e22' }]}>
-              <Text style={[styles.statusText, { color: isClosed ? C.danger : '#22c55e' }]}>
-                {isClosed ? '마감' : '모집 중'}
-              </Text>
-            </View>
-            {isOwner && !isClosed && (
-              <Pressable
-                onPress={async () => {
-                  await (supabase as any).from('moui_posts').update({ status: 'closed' }).eq('id', item.id);
-                  fetchPosts();
-                }}
-                style={({ pressed }) => [styles.closeBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
-              >
-                <Text style={[styles.closeBtnText, { color: C.muted }]}>마감하기</Text>
-              </Pressable>
+                <Pressable
+                  onPress={() => {
+                    const msg = '이 모집글을 삭제하시겠습니까?';
+                    const doDelete = async () => {
+                      const { error } = await (supabase as any).from('moui_posts').delete().eq('id', item.id);
+                      if (error) { showAlert('오류', '삭제 실패: ' + error.message); }
+                      else { fetchPosts(); }
+                    };
+                    if (Platform.OS === 'web') {
+                      if (!window.confirm(msg)) return;
+                      doDelete();
+                    } else {
+                      Alert.alert('삭제 확인', msg, [
+                        { text: '취소', style: 'cancel' },
+                        { text: '삭제', style: 'destructive', onPress: doDelete },
+                      ]);
+                    }
+                  }}
+                  style={({ pressed }) => [styles.closeBtn, { borderColor: C.danger + '55' }, pressed && { opacity: 0.6 }]}
+                >
+                  <Text style={[styles.closeBtnText, { color: C.danger }]}>삭제하기</Text>
+                </Pressable>
+                {!isClosed && (
+                  <Pressable
+                    onPress={() => {
+                      const msg = remainingDays !== null
+                        ? `모집기간이 ${remainingDays}일 남았는데 마감하시겠습니까?`
+                        : '모집을 마감하시겠습니까?';
+                      if (Platform.OS === 'web') {
+                        if (!window.confirm(msg)) return;
+                        (supabase as any).from('moui_posts').update({ status: 'closed' }).eq('id', item.id).then(() => fetchPosts());
+                      } else {
+                        Alert.alert('마감 확인', msg, [
+                          { text: '취소', style: 'cancel' },
+                          { text: '마감', style: 'destructive', onPress: async () => {
+                            await (supabase as any).from('moui_posts').update({ status: 'closed' }).eq('id', item.id);
+                            fetchPosts();
+                          }},
+                        ]);
+                      }
+                    }}
+                    style={({ pressed }) => [styles.closeBtn, { borderColor: C.gold + '55', backgroundColor: C.gold + '11' }, pressed && { opacity: 0.6 }]}
+                  >
+                    <Text style={[styles.closeBtnText, { color: C.gold }]}>마감하기</Text>
+                  </Pressable>
+                )}
+              </>
             )}
           </View>
         </View>
@@ -240,7 +500,7 @@ export default function MouiScreen() {
                 { color: activityRegion ? C.gold : C.muted },
               ]}
             >
-              {activityRegion ? `📍 ${activityRegion}` : '📍 활동 지역 설정'}
+              {activityRegion ? `📍 내 활동 지역: ${activityRegion}` : '📍 활동 지역 설정'}
             </Text>
           </Pressable>
         </View>
@@ -287,24 +547,96 @@ export default function MouiScreen() {
         })}
       </View>
 
+      {/* 거리 필터 */}
+      {myRegion && (
+        <View style={styles.distanceBar}>
+          {([
+            { key: null, label: '전체' },
+            { key: 'near', label: '📍 근처' },
+            { key: 'close', label: '🚶 가까운' },
+            { key: 'far', label: '🚀 먼' },
+          ] as const).map(d => {
+            const active = selectedDistance === d.key;
+            return (
+              <Pressable
+                key={d.key ?? 'all'}
+                onPress={() => setSelectedDistance(d.key)}
+                style={[
+                  styles.distanceChip,
+                  { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.gold + '18' : 'transparent' },
+                ]}
+              >
+                <Text style={[styles.distanceChipText, { color: active ? C.gold : C.muted }]}>
+                  {d.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      )}
+
+      {/* 참여중 / 내가 만든 모임 토글 */}
+      {user && (myJoinedCount > 0 || myPostsCount > 0) && (
+        <View style={styles.joinedToggleBar}>
+          {myJoinedCount > 0 && (
+            <Pressable
+              onPress={() => setShowMyJoined(v => !v)}
+              style={[
+                styles.joinedToggleChip,
+                {
+                  borderColor: showMyJoined ? C.gold : C.border,
+                  backgroundColor: showMyJoined ? C.gold + '18' : 'transparent',
+                },
+              ]}
+            >
+              <Text style={[styles.joinedToggleText, { color: showMyJoined ? C.gold : C.muted }]}>
+                참여중 모임 ({myJoinedCount})
+              </Text>
+            </Pressable>
+          )}
+          {myPostsCount > 0 && (
+            <Pressable
+              onPress={() => setShowMyPosts(v => !v)}
+              style={[
+                styles.joinedToggleChip,
+                {
+                  borderColor: showMyPosts ? C.gold : C.border,
+                  backgroundColor: showMyPosts ? C.gold + '18' : 'transparent',
+                },
+              ]}
+            >
+              <Text style={[styles.joinedToggleText, { color: showMyPosts ? C.gold : C.muted }]}>
+                내가 만든 모임 ({myPostsCount})
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
       {/* 게시물 리스트 */}
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator size="large" color={C.gold} />
         </View>
-      ) : posts.length === 0 ? (
+      ) : sections.length === 0 ? (
         <View style={styles.center}>
           <Text style={{ fontSize: 48, marginBottom: 12 }}>🤝</Text>
-          <Text style={[styles.emptyTitle, { color: C.fg }]}>아직 모임가 없어요</Text>
+          <Text style={[styles.emptyTitle, { color: C.fg }]}>아직 모임이 없어요</Text>
           <Text style={[styles.emptyDesc, { color: C.muted }]}>첫 번째 모의를 작당해보세요!</Text>
         </View>
       ) : (
-        <FlatList
-          data={posts}
+        <SectionList
+          sections={sections}
           keyExtractor={item => item.id}
           renderItem={renderPost}
+          renderSectionHeader={({ section: { title } }) => (
+            <View style={styles.sectionHeader}>
+              <Text style={[styles.sectionHeaderText, { color: C.fg }]}>{title}</Text>
+            </View>
+          )}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
+          stickySectionHeadersEnabled={false}
         />
       )}
       </View>
@@ -378,10 +710,38 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
+  /* 거리 필터 */
+  distanceBar: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+  },
+  distanceChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  distanceChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
   /* 리스트 */
   list: {
     padding: 16,
     paddingBottom: 100,
+  },
+  sectionHeader: {
+    paddingHorizontal: 4,
+    paddingTop: 16,
+    paddingBottom: 8,
+  },
+  sectionHeaderText: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   center: {
     flex: 1,
@@ -400,65 +760,75 @@ const styles = StyleSheet.create({
   /* 게시물 카드 */
   postCard: {
     borderRadius: 16,
-    padding: 20,
+    padding: 18,
     marginBottom: 12,
+    borderWidth: 1,
+    gap: 10,
   },
-  postHeader: {
+  cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginBottom: 12,
+    justifyContent: 'space-between',
   },
-  postAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
+  cardTopRight: {
+    flexDirection: 'row',
     alignItems: 'center',
-    overflow: 'hidden',
+    gap: 6,
   },
-  postAvatarImg: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  leaveBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
   },
-  postAvatarEmoji: { fontSize: 18 },
-  postAuthor: {
-    fontSize: 14,
+  leaveBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
   },
-  postAuthorSub: {
-    fontSize: 11,
-  },
-  postTime: {
-    fontSize: 11,
-  },
   categorChipSmall: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: 8,
-    marginBottom: 6,
+    borderWidth: 1,
   },
   categorChipSmallText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   postTitle: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
-    marginBottom: 6,
+    lineHeight: 24,
   },
   postDesc: {
-    fontSize: 14,
-    lineHeight: 22,
-    marginBottom: 10,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  infoBox: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    gap: 6,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  infoLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    width: 30,
+  },
+  infoValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    flex: 1,
   },
   postTagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 8,
   },
   postTag: {
     paddingHorizontal: 10,
@@ -470,20 +840,50 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 14,
-    marginBottom: 10,
-  },
-  metaText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
   postFooter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+    paddingTop: 4,
+    borderTopWidth: 1,
+  },
+  authorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  postAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+  },
+  postAvatarImg: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+  },
+  postAvatarEmoji: { fontSize: 12 },
+  postAuthor: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  userTypeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  userTypeBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  postTime: {
+    fontSize: 11,
   },
   statusBadge: {
     paddingHorizontal: 10,
@@ -503,5 +903,77 @@ const styles = StyleSheet.create({
   closeBtnText: {
     fontSize: 11,
     fontWeight: '600',
+  },
+
+  /* 참여자 */
+  participantsSection: {
+    borderTopWidth: 1,
+    paddingTop: 10,
+    gap: 8,
+  },
+  participantsList: {
+    gap: 6,
+  },
+  participantsLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  participantAvatars: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  participantItem: {
+    alignItems: 'center',
+    gap: 3,
+    width: 44,
+  },
+  participantAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    overflow: 'hidden',
+    borderWidth: 1,
+  },
+  participantAvatarImg: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  participantName: {
+    fontSize: 9,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  joinBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
+  },
+  joinBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  /* 참여중 모임 토글 */
+  joinedToggleBar: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingBottom: 8,
+  },
+  joinedToggleChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    borderWidth: 1,
+  },
+  joinedToggleText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 });
