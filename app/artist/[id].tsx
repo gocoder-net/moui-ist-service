@@ -778,7 +778,7 @@ export default function ArtistPortfolioScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ═══ HERO SECTION ═══ */}
-        <View style={[styles.heroWrap, { height: heroH, backgroundColor: C.bg }]}>
+        <View style={[styles.heroWrap, { minHeight: heroH, backgroundColor: C.bg }]}>
           <Animated.View style={[styles.heroContent, heroContentStyle]}>
             <View
               style={[styles.heroPanel, { borderColor: C.border, backgroundColor: C.card }]}
@@ -847,7 +847,7 @@ export default function ArtistPortfolioScreen() {
                             style={[styles.heroSnsChip, { borderColor: 'rgba(200,169,110,0.28)' }]}
                             onPress={() => Linking.openURL(url)}
                           >
-                            <Text style={{ fontSize: 13 }}>{detected.icon}</Text>
+                            <Text style={{ fontSize: 10 }}>{detected.icon}</Text>
                             <Text style={[styles.heroSnsLabel, { color: C.gold }]}>{detected.label}</Text>
                           </Pressable>
                         );
@@ -1123,7 +1123,7 @@ const styles = StyleSheet.create({
   heroWrap: {
     justifyContent: 'flex-end',
     alignItems: 'center',
-    overflow: 'hidden',
+    overflow: 'visible',
     paddingBottom: 16,
   },
   heroContent: {
@@ -1153,7 +1153,7 @@ const styles = StyleSheet.create({
   heroRight: {
     flex: 1,
     alignItems: 'flex-start',
-    gap: 8,
+    gap: 6,
   },
   heroAvatarWrap: {
     width: 46,
@@ -1212,42 +1212,42 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 4,
   },
   heroSnsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 4,
   },
   heroSnsChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 3,
     borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
   },
   heroSnsLabel: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '500',
   },
   heroFieldChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 3,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+    gap: 2,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 999,
     borderWidth: 1,
     backgroundColor: 'rgba(200,169,110,0.1)',
   },
   heroFieldEmoji: {
-    fontSize: 11,
+    fontSize: 9,
   },
   heroFieldChipText: {
-    fontSize: 11,
+    fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.3,
   },

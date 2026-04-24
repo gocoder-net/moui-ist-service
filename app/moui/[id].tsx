@@ -102,7 +102,7 @@ export default function MouiChatScreen() {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showInfo, setShowInfo] = useState(true);
+  const [showInfo, setShowInfo] = useState(false);
   const [showTags, setShowTags] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
@@ -332,44 +332,53 @@ export default function MouiChatScreen() {
               {participants.length}명 참여중{expiryLabel ? ` · ${expiryLabel}` : ''}
             </Text>
           </View>
-          <Pressable onPress={() => setShowInfo(v => !v)} style={styles.infoToggle} hitSlop={12}>
-            <IconSymbol name={showInfo ? 'chevron.up' : 'info.circle'} size={18} color={C.gold} />
-          </Pressable>
+          <View style={styles.infoToggle} />
         </View>
 
-        {/* Meeting Info (collapsible) — 핵심 정보만 */}
+        {/* 참여자 (항상 표시) */}
+        {participants.length > 0 && (
+          <View style={[styles.participantsSection, { backgroundColor: C.card, borderBottomColor: C.border }]}>
+            <Text style={[styles.participantsLabel, { color: C.muted }]}>참여자 ({participants.length}명)</Text>
+            <View style={styles.participantAvatars}>
+              {participants.slice(0, 8).map(pt => (
+                <Pressable key={pt.user_id} onPress={() => pt.profiles?.username && router.push(`/artist/${pt.profiles.username}` as any)} style={styles.participantItem}>
+                  <View style={[styles.participantAvatar, { backgroundColor: C.bg, borderColor: C.border }]}>
+                    {pt.profiles?.avatar_url ? (
+                      <Image source={{ uri: pt.profiles.avatar_url }} style={styles.participantAvatarImg} contentFit="cover" />
+                    ) : (
+                      <Text style={{ fontSize: 10 }}>{pt.profiles?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+                    )}
+                  </View>
+                  <Text style={[styles.participantName, { color: C.fg }]} numberOfLines={1}>
+                    {pt.profiles?.name ?? pt.profiles?.username ?? ''}
+                  </Text>
+                </Pressable>
+              ))}
+              {participants.length > 8 && (
+                <View style={styles.participantItem}>
+                  <View style={[styles.participantAvatar, { backgroundColor: C.card, borderColor: C.border }]}>
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: C.muted }}>+{participants.length - 8}</Text>
+                  </View>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
+
+        {/* 상세 정보 토글 */}
+        <Pressable
+          onPress={() => setShowInfo(v => !v)}
+          style={[styles.detailToggle, { backgroundColor: C.card, borderBottomColor: C.border }]}
+        >
+          <Text style={[styles.detailToggleText, { color: C.muted }]}>
+            {showInfo ? '상세정보 접기' : '상세정보 보기'}
+          </Text>
+          <IconSymbol name={showInfo ? 'chevron.up' : 'chevron.down'} size={12} color={C.muted} />
+        </Pressable>
+
+        {/* 상세 정보 (접이식) */}
         {showInfo && (
           <View style={[styles.infoSection, { backgroundColor: C.card, borderBottomColor: C.border }]}>
-            {/* 참여자 (맨 위) */}
-            {participants.length > 0 && (
-              <View>
-                <Text style={[styles.participantsLabel, { color: C.muted }]}>참여자 ({participants.length}명)</Text>
-                <View style={styles.participantAvatars}>
-                  {participants.slice(0, 8).map(pt => (
-                    <Pressable key={pt.user_id} onPress={() => pt.profiles?.username && router.push(`/artist/${pt.profiles.username}` as any)} style={styles.participantItem}>
-                      <View style={[styles.participantAvatar, { backgroundColor: C.bg, borderColor: C.border }]}>
-                        {pt.profiles?.avatar_url ? (
-                          <Image source={{ uri: pt.profiles.avatar_url }} style={styles.participantAvatarImg} contentFit="cover" />
-                        ) : (
-                          <Text style={{ fontSize: 10 }}>{pt.profiles?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
-                        )}
-                      </View>
-                      <Text style={[styles.participantName, { color: C.fg }]} numberOfLines={1}>
-                        {pt.profiles?.name ?? pt.profiles?.username ?? ''}
-                      </Text>
-                    </Pressable>
-                  ))}
-                  {participants.length > 8 && (
-                    <View style={styles.participantItem}>
-                      <View style={[styles.participantAvatar, { backgroundColor: C.card, borderColor: C.border }]}>
-                        <Text style={{ fontSize: 9, fontWeight: '700', color: C.muted }}>+{participants.length - 8}</Text>
-                      </View>
-                    </View>
-                  )}
-                </View>
-              </View>
-            )}
-
             {/* 정보 박스 */}
             <View style={[styles.infoBox, { backgroundColor: C.bg, borderColor: C.border }]}>
               {post.meeting_date && (
@@ -405,57 +414,46 @@ export default function MouiChatScreen() {
               )}
             </View>
 
-            {/* 태그: 분야 + 모집 대상 (접이식) */}
+            {/* 태그: 분야 + 모집 대상 */}
             {(post.fields || targetKeys.length > 0) && (
-              <>
-                <Pressable
-                  onPress={() => setShowTags(v => !v)}
-                  style={[styles.tagToggle, { borderColor: C.border }]}
-                >
-                  <Text style={[styles.tagToggleText, { color: C.muted }]}>분야 · 모집대상</Text>
-                  <IconSymbol name={showTags ? 'chevron.up' : 'chevron.down'} size={12} color={C.muted} />
-                </Pressable>
-                {showTags && (
-                  <View style={styles.postMetaSection}>
-                    {post.fields && (
-                      <View style={styles.postMetaRow}>
-                        <Text style={[styles.postMetaLabel, { color: C.muted }]}>분야</Text>
-                        <View style={styles.postTagRow}>
-                          {post.fields.trim() === '전체' ? (
-                            <View style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                              <Text style={[styles.postTagText, { color: C.gold }]}>전체 분야</Text>
+              <View style={styles.postMetaSection}>
+                {post.fields && (
+                  <View style={styles.postMetaRow}>
+                    <Text style={[styles.postMetaLabel, { color: C.muted }]}>분야</Text>
+                    <View style={styles.postTagRow}>
+                      {post.fields.trim() === '전체' ? (
+                        <View style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                          <Text style={[styles.postTagText, { color: C.gold }]}>전체 분야</Text>
+                        </View>
+                      ) : (
+                        post.fields.split(',').map(f => {
+                          const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
+                          return (
+                            <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                              <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
                             </View>
-                          ) : (
-                            post.fields.split(',').map(f => {
-                              const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
-                              return (
-                                <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                                  <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
-                                </View>
-                              );
-                            })
-                          )}
-                        </View>
-                      </View>
-                    )}
-                    {targetKeys.length > 0 && (
-                      <View style={styles.postMetaRow}>
-                        <Text style={[styles.postMetaLabel, { color: C.muted }]}>모집 대상</Text>
-                        <View style={styles.postTagRow}>
-                          {targetKeys.map(key => {
-                            const t = TARGET_OPTIONS.find(o => o.key === key);
-                            return t ? (
-                              <View key={key} style={[styles.postTag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22' }]}>
-                                <Text style={[styles.postTagText, { color: C.fg, opacity: 0.82 }]}>{t.icon} {t.label}</Text>
-                              </View>
-                            ) : null;
-                          })}
-                        </View>
-                      </View>
-                    )}
+                          );
+                        })
+                      )}
+                    </View>
                   </View>
                 )}
-              </>
+                {targetKeys.length > 0 && (
+                  <View style={styles.postMetaRow}>
+                    <Text style={[styles.postMetaLabel, { color: C.muted }]}>모집 대상</Text>
+                    <View style={styles.postTagRow}>
+                      {targetKeys.map(key => {
+                        const t = TARGET_OPTIONS.find(o => o.key === key);
+                        return t ? (
+                          <View key={key} style={[styles.postTag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22' }]}>
+                            <Text style={[styles.postTagText, { color: C.fg, opacity: 0.82 }]}>{t.icon} {t.label}</Text>
+                          </View>
+                        ) : null;
+                      })}
+                    </View>
+                  </View>
+                )}
+              </View>
             )}
           </View>
         )}
@@ -622,7 +620,26 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  /* Info section — moui.tsx 카드 스타일 그대로 */
+  /* 참여자 섹션 (항상 표시) */
+  participantsSection: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  /* 상세정보 토글 */
+  detailToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  detailToggleText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  /* Info section */
   infoSection: {
     padding: 14,
     gap: 10,

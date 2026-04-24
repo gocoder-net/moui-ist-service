@@ -583,13 +583,15 @@ export function ExhibitionViewerContent({ exhibitionId }: { exhibitionId: string
   if (mode === 'entrance') {
     return (
       <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-        <View style={styles.topBackWrap}>
-          <Pressable style={styles.topBack} onPress={() => router.back()}>
-            <Text style={styles.topBackArrow}>←</Text>
-            <Text style={styles.topBackText}>나가기</Text>
-          </Pressable>
+        <View style={styles.centeredContainer}>
+          <View style={styles.topBackWrap}>
+            <Pressable style={styles.topBack} onPress={() => router.back()}>
+              <Text style={styles.topBackArrow}>←</Text>
+              <Text style={styles.topBackText}>나가기</Text>
+            </Pressable>
+          </View>
+          <EntranceView exhibition={exhibition} onEnter={() => setMode('map')} />
         </View>
-        <EntranceView exhibition={exhibition} onEnter={() => setMode('map')} />
       </View>
     );
   }
@@ -597,7 +599,7 @@ export function ExhibitionViewerContent({ exhibitionId }: { exhibitionId: string
   // 맵
   return (
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll} style={styles.centeredContainer}>
         {/* 상단 */}
         <View style={styles.topBar}>
           <Pressable style={styles.topBarBtn} onPress={() => setMode('entrance')}>
@@ -668,6 +670,7 @@ export function ExhibitionViewerContent({ exhibitionId }: { exhibitionId: string
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
+  centeredContainer: { flex: 1, width: '100%', maxWidth: 680, alignSelf: 'center' as const },
   scroll: { paddingHorizontal: 24, paddingBottom: 40 },
 
   loadingScreen: { flex: 1, backgroundColor: C.bg, justifyContent: 'center', alignItems: 'center' },
