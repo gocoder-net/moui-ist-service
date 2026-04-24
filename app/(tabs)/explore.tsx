@@ -7,6 +7,7 @@ import {
   TextInput,
   Image,
   FlatList,
+  useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -156,6 +157,9 @@ export default function ExploreScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { colors: C } = useThemeMode();
+  const { width: screenW } = useWindowDimensions();
+  const MAX_CONTENT_W = 680;
+  const numCols = 3;
   const [artists, setArtists] = useState<ArtistCard[]>([]);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('creator');
@@ -358,6 +362,7 @@ export default function ExploreScreen() {
         <FloatingShape shape="line" size={80} color={C.goldLight} opacity={0.07} top="65%" left="40%" duration={4500} delay={300} />
       </View>
 
+      <View style={styles.innerContainer}>
       {/* 상단 타이틀 */}
       <Animated.View entering={FadeIn.delay(100).duration(300)} style={styles.topHeader}>
         <Text style={[styles.topTitle, { color: C.fg }]}>작품구경</Text>
@@ -425,16 +430,17 @@ export default function ExploreScreen() {
         </View>
       ) : (
         <FlatList
-          key={activeTab}
+          key={`${activeTab}-${numCols}`}
           data={filtered}
           keyExtractor={(item) => item.id}
           renderItem={renderArtistCard}
-          numColumns={3}
+          numColumns={numCols}
           columnWrapperStyle={styles.gridRow}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
         />
       )}
+      </View>
     </View>
   );
 }
@@ -442,6 +448,12 @@ export default function ExploreScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  innerContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
 
   topHeader: {
@@ -513,7 +525,6 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     flex: 1,
-    maxWidth: '33.33%',
     marginBottom: 8,
   },
 

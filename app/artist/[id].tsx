@@ -37,7 +37,6 @@ import Animated, {
   withSequence,
   Easing,
   runOnJS,
-  type SharedValue,
 } from 'react-native-reanimated';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/auth-context';
@@ -50,6 +49,7 @@ type Exhibition = Database['public']['Tables']['exhibitions']['Row'];
 
 const MAX_CONTENT_W = 680;
 const MAX_HERO_H = 220;
+const ARTWORK_PAGE_SIZE = 10;
 
 const Fonts = {
   serif: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
@@ -144,98 +144,70 @@ function AnimatedCounter({ to, duration = 1200, style }: { to: number; duration?
   return <Text style={style}>{display}</Text>;
 }
 
-/* ── Artwork Card with parallax + gradient + press effect ── */
+/* ── Artwork Card (clean feed style) ── */
 function ArtworkCard({
   artwork,
-  index,
-  isHero,
-  scrollY,
-  layoutY,
   cardW,
-  cardH,
-  viewH,
   onPress,
   C,
 }: {
   artwork: Artwork;
-  index: number;
-  isHero: boolean;
-  scrollY: SharedValue<number>;
-  layoutY: number;
   cardW: number;
-  cardH: number;
-  viewH: number;
   onPress: () => void;
   C: any;
 }) {
-  const scaleVal = useSharedValue(1);
-
-  const fadeStyle = useAnimatedStyle(() => {
-    const distFromView = layoutY - scrollY.value - viewH;
-    return {
-      opacity: interpolate(distFromView, [viewH * 0.3, 0], [0, 1], Extrapolation.CLAMP),
-      transform: [
-        { translateY: interpolate(distFromView, [viewH * 0.3, 0], [40, 0], Extrapolation.CLAMP) },
-      ],
-    };
-  });
-
-  const parallaxStyle = useAnimatedStyle(() => {
-    const offset = layoutY - scrollY.value;
-    return {
-      transform: [
-        { translateY: interpolate(offset, [-viewH, viewH], [30, -30], Extrapolation.CLAMP) },
-      ],
-    };
-  });
-
-  const pressStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scaleVal.value }],
-  }));
-
-  const handlePressIn = () => {
-    scaleVal.value = withSpring(0.96, { damping: 15, stiffness: 300 });
-  };
-  const handlePressOut = () => {
-    scaleVal.value = withSpring(1, { damping: 10, stiffness: 200 });
-  };
+  const [expanded, setExpanded] = useState(false);
+  const rawRatio = artwork.width_cm && artwork.height_cm
+    ? artwork.width_cm / artwork.height_cm
+    : 1;
+  const imgH = Math.max(cardW * 0.6, Math.min(cardW / rawRatio, cardW * 1.4));
 
   return (
-    <Animated.View style={[fadeStyle, { width: isHero ? '100%' : cardW, marginBottom: 12 }]}>
-      <Animated.View style={pressStyle}>
-        <Pressable
-          onPress={onPress}
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-        >
-          <View style={[styles.artCard, { height: cardH, backgroundColor: C.card }]}>
-            <Animated.View style={[StyleSheet.absoluteFill, { overflow: 'hidden' }, parallaxStyle]}>
-              <Image
-                source={{ uri: artwork.image_url }}
-                style={{ width: '100%', height: cardH + 60, top: -30 }}
-                resizeMode="cover"
-              />
-            </Animated.View>
-            <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.92)']}
-              locations={[0, 0.35, 0.7, 1]}
-              style={styles.artGradient}
-            />
-            <View style={styles.artOverlay}>
-              <Text style={styles.artTitle} numberOfLines={1}>{artwork.title}</Text>
-              {(artwork.year || artwork.medium) && (
-                <Text style={styles.artMeta} numberOfLines={1}>
-                  {[artwork.year, artwork.medium].filter(Boolean).join(' · ')}
-                </Text>
-              )}
-              {artwork.width_cm && artwork.height_cm && (
-                <Text style={styles.artSize}>{artwork.width_cm} × {artwork.height_cm} cm</Text>
-              )}
-            </View>
-          </View>
+    <View style={{ width: '100%', marginBottom: 20 }}>
+      <Pressable onPress={onPress}>
+        <View style={[styles.artCard, { backgroundColor: C.card }]}>
+          <Image
+            source={{ uri: artwork.image_url }}
+            style={{ width: '100%', height: imgH }}
+            resizeMode="cover"
+          />
+        </View>
+      </Pressable>
+      <View style={styles.artInfoRow}>
+        <Text style={[styles.artInfoTitle, { color: C.fg }]} numberOfLines={expanded ? undefined : 1}>
+          {artwork.title}
+        </Text>
+        <Pressable onPress={() => setExpanded(!expanded)} hitSlop={8}>
+          <Text style={[styles.artInfoMore, { color: C.gold }]}>
+            {expanded ? '접기' : '더보기'}
+          </Text>
         </Pressable>
-      </Animated.View>
-    </Animated.View>
+      </View>
+      {expanded && (
+        <View style={[styles.artExpandedInfo, { borderTopColor: C.border }]}>
+          {(artwork.year || artwork.medium) && (
+            <Text style={[styles.artExpandedMeta, { color: C.muted }]}>
+              {[artwork.year, artwork.medium].filter(Boolean).join(' · ')}
+            </Text>
+          )}
+          {artwork.width_cm && artwork.height_cm && (
+            <Text style={[styles.artExpandedMeta, { color: C.muted }]}>
+              {artwork.width_cm} × {artwork.height_cm} cm
+            </Text>
+          )}
+          {(artwork as any).edition && (
+            <Text style={[styles.artExpandedMeta, { color: C.muted }]}>
+              에디션: {(artwork as any).edition}
+            </Text>
+          )}
+          {(artwork as any).description && (
+            <Text style={[styles.artExpandedDesc, { color: C.fg }]}>
+              {(artwork as any).description}
+            </Text>
+          )}
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -466,6 +438,11 @@ export default function ArtistPortfolioScreen() {
   const [resolvedId, setResolvedId] = useState<string | null>(UUID_REGEX.test(rawId) ? rawId : null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
+  const [artworksTotalCount, setArtworksTotalCount] = useState(0);
+  const [hasMoreArtworks, setHasMoreArtworks] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const hasMoreRef = useRef(false);
+  const loadingMoreRef = useRef(false);
   const [followerCount, setFollowerCount] = useState(0);
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -483,8 +460,19 @@ export default function ArtistPortfolioScreen() {
   const artworksRef = useRef<Artwork[]>([]);
 
   const scrollY = useSharedValue(0);
+  const triggerLoadMore = useCallback(() => {
+    if (hasMoreRef.current && !loadingMoreRef.current && resolvedId) {
+      loadMoreArtworks(resolvedId);
+    }
+  }, [resolvedId]);
   const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (e) => { scrollY.value = e.contentOffset.y; },
+    onScroll: (e) => {
+      scrollY.value = e.contentOffset.y;
+      const { contentOffset, contentSize, layoutMeasurement } = e;
+      if (contentSize.height > 0 && contentOffset.y + layoutMeasurement.height >= contentSize.height - 400) {
+        runOnJS(triggerLoadMore)();
+      }
+    },
   });
 
   const diamondRotation = useSharedValue(0);
@@ -518,19 +506,54 @@ export default function ArtistPortfolioScreen() {
   useEffect(() => { if (resolvedId) loadData(resolvedId); }, [resolvedId]);
   useFocusEffect(useCallback(() => { if (resolvedId) loadData(resolvedId); }, [resolvedId]));
 
+  const loadMoreArtworks = async (uid: string) => {
+    if (loadingMoreRef.current || !hasMoreRef.current) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    const from = artworksRef.current.length;
+    const to = from + ARTWORK_PAGE_SIZE - 1;
+    const { data } = await supabase
+      .from('artworks')
+      .select('*')
+      .eq('user_id', uid)
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (data && data.length > 0) {
+      setArtworks(prev => {
+        const next = [...prev, ...data];
+        artworksRef.current = next;
+        return next;
+      });
+      if (data.length < ARTWORK_PAGE_SIZE) {
+        setHasMoreArtworks(false);
+        hasMoreRef.current = false;
+      }
+    } else {
+      setHasMoreArtworks(false);
+      hasMoreRef.current = false;
+    }
+    setLoadingMore(false);
+    loadingMoreRef.current = false;
+  };
+
   const loadData = async (uid: string) => {
     setLoading(true);
     const [profileRes, artworksRes, followCountRes, exhibitionsRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', uid).single(),
-      supabase.from('artworks').select('*').eq('user_id', uid).order('created_at', { ascending: false }),
+      supabase.from('artworks').select('*', { count: 'exact' }).eq('user_id', uid).order('created_at', { ascending: false }).range(0, ARTWORK_PAGE_SIZE - 1),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', uid),
       supabase.from('exhibitions').select('*').eq('user_id', uid).eq('is_published', true).order('created_at', { ascending: false }),
     ]);
 
     if (profileRes.data) setProfile(profileRes.data);
+    const totalArtworks = artworksRes.count ?? 0;
+    setArtworksTotalCount(totalArtworks);
     if (artworksRes.data) {
       setArtworks(artworksRes.data);
       artworksRef.current = artworksRes.data;
+      const more = artworksRes.data.length < totalArtworks;
+      setHasMoreArtworks(more);
+      hasMoreRef.current = more;
     }
     setFollowerCount(followCountRes.count ?? 0);
     if (exhibitionsRes.data) setExhibitions(exhibitionsRes.data);
@@ -651,33 +674,9 @@ export default function ArtistPortfolioScreen() {
     );
   }
 
-  /* ── Gallery layout: 3-cycle (1 hero + 2 grid) ── */
+  /* ── Gallery layout: single column feed ── */
   const galleryPad = 24;
-  const heroCardW = contentW - galleryPad * 2;
-  const heroCardH = heroCardW * 0.65;
-  const gridCardW = (contentW - galleryPad * 2 - 12) / 2;
-  const gridCardH = gridCardW * 1.2;
-  const galleryStartY = heroH + (profile?.bio ? 200 : 0) + 50;
-
-  const rows: any[] = [];
-  let cumulativeY = galleryStartY;
-  for (let i = 0; i < artworks.length; ) {
-    const cyclePos = i % 3;
-    if (cyclePos === 0) {
-      rows.push({ type: 'hero', artwork: artworks[i], layoutY: cumulativeY, globalIdx: i });
-      cumulativeY += heroCardH + 12;
-      i++;
-    } else {
-      rows.push({
-        type: 'grid',
-        artworks: artworks.slice(i, i + 2),
-        layoutY: cumulativeY,
-        globalIdx: i,
-      });
-      cumulativeY += gridCardH + 12;
-      i += 2;
-    }
-  }
+  const feedCardW = contentW - galleryPad * 2;
 
   const isOwner = user?.id === resolvedId;
   const artistName = profile.name ?? profile.username;
@@ -820,7 +819,7 @@ export default function ArtistPortfolioScreen() {
               {/* ── Stats row (bottom) ── */}
               <View style={styles.statsRow}>
                 <Pressable style={styles.statItem} onPress={() => setActiveTab('works')}>
-                  <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: activeTab === 'works' ? C.gold : C.fg }]} />
+                  <AnimatedCounter to={artworksTotalCount} style={[styles.statNumber, { color: activeTab === 'works' ? C.gold : C.fg }]} />
                   <Text style={[styles.statLabel, { color: activeTab === 'works' ? C.gold : C.muted }]}>작품</Text>
                   {activeTab === 'works' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
                 </Pressable>
@@ -857,44 +856,21 @@ export default function ArtistPortfolioScreen() {
               <Text style={[styles.sectionLabel, { color: C.muted }]}>WORKS</Text>
               <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
 
-              {rows.map((row: any, idx: number) => {
-                if (row.type === 'hero') {
-                  return (
-                    <ArtworkCard
-                      key={row.artwork.id}
-                      artwork={row.artwork}
-                      index={row.globalIdx}
-                      isHero
-                      scrollY={scrollY}
-                      layoutY={row.layoutY}
-                      cardW={heroCardW}
-                      cardH={heroCardH}
-                      viewH={screenH}
-                      onPress={() => openViewer(row.globalIdx)}
-                      C={C}
-                    />
-                  );
-                }
-                return (
-                  <View key={`grid-${idx}`} style={styles.gridRow}>
-                    {row.artworks.map((aw: Artwork, gi: number) => (
-                      <ArtworkCard
-                        key={aw.id}
-                        artwork={aw}
-                        index={row.globalIdx + gi}
-                        isHero={false}
-                        scrollY={scrollY}
-                        layoutY={row.layoutY}
-                        cardW={gridCardW}
-                        cardH={gridCardH}
-                        viewH={screenH}
-                        onPress={() => openViewer(row.globalIdx + gi)}
-                        C={C}
-                      />
-                    ))}
-                  </View>
-                );
-              })}
+              {artworks.map((aw, idx) => (
+                <ArtworkCard
+                  key={aw.id}
+                  artwork={aw}
+                  cardW={feedCardW}
+                  onPress={() => openViewer(idx)}
+                  C={C}
+                />
+              ))}
+
+              {loadingMore && (
+                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                  <ActivityIndicator color={C.gold} size="small" />
+                </View>
+              )}
             </View>
           ) : (
             <View style={styles.emptySection}>
@@ -1315,50 +1291,43 @@ const styles = StyleSheet.create({
     height: 1,
     marginBottom: 24,
   },
-  gridRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
   artCard: {
     borderRadius: 12,
     overflow: 'hidden',
   },
-  artGradient: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '60%',
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+  artInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    paddingVertical: 10,
+    gap: 12,
   },
-  artOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 14,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+  artInfoTitle: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
-  artTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#f5f5f5',
-    letterSpacing: 0.5,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 3,
+  artInfoMore: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
-  artMeta: {
-    fontSize: 11,
-    color: 'rgba(242,244,246,0.7)',
-    marginTop: 2,
+  artExpandedInfo: {
+    paddingHorizontal: 4,
+    paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 4,
   },
-  artSize: {
-    fontSize: 10,
-    color: 'rgba(242,244,246,0.5)',
-    marginTop: 1,
+  artExpandedMeta: {
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  artExpandedDesc: {
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 4,
   },
 
   /* Exhibition Grid */

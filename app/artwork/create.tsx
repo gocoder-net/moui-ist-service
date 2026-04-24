@@ -176,6 +176,7 @@ export default function CreateArtworkScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
+      <View style={styles.innerContainer}>
       {/* 상단 바 */}
       <View style={[styles.topBar, { borderBottomColor: C.border }]}>
         <Pressable
@@ -320,6 +321,7 @@ export default function CreateArtworkScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      </View>
     </View>
   );
 }
@@ -327,6 +329,12 @@ export default function CreateArtworkScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  innerContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   topBar: {
     flexDirection: 'row',

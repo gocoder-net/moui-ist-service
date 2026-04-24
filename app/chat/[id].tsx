@@ -216,6 +216,7 @@ export default function ChatRoomScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={0}
     >
+      <View style={styles.innerContainer}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: C.border }]}>
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
@@ -319,6 +320,7 @@ export default function ChatRoomScreen() {
           <IconSymbol name="paperplane.fill" size={18} color={C.bg} />
         </Pressable>
       </View>
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -326,6 +328,12 @@ export default function ChatRoomScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  innerContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   loadingWrap: {
     flex: 1,

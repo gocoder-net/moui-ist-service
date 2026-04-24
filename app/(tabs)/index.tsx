@@ -345,6 +345,7 @@ export default function HomeScreen() {
         <FloatingShape shape="line" size={80} color={C.goldLight} opacity={0.07} top="65%" left="40%" duration={4500} delay={300} />
       </View>
 
+      <View style={styles.innerContainer}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 히어로 배너 */}
         <Animated.View entering={FadeInDown.delay(100).duration(600).springify()} style={styles.heroBanner}>
@@ -457,6 +458,7 @@ export default function HomeScreen() {
 
         <View style={{ height: 24 }} />
       </ScrollView>
+      </View>
 
       {/* 모의스트 임명 팝업 */}
       {!welcomeClaimed && user && (
@@ -504,6 +506,12 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  innerContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   scroll: {
     paddingHorizontal: 24,

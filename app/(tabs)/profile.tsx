@@ -352,6 +352,7 @@ export default function ProfileScreen() {
 
   return (
     <View style={[s.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
+      <View style={s.innerContainer}>
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         {/* 헤더 */}
         <Animated.View entering={FadeIn.delay(100).duration(300)} style={s.header}>
@@ -582,6 +583,7 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
       </ScrollView>
+      </View>
     </View>
   );
 }
@@ -589,6 +591,12 @@ export default function ProfileScreen() {
 const s = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  innerContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   scroll: {
     paddingHorizontal: 16,

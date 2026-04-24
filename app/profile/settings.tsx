@@ -13,6 +13,7 @@ export default function SettingsScreen() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
+      <View style={styles.innerContainer}>
       {/* 헤더 */}
       <Animated.View entering={FadeIn.delay(50).duration(200)} style={styles.header}>
         <Pressable onPress={() => router.back()} style={styles.backBtn}>
@@ -49,6 +50,7 @@ export default function SettingsScreen() {
           <Text style={[styles.rowArrow, { color: C.danger }]}>›</Text>
         </Pressable>
       </Animated.View>
+      </View>
     </View>
   );
 }
@@ -56,6 +58,12 @@ export default function SettingsScreen() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  innerContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   header: {
     flexDirection: 'row',
