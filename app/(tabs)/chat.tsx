@@ -401,6 +401,9 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.2,
   },
+  cardMeta: {
+    fontSize: 11,
+  },
   cardMsg: {
     fontSize: 13,
     lineHeight: 18,
