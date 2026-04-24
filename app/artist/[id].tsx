@@ -583,6 +583,7 @@ export default function ArtistPortfolioScreen() {
   const [chatModalVisible, setChatModalVisible] = useState(false);
   const [chatMessage, setChatMessage] = useState('');
   const [chatSending, setChatSending] = useState(false);
+  const [chatStatus, setChatStatus] = useState<'none' | 'pending' | 'accepted' | 'rejected'>('none');
 
   // Viewer state
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -733,21 +734,45 @@ export default function ArtistPortfolioScreen() {
         .eq('follower_id', user.id)
         .eq('following_id', uid);
       setIsFollowing((count ?? 0) > 0);
+
+      // 채팅 요청 상태 확인
+      const { data: chatReq } = await supabase
+        .from('chat_requests')
+        .select('status')
+        .eq('sender_id', user.id)
+        .eq('receiver_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .single();
+      if (chatReq) {
+        setChatStatus(chatReq.status as any);
+      } else {
+        setChatStatus('none');
+      }
     }
     setLoading(false);
 
     // Auto-open viewer if artworkId is in URL (supports both 1-based index and UUID)
-    if (artworkId && artworksRes.data) {
+    if (artworkId) {
       const num = parseInt(artworkId, 10);
-      let idx: number;
-      if (!isNaN(num) && num >= 1 && num <= artworksRes.data.length) {
-        idx = num - 1; // 1-based → 0-based
-      } else {
-        idx = artworksRes.data.findIndex((a) => a.id === artworkId); // fallback UUID
-      }
-      if (idx >= 0) {
-        setViewerIndex(idx);
-        setViewerVisible(true);
+      // 페이지네이션과 관계없이 전체 작품 로드
+      const { data: allAw } = await supabase
+        .from('artworks')
+        .select('*')
+        .eq('user_id', uid)
+        .order('created_at', { ascending: false });
+      if (allAw && allAw.length > 0) {
+        let idx: number;
+        if (!isNaN(num) && num >= 1 && num <= allAw.length) {
+          idx = num - 1;
+        } else {
+          idx = allAw.findIndex((a) => a.id === artworkId);
+        }
+        if (idx >= 0) {
+          setViewerArtworks(allAw);
+          setViewerIndex(idx);
+          setViewerVisible(true);
+        }
       }
     }
   };
@@ -797,6 +822,7 @@ export default function ArtistPortfolioScreen() {
     }
     setChatModalVisible(false);
     setChatMessage('');
+    setChatStatus('pending');
     Alert.alert('완료', '채팅 요청을 보냈습니다!');
   };
 
@@ -969,7 +995,7 @@ export default function ArtistPortfolioScreen() {
                         style={({ pressed }) => [
                           styles.followBtn,
                           { borderColor: C.gold },
-                          isFollowing && { backgroundColor: C.gold },
+                          !isFollowing && { backgroundColor: C.gold },
                           pressed && { opacity: 0.8 },
                         ]}
                         onPress={() => {
@@ -987,32 +1013,44 @@ export default function ArtistPortfolioScreen() {
                           toggleFollow();
                         }}
                       >
-                        <Text style={[styles.followBtnText, { color: C.gold }, isFollowing && { color: C.bg }]}>
-                          {isFollowing ? '팔로잉' : '팔로우'}
+                        <Text style={[styles.followBtnText, { color: C.bg }, isFollowing && { color: C.gold }]}>
+                          {isFollowing ? '✓ 팔로잉' : '+ 팔로우'}
                         </Text>
                       </Pressable>
                       <Pressable
                         style={({ pressed }) => [
                           styles.followBtn,
-                          { borderColor: C.gold, backgroundColor: C.gold },
+                          { borderColor: C.gold },
+                          chatStatus !== 'pending' && { backgroundColor: C.gold },
                           pressed && { opacity: 0.8 },
                         ]}
                         onPress={() => {
+                          if (chatStatus === 'pending') return;
                           if (!user?.id) {
                             if (Platform.OS === 'web') {
                               if (window.confirm('모의스트 가입이 필요합니다.\n가입하시겠습니까?')) router.push('/signup' as any);
                             } else {
-                              Alert.alert('���입 필요', '모의스트 가입이 필요합니다.', [
+                              Alert.alert('가입 필요', '모의스트 가입이 필요합니다.', [
                                 { text: '취소', style: 'cancel' },
                                 { text: '가입하기', onPress: () => router.push('/signup' as any) },
                               ]);
                             }
                             return;
                           }
+                          if (chatStatus === 'accepted') {
+                            // TODO: 채팅방으로 이동
+                            return;
+                          }
                           setChatModalVisible(true);
                         }}
                       >
-                        <Text style={[styles.followBtnText, { color: C.bg }]}>채팅걸기</Text>
+                        <Text style={[styles.followBtnText, {
+                          color: chatStatus === 'pending' ? C.gold : C.bg,
+                        }]}>
+                          {chatStatus === 'pending' ? '⏳ 수락 대기중'
+                            : chatStatus === 'accepted' ? '💬 채팅'
+                            : '채팅걸기'}
+                        </Text>
                       </Pressable>
                     </View>
                   )}

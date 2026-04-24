@@ -516,8 +516,8 @@ export default function ProfileScreen() {
           </View>
         </Animated.View>
 
-        {/* 작가 인증 */}
-        {!verified && (
+        {/* 작가 인증 (작가만) */}
+        {userType === 'creator' && !verified && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.verificationCard, { backgroundColor: C.card }]}>
             {verificationStatus === 'pending' ? (
               <View style={s.verificationRow}>

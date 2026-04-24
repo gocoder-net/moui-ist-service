@@ -502,8 +502,8 @@ export default function ChatScreen() {
                     <ProfileMeta profile={receiver} />
                     <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={2}>{item.message}</Text>
                   </Pressable>
-                  <View style={[styles.pendingBadge, { backgroundColor: C.goldDim }]}>
-                    <Text style={[styles.pendingText, { color: C.gold }]}>대기중</Text>
+                  <View style={[styles.pendingBadge, { backgroundColor: 'rgba(232,168,64,0.12)' }]}>
+                    <Text style={[styles.pendingText, { color: '#e8a840' }]}>수락 대기중</Text>
                   </View>
                 </View>
               </View>

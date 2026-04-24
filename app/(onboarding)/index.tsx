@@ -610,7 +610,7 @@ export default function OnboardingScreen() {
 
             {needsFieldSelection && (
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>{selected === 'aspiring' ? '희망 분��' : '분야'} <Text style={styles.inputRequired}>(필수)</Text></Text>
+                <Text style={styles.inputLabel}>{selected === 'aspiring' ? '희망 분야' : '분야'} <Text style={styles.inputRequired}>(필수)</Text></Text>
                 <View style={styles.chipGrid}>
                   {FIELD_CATEGORIES.map((cat) => {
                     const selectedField = selectedFields.includes(cat.key);

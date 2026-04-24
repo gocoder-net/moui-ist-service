@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -7,6 +7,7 @@ import {
   TextInput,
   Image,
   FlatList,
+  ScrollView,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -34,8 +35,9 @@ const USER_TYPE_LABELS: Record<string, string> = {
   audience: '일반',
 };
 
-type TabKey = 'creator' | 'aspiring' | 'audience';
+type TabKey = 'all' | 'creator' | 'aspiring' | 'audience';
 const TABS: { key: TabKey; label: string }[] = [
+  { key: 'all', label: '전체' },
   { key: 'creator', label: '작가' },
   { key: 'aspiring', label: '지망생' },
   { key: 'audience', label: '일반' },
@@ -51,6 +53,20 @@ type ArtistCard = {
   verified: boolean;
   artworkCount: number;
   coverImage: string | null;
+};
+
+type FeedItem = {
+  id: string;
+  type: 'artwork' | 'exhibition' | 'collection';
+  image_url: string;
+  title: string;
+  subtitle: string;
+  artist_name: string;
+  artist_avatar: string | null;
+  artist_username: string;
+  extra?: string;
+  artwork_index?: number; // index in artist's artworks for viewer
+  aspect?: number; // width/height ratio for masonry
 };
 
 /* ── 배경 떠다니는 도형 ── */
@@ -179,8 +195,9 @@ export default function ExploreScreen() {
   const MAX_CONTENT_W = 680;
   const numCols = 3;
   const [artists, setArtists] = useState<ArtistCard[]>([]);
+  const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [search, setSearch] = useState('');
-  const [activeTab, setActiveTab] = useState<TabKey>('creator');
+  const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [loading, setLoading] = useState(true);
 
   const loadArtists = useCallback(async () => {
@@ -232,14 +249,114 @@ export default function ExploreScreen() {
     setLoading(false);
   }, []);
 
+  const loadFeed = useCallback(async () => {
+    // profiles map for artist info
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, name, username, avatar_url');
+    const profileMap = new Map(profiles?.map(p => [p.id, p]) ?? []);
+
+    const items: FeedItem[] = [];
+
+    // 1. Artworks (최신 30개)
+    const { data: aw } = await supabase
+      .from('artworks')
+      .select('id, title, image_url, user_id, year, medium, tags, width_cm, height_cm')
+      .order('created_at', { ascending: false })
+      .limit(30);
+    // Per-user artwork index map
+    const userArtworkIdx = new Map<string, number>();
+    aw?.forEach(a => {
+      const p = profileMap.get(a.user_id);
+      if (!p) return;
+      const idx = userArtworkIdx.get(a.user_id) ?? 0;
+      userArtworkIdx.set(a.user_id, idx + 1);
+      const w = Number(a.width_cm) || 1;
+      const h = Number(a.height_cm) || 1;
+      items.push({
+        id: `aw_${a.id}`,
+        type: 'artwork',
+        image_url: a.image_url,
+        title: a.title,
+        subtitle: [a.year, a.medium?.split(',')[0]?.trim()].filter(Boolean).join(' · '),
+        artist_name: p.name ?? p.username,
+        artist_avatar: p.avatar_url,
+        artist_username: p.username,
+        artwork_index: idx,
+        aspect: Math.max(0.6, Math.min(1.6, w / h)),
+      });
+    });
+
+    // 2. Exhibitions (published)
+    const { data: ex } = await supabase
+      .from('exhibitions')
+      .select('id, title, description, poster_image_url, user_id, room_type')
+      .eq('is_published', true)
+      .order('created_at', { ascending: false })
+      .limit(10);
+    ex?.forEach(e => {
+      if (!e.poster_image_url) return;
+      const p = profileMap.get(e.user_id);
+      if (!p) return;
+      const roomLabel = e.room_type === 'small' ? '소형' : e.room_type === 'medium' ? '중형' : e.room_type === 'large' ? '대형' : e.room_type;
+      items.push({
+        id: `ex_${e.id}`,
+        type: 'exhibition',
+        image_url: e.poster_image_url,
+        title: e.title,
+        subtitle: `3D전시관 · ${roomLabel}`,
+        artist_name: p.name ?? p.username,
+        artist_avatar: p.avatar_url,
+        artist_username: p.username,
+      });
+    });
+
+    // 3. Collections (with cover)
+    const { data: col } = await supabase
+      .from('artwork_collections')
+      .select('id, title, description, cover_image_url, user_id')
+      .order('created_at', { ascending: false })
+      .limit(10);
+    if (col) {
+      for (const c of col) {
+        if (!c.cover_image_url) continue;
+        const p = profileMap.get(c.user_id);
+        if (!p) continue;
+        const { count } = await supabase
+          .from('collection_artworks')
+          .select('id', { count: 'exact', head: true })
+          .eq('collection_id', c.id);
+        items.push({
+          id: `col_${c.id}`,
+          type: 'collection',
+          image_url: c.cover_image_url,
+          title: c.title,
+          subtitle: `아카이브 · ${count ?? 0}개 작품`,
+          artist_name: p.name ?? p.username,
+          artist_avatar: p.avatar_url,
+          artist_username: p.username,
+          extra: c.description ?? undefined,
+        });
+      }
+    }
+
+    // Shuffle (Fisher-Yates) but keep types interleaved
+    for (let i = items.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [items[i], items[j]] = [items[j], items[i]];
+    }
+    setFeedItems(items);
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       loadArtists();
-    }, [loadArtists]),
+      loadFeed();
+    }, [loadArtists, loadFeed]),
   );
 
   const tabCounts = (() => {
-    const counts: Record<TabKey, number> = { creator: 0, aspiring: 0, audience: 0 };
+    const counts: Record<TabKey, number> = { all: feedItems.length, creator: 0, aspiring: 0, audience: 0 };
     artists.forEach((a) => {
       if (!(a.user_type in counts)) return;
       if (a.user_type === 'creator' && a.artworkCount === 0) return;
@@ -249,6 +366,7 @@ export default function ExploreScreen() {
   })();
 
   const filtered = (() => {
+    if (activeTab === 'all') return [];
     let list = artists.filter((a) => a.user_type === activeTab);
 
     if (search.trim()) {
@@ -459,11 +577,99 @@ export default function ExploreScreen() {
         </View>
       </Animated.View>
 
-      {/* 작가 리스트 */}
+      {/* 콘텐츠 */}
       {loading ? (
         <View style={styles.loadingWrap}>
           <View style={[styles.loadingDiamond, { borderColor: C.gold }]} />
         </View>
+      ) : activeTab === 'all' ? (
+        feedItems.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
+            <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 작품이 없습니다</Text>
+          </View>
+        ) : (
+          <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.masonryWrap}>
+              {/* Left column */}
+              <View style={styles.masonryCol}>
+                {feedItems.filter((_, i) => i % 2 === 0).map((item, idx) => (
+                  <Animated.View key={item.id} entering={FadeInDown.delay(60 + idx * 40).duration(400).springify()}>
+                    <Pressable
+                      style={({ pressed }) => [styles.masonryCard, { borderColor: C.border }, pressed && { opacity: 0.85 }]}
+                      onPress={() => {
+                        if (item.type === 'artwork') {
+                          router.push(`/artist/${item.artist_username}?artworkId=${(item.artwork_index ?? 0) + 1}`);
+                        } else if (item.type === 'exhibition') {
+                          router.push(`/artist/${item.artist_username}?tab=exhibitions`);
+                        } else {
+                          router.push(`/artist/${item.artist_username}?tab=collections`);
+                        }
+                      }}
+                    >
+                      <Image
+                        source={{ uri: item.image_url }}
+                        style={[styles.masonryImage, { aspectRatio: item.aspect ?? 1 }]}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.masonryInfo}>
+                        <View style={styles.masonryArtistRow}>
+                          {item.artist_avatar ? (
+                            <Image source={{ uri: item.artist_avatar }} style={styles.masonryAvatar} resizeMode="cover" />
+                          ) : (
+                            <View style={[styles.masonryAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
+                              <Text style={{ fontSize: 8, fontWeight: '800', color: C.fg }}>{item.artist_name.charAt(0)}</Text>
+                            </View>
+                          )}
+                          <Text style={[styles.masonryArtistName, { color: C.muted }]} numberOfLines={1}>{item.artist_name}</Text>
+                        </View>
+                        <Text style={[styles.masonryTitle, { color: C.fg }]} numberOfLines={1}>{item.title}</Text>
+                      </View>
+                    </Pressable>
+                  </Animated.View>
+                ))}
+              </View>
+              {/* Right column */}
+              <View style={styles.masonryCol}>
+                {feedItems.filter((_, i) => i % 2 === 1).map((item, idx) => (
+                  <Animated.View key={item.id} entering={FadeInDown.delay(80 + idx * 40).duration(400).springify()}>
+                    <Pressable
+                      style={({ pressed }) => [styles.masonryCard, { borderColor: C.border }, pressed && { opacity: 0.85 }]}
+                      onPress={() => {
+                        if (item.type === 'artwork') {
+                          router.push(`/artist/${item.artist_username}?artworkId=${(item.artwork_index ?? 0) + 1}`);
+                        } else if (item.type === 'exhibition') {
+                          router.push(`/artist/${item.artist_username}?tab=exhibitions`);
+                        } else {
+                          router.push(`/artist/${item.artist_username}?tab=collections`);
+                        }
+                      }}
+                    >
+                      <Image
+                        source={{ uri: item.image_url }}
+                        style={[styles.masonryImage, { aspectRatio: item.aspect ?? 1 }]}
+                        resizeMode="cover"
+                      />
+                      <View style={styles.masonryInfo}>
+                        <View style={styles.masonryArtistRow}>
+                          {item.artist_avatar ? (
+                            <Image source={{ uri: item.artist_avatar }} style={styles.masonryAvatar} resizeMode="cover" />
+                          ) : (
+                            <View style={[styles.masonryAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
+                              <Text style={{ fontSize: 8, fontWeight: '800', color: C.fg }}>{item.artist_name.charAt(0)}</Text>
+                            </View>
+                          )}
+                          <Text style={[styles.masonryArtistName, { color: C.muted }]} numberOfLines={1}>{item.artist_name}</Text>
+                        </View>
+                        <Text style={[styles.masonryTitle, { color: C.fg }]} numberOfLines={1}>{item.title}</Text>
+                      </View>
+                    </Pressable>
+                  </Animated.View>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
+        )
       ) : filtered.length === 0 ? (
         <View style={styles.emptyWrap}>
           {search.trim() || activeTab !== 'audience' ? (
@@ -713,5 +919,47 @@ const styles = StyleSheet.create({
   emptySubtext: {
     fontSize: 12,
     letterSpacing: 0.5,
+  },
+
+  /* Masonry (전체 탭) */
+  masonryWrap: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  masonryCol: {
+    flex: 1,
+    gap: 6,
+  },
+  masonryCard: {
+    borderRadius: 10,
+    overflow: 'hidden',
+    borderWidth: 0.5,
+  },
+  masonryImage: {
+    width: '100%',
+  },
+  masonryInfo: {
+    padding: 8,
+    gap: 3,
+  },
+  masonryArtistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  masonryAvatar: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  masonryArtistName: {
+    fontSize: 9,
+    fontWeight: '600',
+    flex: 1,
+  },
+  masonryTitle: {
+    fontSize: 11,
+    fontWeight: '700',
   },
 });
