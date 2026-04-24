@@ -371,6 +371,7 @@ CREATE POLICY "Participants can insert moui_chat_messages"
 -- Realtime 활성화
 -- =========================
 ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_requests;
 ALTER PUBLICATION supabase_realtime ADD TABLE public.moui_chat_messages;
 
 -- 작가 인증 요청
@@ -422,4 +423,72 @@ BEGIN
     RAISE EXCEPTION 'Unauthorized';
   END IF;
   UPDATE verification_requests SET status = 'rejected', admin_note = note WHERE id = request_id;
+END; $$;
+
+-- =========================
+-- 채팅 자동 삭제 + 기간 연장
+-- =========================
+
+ALTER TABLE public.chat_requests
+  ADD COLUMN expires_at timestamptz,
+  ADD COLUMN extended boolean NOT NULL DEFAULT false;
+
+-- 기존 accepted 채팅에 만료일 설정 (7일 후)
+UPDATE public.chat_requests
+  SET expires_at = created_at + interval '7 days'
+  WHERE status = 'accepted' AND expires_at IS NULL;
+
+-- 채팅 기간 연장 RPC (100 MOUI 차감, 1회 제한, SECURITY DEFINER)
+CREATE OR REPLACE FUNCTION public.extend_chat(request_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_extended boolean;
+  v_expires timestamptz;
+  v_user_id uuid := auth.uid();
+  v_points integer;
+BEGIN
+  SELECT extended, expires_at INTO v_extended, v_expires
+    FROM chat_requests WHERE id = request_id
+    AND (sender_id = v_user_id OR receiver_id = v_user_id);
+  IF NOT FOUND THEN RAISE EXCEPTION 'Chat not found'; END IF;
+  IF v_extended THEN RAISE EXCEPTION 'Already extended'; END IF;
+
+  SELECT points INTO v_points FROM profiles WHERE id = v_user_id;
+  IF v_points < 100 THEN RAISE EXCEPTION 'Not enough points'; END IF;
+
+  UPDATE profiles SET points = points - 100 WHERE id = v_user_id;
+  INSERT INTO point_history (user_id, amount, balance, type, description)
+    VALUES (v_user_id, -100, v_points - 100, 'chat_extend', '채팅 기간 연장');
+
+  UPDATE chat_requests
+    SET expires_at = COALESCE(expires_at, now()) + interval '7 days',
+        extended = true
+    WHERE id = request_id;
+END; $$;
+
+-- =========================
+-- 채팅 읽음 추적
+-- =========================
+
+ALTER TABLE public.chat_requests
+  ADD COLUMN sender_last_read_at timestamptz,
+  ADD COLUMN receiver_last_read_at timestamptz;
+
+-- 채팅 읽음 표시 RPC (sender/receiver 모두 호출 가능)
+CREATE OR REPLACE FUNCTION public.mark_chat_read(request_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_sender_id uuid;
+  v_receiver_id uuid;
+BEGIN
+  SELECT sender_id, receiver_id INTO v_sender_id, v_receiver_id
+    FROM chat_requests WHERE id = request_id;
+  IF NOT FOUND THEN RETURN; END IF;
+
+  IF v_user_id = v_sender_id THEN
+    UPDATE chat_requests SET sender_last_read_at = now() WHERE id = request_id;
+  ELSIF v_user_id = v_receiver_id THEN
+    UPDATE chat_requests SET receiver_last_read_at = now() WHERE id = request_id;
+  END IF;
 END; $$;

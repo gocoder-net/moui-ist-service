@@ -50,8 +50,15 @@ export default function ChatRoomScreen() {
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [expiresAt, setExpiresAt] = useState<string | null>(null);
+  const [extended, setExtended] = useState(false);
+  const [extending, setExtending] = useState(false);
+  const [otherLastReadAt, setOtherLastReadAt] = useState<string | null>(null);
+  const iAmSenderRef = useRef(false);
   const flatListRef = useRef<FlatList>(null);
   const inputRef = useRef<TextInput>(null);
+
+  const isExpired = expiresAt ? new Date(expiresAt) < new Date() : false;
 
   // Load chat data
   useEffect(() => {
@@ -66,8 +73,15 @@ export default function ChatRoomScreen() {
 
       if (req) {
         const isSender = req.sender_id === user.id;
+        iAmSenderRef.current = isSender;
         setOtherUser(isSender ? (req as any).receiver : (req as any).sender);
         setMyProfile(isSender ? (req as any).sender : (req as any).receiver);
+        setExpiresAt((req as any).expires_at ?? null);
+        setExtended((req as any).extended ?? false);
+        // Other user's last read timestamp
+        setOtherLastReadAt(
+          isSender ? (req as any).receiver_last_read_at : (req as any).sender_last_read_at
+        );
       }
 
       const { data: msgs } = await supabase
@@ -78,6 +92,9 @@ export default function ChatRoomScreen() {
 
       setMessages(msgs ?? []);
       setLoading(false);
+
+      // Mark as read
+      supabase.rpc('mark_chat_read', { request_id: requestId });
     };
 
     load();
@@ -112,6 +129,27 @@ export default function ChatRoomScreen() {
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
+          // Mark as read when receiving messages while in chat
+          if (newMsg.sender_id !== user?.id) {
+            supabase.rpc('mark_chat_read', { request_id: requestId });
+          }
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chat_requests',
+          filter: `id=eq.${requestId}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          // Update the other user's last read time
+          const otherRead = iAmSenderRef.current
+            ? row.receiver_last_read_at
+            : row.sender_last_read_at;
+          if (otherRead) setOtherLastReadAt(otherRead);
         },
       )
       .subscribe();
@@ -189,8 +227,46 @@ export default function ChatRoomScreen() {
     }
   }, [doEndChat]);
 
+  const doExtendChat = useCallback(async () => {
+    if (!requestId) return;
+    setExtending(true);
+    const { error } = await supabase.rpc('extend_chat', { request_id: requestId });
+    setExtending(false);
+    if (error) {
+      const msg = error.message.includes('Not enough points')
+        ? 'MOUI가 부족합니다 (100 MOUI 필요)'
+        : error.message.includes('Already extended')
+        ? '이미 연장된 채팅입니다'
+        : '연장에 실패했습니다';
+      Alert.alert('오류', msg);
+      return;
+    }
+    // Refresh state
+    setExtended(true);
+    setExpiresAt((prev) =>
+      prev ? new Date(new Date(prev).getTime() + 7 * 86400000).toISOString() : null,
+    );
+    Alert.alert('완료', '채팅이 7일 연장되었습니다');
+  }, [requestId]);
+
+  const extendChat = useCallback(() => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('100 MOUI를 사용하여 채팅을 7일 연장하시겠습니까?')) {
+        doExtendChat();
+      }
+    } else {
+      Alert.alert('기간 연장', '100 MOUI를 사용하여 채팅을 7일 연장하시겠습니까?', [
+        { text: '취소', style: 'cancel' },
+        { text: '연장', onPress: doExtendChat },
+      ]);
+    }
+  }, [doExtendChat]);
+
   const otherName = otherUser?.name ?? otherUser?.username ?? '...';
   const headerName = otherName === '...' ? otherName : `${otherName}님`;
+  const expiryLabel = expiresAt
+    ? `${new Date(expiresAt).getMonth() + 1}/${new Date(expiresAt).getDate()}까지`
+    : null;
 
   const AvatarBubble = ({ profile }: { profile: Profile | null }) =>
     profile?.avatar_url ? (
@@ -247,21 +323,43 @@ export default function ChatRoomScreen() {
               {headerName}
             </Text>
             <Text style={[styles.headerSub, { color: C.muted }]} numberOfLines={1}>
-              일대일 채팅
+              {expiryLabel ? `${expiryLabel} · 일대일 채팅` : '일대일 채팅'}
             </Text>
           </View>
         </Pressable>
-        <Pressable
-          onPress={endChat}
-          style={({ pressed }) => [
-            styles.endBtn,
-            { borderColor: C.danger + '55', backgroundColor: C.danger + '10' },
-            pressed && { opacity: 0.75 },
-          ]}
-          hitSlop={12}
-        >
-          <Text style={[styles.endBtnText, { color: C.danger }]}>채팅 종료</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          {extended ? (
+            <View style={[styles.extendedBadge, { borderColor: C.muted + '55', backgroundColor: C.card }]}>
+              <Text style={[styles.endBtnText, { color: C.muted }]}>연장 완료</Text>
+            </View>
+          ) : !isExpired ? (
+            <Pressable
+              onPress={extendChat}
+              disabled={extending}
+              style={({ pressed }) => [
+                styles.extendBtn,
+                { borderColor: C.gold, backgroundColor: C.goldDim },
+                (pressed || extending) && { opacity: 0.6 },
+              ]}
+              hitSlop={12}
+            >
+              <Text style={[styles.endBtnText, { color: C.gold }]}>
+                {extending ? '...' : '기간 연장'}
+              </Text>
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={endChat}
+            style={({ pressed }) => [
+              styles.endBtn,
+              { borderColor: C.danger + '55', backgroundColor: C.danger + '10' },
+              pressed && { opacity: 0.75 },
+            ]}
+            hitSlop={12}
+          >
+            <Text style={[styles.endBtnText, { color: C.danger }]}>채팅 종료</Text>
+          </Pressable>
+        </View>
       </View>
 
       {/* Messages */}
@@ -305,9 +403,14 @@ export default function ChatRoomScreen() {
                 ]}>
                   <Text style={[styles.msgText, { color: isMe ? C.bg : C.fg }]}>{item.content}</Text>
                 </View>
-                <Text style={[styles.msgTime, { color: C.mutedLight, textAlign: isMe ? 'right' : 'left' }]}>
-                  {new Date(item.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-                </Text>
+                <View style={[styles.msgTimeRow, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}>
+                  {isMe && otherLastReadAt && item.created_at <= otherLastReadAt && (
+                    <Text style={[styles.readReceipt, { color: C.gold }]}>읽음</Text>
+                  )}
+                  <Text style={[styles.msgTime, { color: C.mutedLight }]}>
+                    {new Date(item.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                </View>
               </View>
               {isMe && (
                 prevMsg?.sender_id !== item.sender_id ? (
@@ -327,30 +430,38 @@ export default function ChatRoomScreen() {
       />
 
       {/* Input bar */}
-      <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8), borderTopColor: C.border, backgroundColor: C.bg }]}>
-        <TextInput
-          ref={inputRef}
-          style={[styles.input, { color: C.fg, backgroundColor: C.card, borderColor: C.border }]}
-          placeholder="메시지를 입력하세요"
-          placeholderTextColor={C.muted}
-          value={inputText}
-          onChangeText={setInputText}
-          multiline
-          maxLength={1000}
-          onKeyPress={handleKeyPress}
-          blurOnSubmit={false}
-        />
-        <Pressable
-          style={({ pressed }) => [
-            styles.sendBtn,
-            { backgroundColor: C.gold, opacity: (!inputText.trim() || sending) ? 0.4 : pressed ? 0.8 : 1 },
-          ]}
-          onPress={sendMessage}
-          disabled={!inputText.trim() || sending}
-        >
-          <IconSymbol name="paperplane.fill" size={18} color={C.bg} />
-        </Pressable>
-      </View>
+      {isExpired ? (
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8), borderTopColor: C.border, backgroundColor: C.bg }]}>
+          <View style={[styles.expiredBar, { backgroundColor: C.card }]}>
+            <Text style={[styles.expiredText, { color: C.muted }]}>채팅이 만료되었습니다</Text>
+          </View>
+        </View>
+      ) : (
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8), borderTopColor: C.border, backgroundColor: C.bg }]}>
+          <TextInput
+            ref={inputRef}
+            style={[styles.input, { color: C.fg, backgroundColor: C.card, borderColor: C.border }]}
+            placeholder="메시지를 입력하세요"
+            placeholderTextColor={C.muted}
+            value={inputText}
+            onChangeText={setInputText}
+            multiline
+            maxLength={1000}
+            onKeyPress={handleKeyPress}
+            blurOnSubmit={false}
+          />
+          <Pressable
+            style={({ pressed }) => [
+              styles.sendBtn,
+              { backgroundColor: C.gold, opacity: (!inputText.trim() || sending) ? 0.4 : pressed ? 0.8 : 1 },
+            ]}
+            onPress={sendMessage}
+            disabled={!inputText.trim() || sending}
+          >
+            <IconSymbol name="paperplane.fill" size={18} color={C.bg} />
+          </Pressable>
+        </View>
+      )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -485,9 +596,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
   },
+  msgTimeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   msgTime: {
     fontSize: 10,
     marginHorizontal: 4,
+  },
+  readReceipt: {
+    fontSize: 10,
+    fontWeight: '600',
   },
   emptyChat: {
     flex: 1,
@@ -522,5 +642,32 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    gap: 6,
+    flexShrink: 0,
+  },
+  extendBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  extendedBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  expiredBar: {
+    flex: 1,
+    borderRadius: 20,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  expiredText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

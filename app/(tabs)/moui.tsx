@@ -105,7 +105,7 @@ export default function MouiScreen() {
   const [posts, setPosts] = useState<MouiPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [selectedDistance, setSelectedDistance] = useState<string | null>(null);
@@ -192,9 +192,9 @@ export default function MouiScreen() {
 
   const activeFilterTags = useMemo(() => {
     const tags: { label: string; clear: () => void }[] = [];
-    if (selectedCategory) {
-      const cat = MOUI_CATEGORIES.find(c => c.key === selectedCategory);
-      if (cat) tags.push({ label: `${cat.icon} ${cat.label}`, clear: () => setSelectedCategory(null) });
+    for (const key of selectedCategories) {
+      const cat = MOUI_CATEGORIES.find(c => c.key === key);
+      if (cat) tags.push({ label: `${cat.icon} ${cat.label}`, clear: () => setSelectedCategories(prev => { const next = new Set(prev); next.delete(key); return next; }) });
     }
     if (selectedField) {
       const fo = FIELD_OPTIONS.find(o => o.key === selectedField);
@@ -211,7 +211,7 @@ export default function MouiScreen() {
     if (showMyJoined) tags.push({ label: '참여중', clear: () => setShowMyJoined(false) });
     if (showMyPosts) tags.push({ label: '내 모임', clear: () => setShowMyPosts(false) });
     return tags;
-  }, [selectedCategory, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts]);
+  }, [selectedCategories, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts]);
 
   const activeFilterCount = activeFilterTags.length;
   const filterButtonActive = showFilterPanel || activeFilterCount > 0;
@@ -222,7 +222,7 @@ export default function MouiScreen() {
   const createButtonIconBg = 'rgba(200,169,110,0.16)';
 
   const clearFilters = () => {
-    setSelectedCategory(null);
+    setSelectedCategories(new Set());
     setSelectedField(null);
     setSelectedTarget(null);
     setSelectedDistance(null);
@@ -233,8 +233,8 @@ export default function MouiScreen() {
   const sections = useMemo(() => {
     let filtered = posts;
 
-    if (selectedCategory) {
-      filtered = filtered.filter(p => p.category === selectedCategory);
+    if (selectedCategories.size > 0) {
+      filtered = filtered.filter(p => p.category != null && selectedCategories.has(p.category));
     }
 
     if (selectedField) {
@@ -288,7 +288,7 @@ export default function MouiScreen() {
     if (close.length > 0) result.push({ title: '🚶 가까운 모임', data: close });
     if (far.length > 0) result.push({ title: '🚀 먼 모임', data: far });
     return result;
-  }, [posts, myDistrict, myProvince, selectedCategory, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts, user]);
+  }, [posts, myDistrict, myProvince, selectedCategories, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts, user]);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -325,13 +325,13 @@ export default function MouiScreen() {
       <Animated.View entering={FadeInDown.delay(index * 60).duration(300)}>
         <View style={[
           styles.postCard,
-          { backgroundColor: isOwner ? C.gold + '15' : C.card, borderColor: isOwner ? C.gold : C.border, borderWidth: isOwner ? 1.5 : 1 },
+          { backgroundColor: isOwner ? C.goldDim : C.card, borderColor: isOwner ? C.gold : C.border, borderWidth: isOwner ? 1.5 : 1 },
           isClosed && { opacity: 0.85 },
         ]}>
           {/* 내가 만든 모의 라벨 */}
           {isOwner && (
             <View style={[styles.ownerLabel, { backgroundColor: C.gold }]}>
-              <Text style={[styles.ownerLabelText, { color: C.bg }]}>내가 만든 모의</Text>
+              <Text style={[styles.ownerLabelText, { color: '#000' }]}>👑 내가 만든 모의</Text>
             </View>
           )}
           {/* 상단: 카테고리 + 참석취소 + 상태 배지 */}
@@ -712,17 +712,21 @@ export default function MouiScreen() {
             <Text style={[styles.filterSectionLabel, { color: C.muted }]}>카테고리</Text>
             <View style={styles.filterChipRow}>
               <Pressable
-                onPress={() => setSelectedCategory(null)}
-                style={[styles.filterChip, { backgroundColor: selectedCategory === null ? C.gold : C.bg, borderColor: selectedCategory === null ? C.gold : C.border }]}
+                onPress={() => setSelectedCategories(new Set())}
+                style={[styles.filterChip, { backgroundColor: selectedCategories.size === 0 ? C.gold : C.bg, borderColor: selectedCategories.size === 0 ? C.gold : C.border }]}
               >
-                <Text style={[styles.filterChipText, { color: selectedCategory === null ? C.bg : C.muted }]}>전체</Text>
+                <Text style={[styles.filterChipText, { color: selectedCategories.size === 0 ? C.bg : C.muted }]}>전체</Text>
               </Pressable>
               {MOUI_CATEGORIES.map(cat => {
-                const active = selectedCategory === cat.key;
+                const active = selectedCategories.has(cat.key);
                 return (
                   <Pressable
                     key={cat.key}
-                    onPress={() => setSelectedCategory(active ? null : cat.key)}
+                    onPress={() => setSelectedCategories(prev => {
+                      const next = new Set(prev);
+                      if (next.has(cat.key)) next.delete(cat.key); else next.add(cat.key);
+                      return next;
+                    })}
                     style={[styles.filterChip, { backgroundColor: active ? C.gold : C.bg, borderColor: active ? C.gold : C.border }]}
                   >
                     <Text style={[styles.filterChipText, { color: active ? C.bg : C.muted }]}>{cat.icon} {cat.label}</Text>

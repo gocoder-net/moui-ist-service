@@ -43,10 +43,28 @@ type ChatRequestRow = {
   message: string;
   status: 'pending' | 'accepted' | 'rejected';
   created_at: string;
+  expires_at: string | null;
+  extended: boolean;
+  sender_last_read_at: string | null;
+  receiver_last_read_at: string | null;
   sender?: ChatProfile;
   receiver?: ChatProfile;
   last_message?: string | null;
+  last_message_at?: string | null;
+  last_message_sender_id?: string | null;
 };
+
+function getRelativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return '방금';
+  if (minutes < 60) return `${minutes}분 전`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}일 전`;
+  return `${Math.floor(days / 7)}주 전`;
+}
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
@@ -88,16 +106,31 @@ export default function ChatScreen() {
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
 
+    // Auto-delete expired chats
+    const now = new Date().toISOString();
+    const expired = (activeData ?? []).filter(
+      (c: any) => c.expires_at && c.expires_at < now,
+    );
+    for (const chat of expired) {
+      await supabase.from('chat_messages').delete().eq('request_id', chat.id);
+      await supabase.from('chat_requests').delete().eq('id', chat.id);
+    }
+    const validActive = (activeData ?? []).filter(
+      (c: any) => !c.expires_at || c.expires_at >= now,
+    );
+
     // Get last messages for active chats
-    if (activeData && activeData.length > 0) {
-      for (const chat of activeData) {
+    if (validActive.length > 0) {
+      for (const chat of validActive) {
         const { data: msgData } = await supabase
           .from('chat_messages')
-          .select('content')
+          .select('content, created_at, sender_id')
           .eq('request_id', chat.id)
           .order('created_at', { ascending: false })
           .limit(1);
         (chat as any).last_message = msgData?.[0]?.content ?? null;
+        (chat as any).last_message_at = msgData?.[0]?.created_at ?? null;
+        (chat as any).last_message_sender_id = msgData?.[0]?.sender_id ?? null;
       }
     }
 
@@ -142,7 +175,7 @@ export default function ChatScreen() {
     }
 
     setReceived((receivedData as any) ?? []);
-    setActive((activeData as any) ?? []);
+    setActive(validActive as any);
     setSent((sentData as any) ?? []);
     setMouiChats(mouiItems);
     setLoading(false);
@@ -152,10 +185,13 @@ export default function ChatScreen() {
   useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
 
   const handleAccept = async (requestId: string, senderId: string) => {
-    // Update status
+    // Update status + set expiry (7 days)
     const { error } = await supabase
       .from('chat_requests')
-      .update({ status: 'accepted' })
+      .update({
+        status: 'accepted',
+        expires_at: new Date(Date.now() + 7 * 86400000).toISOString(),
+      })
       .eq('id', requestId);
     if (error) { Alert.alert('오류', '수락에 실패했습니다.'); return; }
 
@@ -339,22 +375,51 @@ export default function ChatScreen() {
 
             if (sec.type === 'active') {
               const other = getOtherUser(item);
+              const expiryLabel = item.expires_at
+                ? `${new Date(item.expires_at).getMonth() + 1}/${new Date(item.expires_at).getDate()} 만료`
+                : null;
+              const timeAgo = item.last_message_at ? getRelativeTime(item.last_message_at) : null;
+              const myLastRead = item.sender_id === user?.id
+                ? item.sender_last_read_at
+                : item.receiver_last_read_at;
+              const hasUnread = !!(
+                item.last_message_at &&
+                item.last_message_sender_id !== user?.id &&
+                (!myLastRead || item.last_message_at > myLastRead)
+              );
               return (
                 <Pressable
                   style={({ pressed }) => [styles.card, { backgroundColor: C.card }, pressed && { opacity: 0.8 }]}
                   onPress={() => router.push(`/chat/${item.id}` as any)}
                 >
                   <View style={styles.cardRow}>
-                    <Pressable onPress={() => other && router.push(`/artist/${other.username}` as any)}>
-                      <Avatar profile={other} />
-                    </Pressable>
+                    <View>
+                      <Pressable onPress={() => other && router.push(`/artist/${other.username}` as any)}>
+                        <Avatar profile={other} />
+                      </Pressable>
+                      {hasUnread && (
+                        <View style={[styles.unreadDot, { backgroundColor: C.gold }]} />
+                      )}
+                    </View>
                     <View style={styles.cardInfo}>
                       <View style={styles.nameRow}>
                         <Text style={[styles.cardName, { color: C.fg }]}>{other?.name ?? other?.username}</Text>
                         <Badge profile={other} />
+                        {hasUnread && (
+                          <View style={[styles.newBadge, { backgroundColor: C.gold }]}>
+                            <Text style={styles.newBadgeText}>NEW</Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }} />
+                        {timeAgo && (
+                          <Text style={[styles.timeAgoText, { color: C.muted }]}>{timeAgo}</Text>
+                        )}
                       </View>
+                      {expiryLabel && (
+                        <Text style={[styles.expiryText, { color: C.muted }]}>{expiryLabel}</Text>
+                      )}
                       <ProfileMeta profile={other} />
-                      <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={1}>
+                      <Text style={[styles.cardMsg, { color: hasUnread ? C.fg : C.muted, fontWeight: hasUnread ? '600' : '400' }]} numberOfLines={1}>
                         {item.last_message ?? item.message}
                       </Text>
                     </View>
@@ -527,5 +592,34 @@ const styles = StyleSheet.create({
   pendingText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  expiryText: {
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  timeAgoText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#000',
+  },
+  newBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  newBadgeText: {
+    fontSize: 8,
+    fontWeight: '900',
+    color: '#000',
+    letterSpacing: 0.5,
   },
 });
