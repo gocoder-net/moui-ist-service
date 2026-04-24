@@ -198,7 +198,7 @@ export default function MouiScreen() {
 
   const myJoinedCount = useMemo(() => {
     if (!user) return 0;
-    return posts.filter(p => p.moui_participants?.some(pt => pt.user_id === user.id)).length;
+    return posts.filter(p => p.user_id !== user.id && p.moui_participants?.some(pt => pt.user_id === user.id)).length;
   }, [posts, user]);
 
   const myPostsCount = useMemo(() => {
@@ -296,12 +296,12 @@ export default function MouiScreen() {
         return !isClosed && !isOwner && !isJoined && !isFull;
       });
     } else if (activeTab === 'joined' && user) {
-      filtered = filtered.filter(p => p.moui_participants?.some(pt => pt.user_id === user.id));
+      filtered = filtered.filter(p => p.user_id !== user.id && p.moui_participants?.some(pt => pt.user_id === user.id));
     } else if (activeTab === 'mine' && user) {
       filtered = filtered.filter(p => p.user_id === user.id);
     }
 
-    const sectionTitle = activeTab === 'available' ? '참여가능 모임' : activeTab === 'joined' ? '참여중 모임' : activeTab === 'mine' ? '개설한 모임' : showMyJoined && showMyPosts ? '내 모임' : showMyJoined ? '참여중 모임' : showMyPosts ? '내가 만든 모임' : '모든 모임';
+    const sectionTitle = activeTab === 'available' ? '참여가능 모임' : activeTab === 'joined' ? '참여중 모임' : activeTab === 'mine' ? '만든 모임' : showMyJoined && showMyPosts ? '내 모임' : showMyJoined ? '참여중 모임' : showMyPosts ? '내가 만든 모임' : '모든 모임';
 
     if (!myProvince || !myDistrict) {
       return filtered.length > 0 ? [{ title: sectionTitle, data: filtered }] : [];
@@ -446,7 +446,7 @@ export default function MouiScreen() {
           <View style={[styles.infoBox, { backgroundColor: C.bg, borderColor: C.border }]}>
             {item.meeting_date && (
               <View style={styles.infoRow}>
-                <Text style={[styles.infoLabel, { color: C.muted }]}>일시</Text>
+                <Text style={[styles.infoLabel, { color: C.muted }]}>모이는 날</Text>
                 {user ? (
                   <Text style={[styles.infoValue, { color: C.fg }]}>
                     {formatMeetingDate(item.meeting_date)}
@@ -511,7 +511,7 @@ export default function MouiScreen() {
             )}
             {targetKeys.length > 0 && (
               <View style={styles.infoRow}>
-                <Text style={[styles.infoLabel, { color: C.muted }]}>모집 대상</Text>
+                <Text style={[styles.infoLabel, { color: C.muted }]}>대상</Text>
                 <View style={[styles.postTagRow, { flex: 1 }]}>
                   {targetKeys.map(key => {
                     const t = TARGET_OPTIONS.find(o => o.key === key);
@@ -768,22 +768,28 @@ export default function MouiScreen() {
         </View>
       </Animated.View>
 
-      {/* 탭바: 전체 / 참여중 / 개설한 모임 */}
-      <View style={[styles.tabBar, { borderBottomColor: C.border }]}>
+      {/* 탭바: 전체 / 참여중 / 만든 모임 */}
+      <View style={styles.tabBar}>
         {([
           { key: 'all' as const, label: '전체' },
           { key: 'available' as const, label: '참여가능' },
           { key: 'joined' as const, label: `참여중${user && myJoinedCount > 0 ? ` (${myJoinedCount})` : ''}` },
-          { key: 'mine' as const, label: `개설한 모임${user && myPostsCount > 0 ? ` (${myPostsCount})` : ''}` },
+          { key: 'mine' as const, label: `만든 모임${user && myPostsCount > 0 ? ` (${myPostsCount})` : ''}` },
         ]).map(tab => {
           const isActive = activeTab === tab.key;
           return (
             <Pressable
               key={tab.key}
               onPress={() => setActiveTab(tab.key)}
-              style={[styles.tabItem, isActive && { borderBottomColor: C.gold, borderBottomWidth: 2 }]}
+              style={[
+                styles.tabItem,
+                {
+                  backgroundColor: isActive ? C.gold : C.bg,
+                  borderColor: isActive ? C.gold : C.border,
+                },
+              ]}
             >
-              <Text style={[styles.tabItemText, { color: isActive ? C.fg : C.muted }, isActive && { fontWeight: '800' }]}>
+              <Text style={[styles.tabItemText, { color: isActive ? C.bg : C.muted }]}>
                 {tab.label}
               </Text>
             </Pressable>
@@ -1193,18 +1199,20 @@ const styles = StyleSheet.create({
   /* 탭바 */
   tabBar: {
     flexDirection: 'row',
-    borderBottomWidth: 1,
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
   },
   tabItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
   },
   tabItemText: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   collapsedFilterRow: {

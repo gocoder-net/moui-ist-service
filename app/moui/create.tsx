@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, TextInput, Pressable, ScrollView,
-  Alert, Platform,
+  Alert, Platform, Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -31,9 +31,10 @@ function isValidMapUrl(url: string): boolean {
 
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 const MINUTES = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55];
-const MAX_RECRUIT_DAYS = 30;
+const MAX_RECRUIT_DAYS = 90;
 const MAX_RECRUIT_MONTHS = 3;
 const MAX_MEETING_MONTHS = 6;
+const DAY_NAMES = ['일', '월', '화', '수', '목', '금', '토'];
 
 function getMaxDate(months: number) {
   const d = new Date();
@@ -41,51 +42,270 @@ function getMaxDate(months: number) {
   return d;
 }
 
-/** 오늘~maxDate 사이의 연도 목록 */
-function getYears(maxMonths: number) {
-  const now = new Date();
-  const max = getMaxDate(maxMonths);
-  const years: number[] = [];
-  for (let y = now.getFullYear(); y <= max.getFullYear(); y++) years.push(y);
-  return years;
+function getToday() {
+  const n = new Date();
+  return new Date(n.getFullYear(), n.getMonth(), n.getDate());
 }
 
-/** 선택한 연도 기준, 오늘~maxDate 사이의 월 목록 */
-function getMonths(year: number, maxMonths: number) {
-  const now = new Date();
-  const max = getMaxDate(maxMonths);
-  const months: number[] = [];
-  for (let m = 1; m <= 12; m++) {
-    const first = new Date(year, m - 1, 1);
-    const last = new Date(year, m, 0);
-    // 해당 월의 마지막 날이 오늘 이전이면 스킵, 첫날이 max 이후면 스킵
-    if (last < new Date(now.getFullYear(), now.getMonth(), 1)) continue;
-    if (first > max) continue;
-    months.push(m);
-  }
-  return months;
-}
-
-/** 선택한 연/월 기준, 오늘~maxDate 사이의 일 목록 */
-function getFilteredDays(year: number, month: number, maxMonths: number) {
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const max = getMaxDate(maxMonths);
+/** 달력 그리드 생성 */
+function buildCalendarGrid(year: number, month: number) {
+  const firstDay = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
-  const days: number[] = [];
+  const rows: (number | null)[][] = [];
+  let row: (number | null)[] = Array(firstDay).fill(null);
   for (let d = 1; d <= daysInMonth; d++) {
-    const date = new Date(year, month - 1, d);
-    if (date < today) continue;
-    if (date > max) continue;
-    days.push(d);
+    row.push(d);
+    if (row.length === 7) { rows.push(row); row = []; }
   }
-  return days;
+  if (row.length > 0) { while (row.length < 7) row.push(null); rows.push(row); }
+  return rows;
 }
 
-const FREQUENCY_OPTIONS = [
-  { key: 'once', icon: '1️⃣', label: '1회성' },
-  { key: 'regular', icon: '🔄', label: '정기' },
-] as const;
+/** 달력 피커 컴포넌트 */
+function CalendarPicker({ visible, onClose, onSelect, selected, minDate, maxDate, colors: C, showTime, selectedHour, selectedMinute, onHourChange, onMinuteChange }: {
+  visible: boolean;
+  onClose: () => void;
+  onSelect: (d: Date) => void;
+  selected: Date | null;
+  minDate: Date;
+  maxDate: Date;
+  colors: any;
+  showTime?: boolean;
+  selectedHour?: number | null;
+  selectedMinute?: number | null;
+  onHourChange?: (h: number) => void;
+  onMinuteChange?: (m: number) => void;
+}) {
+  const [viewYear, setViewYear] = useState(selected?.getFullYear() ?? minDate.getFullYear());
+  const [viewMonth, setViewMonth] = useState(selected ? selected.getMonth() + 1 : minDate.getMonth() + 1);
+  const [showHourPicker, setShowHourPicker] = useState(false);
+  const [showMinutePicker, setShowMinutePicker] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setViewYear(selected?.getFullYear() ?? minDate.getFullYear());
+      setViewMonth(selected ? selected.getMonth() + 1 : minDate.getMonth() + 1);
+      setShowHourPicker(false);
+      setShowMinutePicker(false);
+    }
+  }, [visible]);
+
+  const goPrev = () => {
+    let y = viewYear, m = viewMonth - 1;
+    if (m < 1) { m = 12; y--; }
+    const firstOfMonth = new Date(y, m - 1, 1);
+    const lastOfMinMonth = new Date(minDate.getFullYear(), minDate.getMonth() + 1, 0);
+    if (firstOfMonth <= lastOfMinMonth) { setViewYear(y); setViewMonth(m); }
+  };
+  const goNext = () => {
+    let y = viewYear, m = viewMonth + 1;
+    if (m > 12) { m = 1; y++; }
+    if (new Date(y, m - 1, 1) <= maxDate) { setViewYear(y); setViewMonth(m); }
+  };
+
+  const grid = buildCalendarGrid(viewYear, viewMonth);
+  const today = getToday();
+
+  const isDisabled = (day: number) => {
+    const d = new Date(viewYear, viewMonth - 1, day);
+    return d < minDate || d > maxDate;
+  };
+  const isSelected = (day: number) => {
+    if (!selected) return false;
+    return selected.getFullYear() === viewYear && selected.getMonth() + 1 === viewMonth && selected.getDate() === day;
+  };
+  const isToday = (day: number) => {
+    return today.getFullYear() === viewYear && today.getMonth() + 1 === viewMonth && today.getDate() === day;
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable style={calStyles.overlay} onPress={onClose}>
+        <Pressable style={[calStyles.container, { backgroundColor: C.bg }]} onPress={e => e.stopPropagation()}>
+          {/* 헤더: < 2026년 4월 > */}
+          <View style={calStyles.header}>
+            <Pressable onPress={goPrev} style={calStyles.navBtn}>
+              <Text style={{ color: C.fg, fontSize: 18 }}>‹</Text>
+            </Pressable>
+            <Text style={[calStyles.headerText, { color: C.fg }]}>{viewYear}년 {viewMonth}월</Text>
+            <Pressable onPress={goNext} style={calStyles.navBtn}>
+              <Text style={{ color: C.fg, fontSize: 18 }}>›</Text>
+            </Pressable>
+          </View>
+
+          {/* 요일 헤더 */}
+          <View style={calStyles.weekRow}>
+            {DAY_NAMES.map((dn, i) => (
+              <View key={i} style={calStyles.dayCell}>
+                <Text style={{ color: i === 0 ? '#e55' : i === 6 ? '#58f' : C.muted, fontSize: 12, fontWeight: '600' }}>{dn}</Text>
+              </View>
+            ))}
+          </View>
+
+          {/* 날짜 그리드 */}
+          {grid.map((row, ri) => (
+            <View key={ri} style={calStyles.weekRow}>
+              {row.map((day, ci) => {
+                if (day === null) return <View key={ci} style={calStyles.dayCell} />;
+                const disabled = isDisabled(day);
+                const sel = isSelected(day);
+                const tod = isToday(day);
+                return (
+                  <Pressable
+                    key={ci}
+                    onPress={() => !disabled && onSelect(new Date(viewYear, viewMonth - 1, day))}
+                    style={[
+                      calStyles.dayCell,
+                      sel && { backgroundColor: C.gold, borderRadius: 20 },
+                      tod && !sel && { borderWidth: 1, borderColor: C.gold, borderRadius: 20 },
+                    ]}
+                  >
+                    <Text style={{
+                      color: disabled ? C.mutedLight : sel ? C.bg : ci === 0 ? '#e55' : ci === 6 ? '#58f' : C.fg,
+                      fontSize: 14,
+                      fontWeight: sel ? '800' : '500',
+                    }}>{day}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ))}
+
+          {/* 시간 선택 (모이는 날용) */}
+          {showTime && selected && (
+            <View style={calStyles.timeSection}>
+              <View style={calStyles.timeRow}>
+                <Pressable
+                  onPress={() => { setShowHourPicker(!showHourPicker); setShowMinutePicker(false); }}
+                  style={[calStyles.timeBtn, { backgroundColor: C.card, borderColor: showHourPicker ? C.gold : C.border }]}
+                >
+                  <Text style={{ color: selectedHour !== null && selectedHour !== undefined ? C.fg : C.mutedLight, fontSize: 14 }}>
+                    {selectedHour !== null && selectedHour !== undefined ? `${selectedHour}시` : '시'}
+                  </Text>
+                </Pressable>
+                <Text style={{ color: C.muted, fontSize: 16 }}>:</Text>
+                <Pressable
+                  onPress={() => { setShowMinutePicker(!showMinutePicker); setShowHourPicker(false); }}
+                  style={[calStyles.timeBtn, { backgroundColor: C.card, borderColor: showMinutePicker ? C.gold : C.border }]}
+                >
+                  <Text style={{ color: selectedMinute !== null && selectedMinute !== undefined ? C.fg : C.mutedLight, fontSize: 14 }}>
+                    {selectedMinute !== null && selectedMinute !== undefined ? `${String(selectedMinute).padStart(2, '0')}분` : '분'}
+                  </Text>
+                </Pressable>
+              </View>
+              {showHourPicker && (
+                <ScrollView style={[calStyles.timeList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
+                  {HOURS.map(h => (
+                    <Pressable key={h} onPress={() => { onHourChange?.(h); setShowHourPicker(false); }}
+                      style={[calStyles.timeItem, selectedHour === h && { backgroundColor: C.gold + '22' }]}>
+                      <Text style={{ color: selectedHour === h ? C.gold : C.fg, fontSize: 13 }}>{h}시</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+              {showMinutePicker && (
+                <ScrollView style={[calStyles.timeList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
+                  {MINUTES.map(m => (
+                    <Pressable key={m} onPress={() => { onMinuteChange?.(m); setShowMinutePicker(false); }}
+                      style={[calStyles.timeItem, selectedMinute === m && { backgroundColor: C.gold + '22' }]}>
+                      <Text style={{ color: selectedMinute === m ? C.gold : C.fg, fontSize: 13 }}>{String(m).padStart(2, '0')}분</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
+
+          {/* 확인 버튼 */}
+          {(() => {
+            const needsTime = showTime && (selectedHour === null || selectedHour === undefined || selectedMinute === null || selectedMinute === undefined);
+            const disabled = !selected || needsTime;
+            return (
+              <Pressable onPress={() => !disabled && onClose()} style={[calStyles.confirmBtn, { backgroundColor: disabled ? C.muted : C.gold, opacity: disabled ? 0.4 : 1 }]}>
+                <Text style={{ color: C.bg, fontSize: 14, fontWeight: '700' }}>
+                  {disabled && needsTime ? '시간을 선택해주세요' : '확인'}
+                </Text>
+              </Pressable>
+            );
+          })()}
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+const calStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  container: {
+    width: 340,
+    borderRadius: 16,
+    padding: 20,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  headerText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  navBtn: {
+    padding: 8,
+  },
+  weekRow: {
+    flexDirection: 'row',
+  },
+  dayCell: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 38,
+  },
+  timeSection: {
+    marginTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#333',
+    paddingTop: 12,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  timeBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    minWidth: 80,
+    alignItems: 'center',
+  },
+  timeList: {
+    maxHeight: 150,
+    borderWidth: 1,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  timeItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  confirmBtn: {
+    marginTop: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+});
 
 export default function CreateMouiScreen() {
   const insets = useSafeAreaInsets();
@@ -99,7 +319,6 @@ export default function CreateMouiScreen() {
   const [formCategory, setFormCategory] = useState<string | null>(null);
   const [formTitle, setFormTitle] = useState('');
   const [formDesc, setFormDesc] = useState('');
-  const [formFrequency, setFormFrequency] = useState<string | null>(null);
   const [formTargets, setFormTargets] = useState<string[]>([]);
   const [formProvince, setFormProvince] = useState('');
   const [formDistrict, setFormDistrict] = useState('');
@@ -109,35 +328,19 @@ export default function CreateMouiScreen() {
   const [formFields, setFormFields] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
 
-  // 모집 기간 (시작~종료)
-  const [recruitStartYear, setRecruitStartYear] = useState<number | null>(null);
-  const [recruitStartMonth, setRecruitStartMonth] = useState<number | null>(null);
-  const [recruitStartDay, setRecruitStartDay] = useState<number | null>(null);
-  const [recruitEndYear, setRecruitEndYear] = useState<number | null>(null);
-  const [recruitEndMonth, setRecruitEndMonth] = useState<number | null>(null);
-  const [recruitEndDay, setRecruitEndDay] = useState<number | null>(null);
-  const [showRSYearPicker, setShowRSYearPicker] = useState(false);
-  const [showRSMonthPicker, setShowRSMonthPicker] = useState(false);
-  const [showRSDayPicker, setShowRSDayPicker] = useState(false);
-  const [showREYearPicker, setShowREYearPicker] = useState(false);
-  const [showREMonthPicker, setShowREMonthPicker] = useState(false);
-  const [showREDayPicker, setShowREDayPicker] = useState(false);
+  // 모집 기간 (시작은 오늘 자동, 종료일만 선택)
+  const [recruitEndDate, setRecruitEndDate] = useState<Date | null>(null);
+  const [showRecruitCalendar, setShowRecruitCalendar] = useState(false);
 
   // Picker visibility
   const [showProvincePicker, setShowProvincePicker] = useState(false);
   const [showDistrictPicker, setShowDistrictPicker] = useState(false);
 
   // Meeting date state
-  const [dateYear, setDateYear] = useState<number | null>(null);
-  const [dateMonth, setDateMonth] = useState<number | null>(null);
-  const [dateDay, setDateDay] = useState<number | null>(null);
+  const [meetingDate, setMeetingDate] = useState<Date | null>(null);
   const [dateHour, setDateHour] = useState<number | null>(null);
   const [dateMinute, setDateMinute] = useState<number | null>(null);
-  const [showYearPicker, setShowYearPicker] = useState(false);
-  const [showMonthPicker, setShowMonthPicker] = useState(false);
-  const [showDayPicker, setShowDayPicker] = useState(false);
-  const [showHourPicker, setShowHourPicker] = useState(false);
-  const [showMinutePicker, setShowMinutePicker] = useState(false);
+  const [showMeetingCalendar, setShowMeetingCalendar] = useState(false);
 
   // 수정 모드: 기존 데이터 로드
   useEffect(() => {
@@ -148,7 +351,6 @@ export default function CreateMouiScreen() {
       setFormCategory(data.category ?? null);
       setFormTitle(data.title ?? '');
       setFormDesc(data.description ?? '');
-      setFormFrequency(data.frequency ?? null);
       setFormMapUrl(data.map_url ?? '');
       setFormAddress(data.address ?? '');
       // region
@@ -160,85 +362,53 @@ export default function CreateMouiScreen() {
       if (data.fields === '전체' || !data.fields) { setFormFieldAll(true); setFormFields([]); }
       else { setFormFieldAll(false); setFormFields(data.fields.split(',').map((s: string) => s.trim())); }
       // recruit dates
-      if (data.recruit_start) {
-        const rs = new Date(data.recruit_start);
-        setRecruitStartYear(rs.getFullYear()); setRecruitStartMonth(rs.getMonth() + 1); setRecruitStartDay(rs.getDate());
-      }
       if (data.recruit_deadline) {
-        const re = new Date(data.recruit_deadline);
-        setRecruitEndYear(re.getFullYear()); setRecruitEndMonth(re.getMonth() + 1); setRecruitEndDay(re.getDate());
+        setRecruitEndDate(new Date(data.recruit_deadline));
       }
       // meeting date
       if (data.meeting_date) {
         const md = new Date(data.meeting_date);
-        setDateYear(md.getFullYear()); setDateMonth(md.getMonth() + 1); setDateDay(md.getDate());
+        setMeetingDate(new Date(md.getFullYear(), md.getMonth(), md.getDate()));
         setDateHour(md.getHours()); setDateMinute(md.getMinutes());
       }
     })();
   }, [edit]);
 
   const closeAllPickers = () => {
-    setShowYearPicker(false);
-    setShowMonthPicker(false);
-    setShowDayPicker(false);
-    setShowHourPicker(false);
-    setShowMinutePicker(false);
     setShowProvincePicker(false);
     setShowDistrictPicker(false);
-    setShowRSYearPicker(false);
-    setShowRSMonthPicker(false);
-    setShowRSDayPicker(false);
-    setShowREYearPicker(false);
-    setShowREMonthPicker(false);
-    setShowREDayPicker(false);
   };
 
-  const recruitYears = getYears(MAX_RECRUIT_MONTHS);
-  const recruitStartMonths = recruitStartYear ? getMonths(recruitStartYear, MAX_RECRUIT_MONTHS) : [];
-  const recruitStartDays = recruitStartYear && recruitStartMonth
-    ? getFilteredDays(recruitStartYear, recruitStartMonth, MAX_RECRUIT_MONTHS)
-    : [];
-  const recruitEndMonths = recruitEndYear ? getMonths(recruitEndYear, MAX_RECRUIT_MONTHS) : [];
-  const recruitEndDays = recruitEndYear && recruitEndMonth
-    ? getFilteredDays(recruitEndYear, recruitEndMonth, MAX_RECRUIT_MONTHS)
-    : [];
+  const recruitStartDate = getToday();
 
-  const recruitStartDate = recruitStartYear && recruitStartMonth && recruitStartDay
-    ? new Date(recruitStartYear, recruitStartMonth - 1, recruitStartDay)
-    : null;
-  const recruitEndDate = recruitEndYear && recruitEndMonth && recruitEndDay
-    ? new Date(recruitEndYear, recruitEndMonth - 1, recruitEndDay)
-    : null;
-
-  const recruitDaysGap = recruitStartDate && recruitEndDate
+  const recruitDaysGap = recruitEndDate
     ? Math.ceil((recruitEndDate.getTime() - recruitStartDate.getTime()) / 86400000)
     : null;
 
-  const formatShortDate = (y: number, m: number, d: number) =>
-    `${y}.${String(m).padStart(2, '0')}.${String(d).padStart(2, '0')}`;
+  const formatShortDate = (d: Date) =>
+    `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
 
-  const meetingYears = getYears(MAX_MEETING_MONTHS);
-  const meetingMonths = dateYear ? getMonths(dateYear, MAX_MEETING_MONTHS) : [];
-  const days = dateYear && dateMonth
-    ? getFilteredDays(dateYear, dateMonth, MAX_MEETING_MONTHS)
-    : [];
+  const formatDateLabel = (d: Date) => {
+    const dayName = DAY_NAMES[d.getDay()];
+    return `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일 (${dayName})`;
+  };
 
   const handleSubmit = async () => {
     if (!user) return;
     if (!formCategory) { showAlert('알림', '카테고리를 선택해주세요.'); return; }
-    if (!formTitle.trim()) { showAlert('알림', '제목을 입력해주세요.'); return; }
-    if (!formDesc.trim()) { showAlert('알림', '내용을 입력해주세요.'); return; }
-    if (!formFrequency) { showAlert('알림', '1회성/정기를 선택해주세요.'); return; }
-    if (!recruitStartDate || !recruitEndDate) { showAlert('알림', '모집 기간 시작일과 종료일을 선택해주세요.'); return; }
-    if (recruitEndDate <= recruitStartDate) { showAlert('알림', '모집 종료일은 시작일 이후여야 합니다.'); return; }
+    if (formTitle.trim().length < 10) { showAlert('알림', '제목을 10글자 이상 입력해주세요.'); return; }
+    if (formDesc.trim().length < 10) { showAlert('알림', '상세 내용을 10글자 이상 입력해주세요.'); return; }
+    if (!recruitEndDate) { showAlert('알림', '모집 마감일을 선택해주세요.'); return; }
+    if (recruitEndDate <= recruitStartDate) { showAlert('알림', '모집 마감일은 오늘 이후여야 합니다.'); return; }
     if (recruitDaysGap! > MAX_RECRUIT_DAYS) { showAlert('알림', `모집 기간은 최대 ${MAX_RECRUIT_DAYS}일입니다.`); return; }
     if (recruitEndDate > getMaxDate(MAX_RECRUIT_MONTHS)) { showAlert('알림', '모집 기간은 지금으로부터 3개월 이내만 가능합니다.'); return; }
-    if (formTargets.length === 0) { showAlert('알림', '모집 대상을 선택해주세요.'); return; }
+    if (formTargets.length === 0) { showAlert('알림', '대상을 선택해주세요.'); return; }
     if (!formProvince || !formDistrict) { showAlert('알림', '모일 위치를 선택해주세요.'); return; }
     if (!formAddress.trim()) { showAlert('알림', '상세 주소를 입력해주세요.'); return; }
-    if (!(dateYear && dateMonth && dateDay)) { showAlert('알림', '모임 일시를 선택해주세요.'); return; }
-    const meetingD = new Date(dateYear, dateMonth - 1, dateDay);
-    if (meetingD > getMaxDate(MAX_MEETING_MONTHS)) { showAlert('알림', '모임 일시는 지금으로부터 6개월 이내만 가능합니다.'); return; }
+    if (!meetingDate) { showAlert('알림', '모이는 날을 선택해주세요.'); return; }
+    if (dateHour === null || dateMinute === null) { showAlert('알림', '모이는 시간을 선택해주세요.'); return; }
+    if (recruitEndDate && meetingDate < recruitEndDate) { showAlert('알림', '모이는 날은 모집 마감일 이후여야 합니다.'); return; }
+    if (meetingDate > getMaxDate(MAX_MEETING_MONTHS)) { showAlert('알림', '모이는 날은 지금으로부터 6개월 이내만 가능합니다.'); return; }
     if (!formFieldAll && formFields.length === 0) { showAlert('알림', '분야를 선택해주세요.'); return; }
     if (formMapUrl.trim() && !isValidMapUrl(formMapUrl.trim())) {
       showAlert('알림', '지도 링크는 네이버, 카카오, 구글맵 URL만 가능합니다.');
@@ -254,7 +424,7 @@ export default function CreateMouiScreen() {
 
     const h = dateHour ?? 0;
     const m = dateMinute ?? 0;
-    const meetingDate = new Date(dateYear!, dateMonth! - 1, dateDay!, h, m).toISOString();
+    const meetingDateISO = new Date(meetingDate!.getFullYear(), meetingDate!.getMonth(), meetingDate!.getDate(), h, m).toISOString();
 
     const payload = {
       title: formTitle.trim(),
@@ -265,9 +435,9 @@ export default function CreateMouiScreen() {
       address,
       target_types: targetTypes,
       map_url: mapUrl,
-      meeting_date: meetingDate,
-      frequency: formFrequency,
-      recruit_start: recruitStartDate!.toISOString(),
+      meeting_date: meetingDateISO,
+      frequency: null,
+      recruit_start: recruitStartDate.toISOString(),
       recruit_deadline: recruitEndDate!.toISOString(),
     };
 
@@ -394,9 +564,9 @@ export default function CreateMouiScreen() {
             )}
           </Animated.View>
 
-          {/* 모집 대상 */}
+          {/* 대상 */}
           <Animated.View entering={FadeInDown.delay(90).duration(300).springify()}>
-            <Text style={[styles.label, { color: C.fg }]}>모집 대상 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+            <Text style={[styles.label, { color: C.fg }]}>대상 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
             <View style={styles.chipRow}>
               {TARGET_TOP.map(t => {
                 const isCreator = t.key === 'creator';
@@ -463,6 +633,9 @@ export default function CreateMouiScreen() {
               placeholder="어떤 모임을 찾고 계신가요?"
               placeholderTextColor={C.mutedLight}
             />
+            <Text style={{ color: formTitle.trim().length >= 10 ? C.muted : C.mutedLight, fontSize: 11, marginTop: 4, textAlign: 'right' }}>
+              {formTitle.trim().length}/10
+            </Text>
           </Animated.View>
 
           {/* 3. 상세 내용 */}
@@ -477,305 +650,84 @@ export default function CreateMouiScreen() {
               multiline
               textAlignVertical="top"
             />
+            <Text style={{ color: formDesc.trim().length >= 10 ? C.muted : C.mutedLight, fontSize: 11, marginTop: 4, textAlign: 'right' }}>
+              {formDesc.trim().length}/10
+            </Text>
           </Animated.View>
 
-          {/* 4. 1회성 / 정기 */}
-          <Animated.View entering={FadeInDown.delay(175).duration(300).springify()}>
-            <Text style={[styles.label, { color: C.fg }]}>모임 유형 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
-            <View style={styles.chipRow}>
-              {FREQUENCY_OPTIONS.map(f => {
-                const active = formFrequency === f.key;
-                return (
-                  <Pressable
-                    key={f.key}
-                    onPress={() => setFormFrequency(active ? null : f.key)}
-                    style={[
-                      styles.chip,
-                      { backgroundColor: active ? C.gold : C.card, borderColor: active ? C.gold : C.border },
-                    ]}
-                  >
-                    <Text style={[styles.chipText, { color: active ? C.bg : C.muted }]}>
-                      {f.icon} {f.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Animated.View>
 
           {/* 5. 모집 기간 */}
           <Animated.View entering={FadeInDown.delay(190).duration(300).springify()} style={isEdit ? { opacity: 0.5, pointerEvents: 'none' } : undefined}>
-            <Text style={[styles.label, { color: C.fg }]}>모집 기간 <Text style={[styles.required, { color: C.gold }]}>*</Text>{isEdit && <Text style={{ color: C.muted, fontSize: 11 }}>  (수정 불가)</Text>}</Text>
+            <Text style={[styles.label, { color: C.fg }]}>모집 마감일 <Text style={[styles.required, { color: C.gold }]}>*</Text>{isEdit && <Text style={{ color: C.muted, fontSize: 11 }}>  (수정 불가)</Text>}</Text>
 
-            {/* 시작일 */}
-            <Text style={[styles.subLabel, { color: C.muted }]}>시작일</Text>
-            <View style={styles.regionRow}>
-              <Pressable
-                onPress={() => { closeAllPickers(); setShowRSYearPicker(!showRSYearPicker); }}
-                style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showRSYearPicker ? C.gold : C.border }]}
-              >
-                <Text style={{ color: recruitStartYear ? C.fg : C.mutedLight, fontSize: 13 }}>
-                  {recruitStartYear ? `${recruitStartYear}년` : '년'}
-                </Text>
-                <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showRSYearPicker ? '▲' : '▼'}</Text>
-              </Pressable>
-              {recruitStartYear !== null && (
-                <Pressable
-                  onPress={() => { closeAllPickers(); setShowRSMonthPicker(!showRSMonthPicker); }}
-                  style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showRSMonthPicker ? C.gold : C.border }]}
-                >
-                  <Text style={{ color: recruitStartMonth ? C.fg : C.mutedLight, fontSize: 13 }}>
-                    {recruitStartMonth ? `${recruitStartMonth}월` : '월'}
-                  </Text>
-                  <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showRSMonthPicker ? '▲' : '▼'}</Text>
-                </Pressable>
-              )}
-              {recruitStartMonth !== null && (
-                <Pressable
-                  onPress={() => { closeAllPickers(); setShowRSDayPicker(!showRSDayPicker); }}
-                  style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showRSDayPicker ? C.gold : C.border }]}
-                >
-                  <Text style={{ color: recruitStartDay ? C.fg : C.mutedLight, fontSize: 13 }}>
-                    {recruitStartDay ? `${recruitStartDay}일` : '일'}
-                  </Text>
-                  <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showRSDayPicker ? '▲' : '▼'}</Text>
-                </Pressable>
-              )}
-            </View>
-            {showRSYearPicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {recruitYears.map(y => (
-                  <Pressable key={y} onPress={() => { setRecruitStartYear(y); setRecruitStartMonth(null); setRecruitStartDay(null); setShowRSYearPicker(false); setShowRSMonthPicker(true); }}
-                    style={[styles.pickerItem, recruitStartYear === y && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: recruitStartYear === y ? C.gold : C.fg, fontSize: 13 }}>{y}년</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-            {showRSMonthPicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {recruitStartMonths.map(m => (
-                  <Pressable key={m} onPress={() => { setRecruitStartMonth(m); setRecruitStartDay(null); setShowRSMonthPicker(false); setShowRSDayPicker(true); }}
-                    style={[styles.pickerItem, recruitStartMonth === m && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: recruitStartMonth === m ? C.gold : C.fg, fontSize: 13 }}>{m}월</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-            {showRSDayPicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {recruitStartDays.map(d => (
-                  <Pressable key={d} onPress={() => { setRecruitStartDay(d); setShowRSDayPicker(false); }}
-                    style={[styles.pickerItem, recruitStartDay === d && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: recruitStartDay === d ? C.gold : C.fg, fontSize: 13 }}>{d}일</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
+            <Pressable
+              onPress={() => setShowRecruitCalendar(true)}
+              style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: recruitEndDate ? C.gold : C.border }]}
+            >
+              <Text style={{ color: recruitEndDate ? C.fg : C.mutedLight, fontSize: 13 }}>
+                {recruitEndDate ? formatDateLabel(recruitEndDate) : '마감일을 선택하세요'}
+              </Text>
+              <Text style={{ color: C.mutedLight, fontSize: 10 }}>📅</Text>
+            </Pressable>
 
-            {/* 종료일 */}
-            <Text style={[styles.subLabel, { color: C.muted, marginTop: 10 }]}>종료일</Text>
-            <View style={styles.regionRow}>
-              <Pressable
-                onPress={() => { closeAllPickers(); setShowREYearPicker(!showREYearPicker); }}
-                style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showREYearPicker ? C.gold : C.border }]}
-              >
-                <Text style={{ color: recruitEndYear ? C.fg : C.mutedLight, fontSize: 13 }}>
-                  {recruitEndYear ? `${recruitEndYear}년` : '년'}
-                </Text>
-                <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showREYearPicker ? '▲' : '▼'}</Text>
-              </Pressable>
-              {recruitEndYear !== null && (
-                <Pressable
-                  onPress={() => { closeAllPickers(); setShowREMonthPicker(!showREMonthPicker); }}
-                  style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showREMonthPicker ? C.gold : C.border }]}
-                >
-                  <Text style={{ color: recruitEndMonth ? C.fg : C.mutedLight, fontSize: 13 }}>
-                    {recruitEndMonth ? `${recruitEndMonth}월` : '월'}
-                  </Text>
-                  <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showREMonthPicker ? '▲' : '▼'}</Text>
-                </Pressable>
-              )}
-              {recruitEndMonth !== null && (
-                <Pressable
-                  onPress={() => { closeAllPickers(); setShowREDayPicker(!showREDayPicker); }}
-                  style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showREDayPicker ? C.gold : C.border }]}
-                >
-                  <Text style={{ color: recruitEndDay ? C.fg : C.mutedLight, fontSize: 13 }}>
-                    {recruitEndDay ? `${recruitEndDay}일` : '일'}
-                  </Text>
-                  <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showREDayPicker ? '▲' : '▼'}</Text>
-                </Pressable>
-              )}
-            </View>
-            {showREYearPicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {recruitYears.map(y => (
-                  <Pressable key={y} onPress={() => { setRecruitEndYear(y); setRecruitEndMonth(null); setRecruitEndDay(null); setShowREYearPicker(false); setShowREMonthPicker(true); }}
-                    style={[styles.pickerItem, recruitEndYear === y && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: recruitEndYear === y ? C.gold : C.fg, fontSize: 13 }}>{y}년</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-            {showREMonthPicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {recruitEndMonths.map(m => (
-                  <Pressable key={m} onPress={() => { setRecruitEndMonth(m); setRecruitEndDay(null); setShowREMonthPicker(false); setShowREDayPicker(true); }}
-                    style={[styles.pickerItem, recruitEndMonth === m && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: recruitEndMonth === m ? C.gold : C.fg, fontSize: 13 }}>{m}월</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-            {showREDayPicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {recruitEndDays.map(d => (
-                  <Pressable key={d} onPress={() => { setRecruitEndDay(d); setShowREDayPicker(false); }}
-                    style={[styles.pickerItem, recruitEndDay === d && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: recruitEndDay === d ? C.gold : C.fg, fontSize: 13 }}>{d}일</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
+            <CalendarPicker
+              visible={showRecruitCalendar}
+              onClose={() => setShowRecruitCalendar(false)}
+              onSelect={(d) => setRecruitEndDate(d)}
+              selected={recruitEndDate}
+              minDate={new Date(getToday().getTime() + 86400000)}
+              maxDate={new Date(getToday().getTime() + MAX_RECRUIT_DAYS * 86400000)}
+              colors={C}
+            />
 
             {/* 요약 */}
-            {recruitStartDate && recruitEndDate && (
+            {recruitEndDate && (
               <View style={[styles.recruitSummary, { backgroundColor: C.card, borderColor: recruitDaysGap! > MAX_RECRUIT_DAYS ? C.danger : C.gold + '44' }]}>
                 <Text style={{ color: recruitDaysGap! > MAX_RECRUIT_DAYS ? C.danger : C.fg, fontSize: 12, fontWeight: '600' }}>
-                  {formatShortDate(recruitStartYear!, recruitStartMonth!, recruitStartDay!)} ~ {formatShortDate(recruitEndYear!, recruitEndMonth!, recruitEndDay!)}
-                  {'  '}({recruitDaysGap}일간)
+                  오늘 ~ {formatShortDate(recruitEndDate)}{'  '}({recruitDaysGap}일간)
                 </Text>
                 {recruitDaysGap! > MAX_RECRUIT_DAYS && (
                   <Text style={{ color: C.danger, fontSize: 11, marginTop: 2 }}>최대 {MAX_RECRUIT_DAYS}일까지 가능합니다</Text>
                 )}
               </View>
             )}
-            {recruitStartDate && recruitEndDate && recruitEndDate <= recruitStartDate && (
-              <Text style={{ color: C.danger, fontSize: 11, marginTop: 4 }}>종료일은 시작일 이후여야 합니다</Text>
-            )}
           </Animated.View>
 
-          {/* 6. 모임 일시 */}
+          {/* 6. 모이는 날 */}
           <Animated.View entering={FadeInDown.delay(200).duration(300).springify()}>
-            <Text style={[styles.label, { color: C.fg }]}>모임 일시 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+            <Text style={[styles.label, { color: C.fg }]}>모이는 날 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
 
-            {/* 날짜 행: 년 / 월 / 일 */}
-            <View style={styles.regionRow}>
-              <Pressable
-                onPress={() => { closeAllPickers(); setShowYearPicker(!showYearPicker); }}
-                style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showYearPicker ? C.gold : C.border }]}
-              >
-                <Text style={{ color: dateYear ? C.fg : C.mutedLight, fontSize: 13 }}>
-                  {dateYear ? `${dateYear}년` : '년'}
-                </Text>
-                <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showYearPicker ? '▲' : '▼'}</Text>
+            <Pressable
+              onPress={() => setShowMeetingCalendar(true)}
+              style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: meetingDate ? C.gold : C.border }]}
+            >
+              <Text style={{ color: meetingDate ? C.fg : C.mutedLight, fontSize: 13 }}>
+                {meetingDate
+                  ? `${formatDateLabel(meetingDate)}${dateHour !== null ? `  ${dateHour}:${String(dateMinute ?? 0).padStart(2, '0')}` : ''}`
+                  : '날짜와 시간을 선택하세요'}
+              </Text>
+              <Text style={{ color: C.mutedLight, fontSize: 10 }}>📅</Text>
+            </Pressable>
+
+            <CalendarPicker
+              visible={showMeetingCalendar}
+              onClose={() => setShowMeetingCalendar(false)}
+              onSelect={(d) => setMeetingDate(d)}
+              selected={meetingDate}
+              minDate={recruitEndDate ?? getToday()}
+              maxDate={getMaxDate(MAX_MEETING_MONTHS)}
+              colors={C}
+              showTime
+              selectedHour={dateHour}
+              selectedMinute={dateMinute}
+              onHourChange={setDateHour}
+              onMinuteChange={setDateMinute}
+            />
+
+            {meetingDate && (
+              <Pressable onPress={() => { setMeetingDate(null); setDateHour(null); setDateMinute(null); }} style={{ marginTop: 6 }}>
+                <Text style={{ color: C.mutedLight, fontSize: 11 }}>초기화</Text>
               </Pressable>
-
-              {dateYear !== null && (
-                <Pressable
-                  onPress={() => { closeAllPickers(); setShowMonthPicker(!showMonthPicker); }}
-                  style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showMonthPicker ? C.gold : C.border }]}
-                >
-                  <Text style={{ color: dateMonth ? C.fg : C.mutedLight, fontSize: 13 }}>
-                    {dateMonth ? `${dateMonth}월` : '월'}
-                  </Text>
-                  <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showMonthPicker ? '▲' : '▼'}</Text>
-                </Pressable>
-              )}
-
-              {dateMonth !== null && (
-                <Pressable
-                  onPress={() => { closeAllPickers(); setShowDayPicker(!showDayPicker); }}
-                  style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showDayPicker ? C.gold : C.border }]}
-                >
-                  <Text style={{ color: dateDay ? C.fg : C.mutedLight, fontSize: 13 }}>
-                    {dateDay ? `${dateDay}일` : '일'}
-                  </Text>
-                  <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showDayPicker ? '▲' : '▼'}</Text>
-                </Pressable>
-              )}
-            </View>
-
-            {showYearPicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {meetingYears.map(y => (
-                  <Pressable key={y} onPress={() => { setDateYear(y); setDateMonth(null); setDateDay(null); setShowYearPicker(false); setShowMonthPicker(true); }}
-                    style={[styles.pickerItem, dateYear === y && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: dateYear === y ? C.gold : C.fg, fontSize: 13 }}>{y}년</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-            {showMonthPicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {meetingMonths.map(m => (
-                  <Pressable key={m} onPress={() => { setDateMonth(m); setDateDay(null); setShowMonthPicker(false); setShowDayPicker(true); }}
-                    style={[styles.pickerItem, dateMonth === m && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: dateMonth === m ? C.gold : C.fg, fontSize: 13 }}>{m}월</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-            {showDayPicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {days.map(d => (
-                  <Pressable key={d} onPress={() => { setDateDay(d); setShowDayPicker(false); }}
-                    style={[styles.pickerItem, dateDay === d && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: dateDay === d ? C.gold : C.fg, fontSize: 13 }}>{d}일</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* 시간 행: 시 : 분 */}
-            {dateDay !== null && (
-              <View style={[styles.regionRow, { marginTop: 8 }]}>
-                <Pressable
-                  onPress={() => { closeAllPickers(); setShowHourPicker(!showHourPicker); }}
-                  style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showHourPicker ? C.gold : C.border }]}
-                >
-                  <Text style={{ color: dateHour !== null ? C.fg : C.mutedLight, fontSize: 13 }}>
-                    {dateHour !== null ? `${dateHour}시` : '시'}
-                  </Text>
-                  <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showHourPicker ? '▲' : '▼'}</Text>
-                </Pressable>
-
-                <Pressable
-                  onPress={() => { closeAllPickers(); setShowMinutePicker(!showMinutePicker); }}
-                  style={[styles.pickerBtn, { backgroundColor: C.card, borderColor: showMinutePicker ? C.gold : C.border }]}
-                >
-                  <Text style={{ color: dateMinute !== null ? C.fg : C.mutedLight, fontSize: 13 }}>
-                    {dateMinute !== null ? `${String(dateMinute).padStart(2, '0')}분` : '분'}
-                  </Text>
-                  <Text style={{ color: C.mutedLight, fontSize: 10 }}>{showMinutePicker ? '▲' : '▼'}</Text>
-                </Pressable>
-
-                <Pressable onPress={() => { setDateYear(null); setDateMonth(null); setDateDay(null); setDateHour(null); setDateMinute(null); }}>
-                  <Text style={{ color: C.mutedLight, fontSize: 11 }}>초기화</Text>
-                </Pressable>
-              </View>
-            )}
-
-            {showHourPicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {HOURS.map(h => (
-                  <Pressable key={h} onPress={() => { setDateHour(h); setShowHourPicker(false); }}
-                    style={[styles.pickerItem, dateHour === h && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: dateHour === h ? C.gold : C.fg, fontSize: 13 }}>{h}시</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            )}
-            {showMinutePicker && (
-              <ScrollView style={[styles.pickerList, { backgroundColor: C.card, borderColor: C.border }]} nestedScrollEnabled>
-                {MINUTES.map(m => (
-                  <Pressable key={m} onPress={() => { setDateMinute(m); setShowMinutePicker(false); }}
-                    style={[styles.pickerItem, dateMinute === m && { backgroundColor: C.gold + '22' }]}>
-                    <Text style={{ color: dateMinute === m ? C.gold : C.fg, fontSize: 13 }}>{String(m).padStart(2, '0')}분</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
             )}
           </Animated.View>
 
@@ -838,7 +790,7 @@ export default function CreateMouiScreen() {
             {/* 상세 주소 — 구/군/시 선택 후 표시 */}
             {formProvince !== '' && formDistrict !== '' && (
               <>
-                <Text style={[styles.subLabel, { color: C.muted, marginTop: 10 }]}>상세 주소</Text>
+                <Text style={[styles.subLabel, { color: C.muted, marginTop: 10 }]}>상세 주소 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
                 <TextInput
                   style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
                   value={formAddress}
