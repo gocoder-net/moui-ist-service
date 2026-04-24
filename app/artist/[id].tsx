@@ -49,7 +49,7 @@ type Exhibition = Database['public']['Tables']['exhibitions']['Row'];
 
 const MAX_CONTENT_W = 680;
 const MAX_HERO_H = 220;
-const ARTWORK_PAGE_SIZE = 10;
+const ARTWORK_PAGE_SIZE = 3;
 
 const Fonts = {
   serif: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
