@@ -187,7 +187,7 @@ export default function HomeScreen() {
   const heroSubtitle = profile?.user_type === 'aspiring'
     ? '당신도 작가가 될 수 있습니다.'
     : profile?.user_type === 'audience'
-      ? '작가와 감상자가 만나는\n창작 커뮤니티'
+      ? '모든 예술인을 위한\n창작 커뮤니티'
       : '세상 모든 예술가를 위한 서비스';
 
   const checkProgress = useCallback(async () => {

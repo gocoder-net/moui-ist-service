@@ -25,7 +25,7 @@ export const FIELD_OPTIONS = [
 export const TARGET_TOP = [
   { key: 'creator',  icon: '🎨', label: '작가' },
   { key: 'aspiring', icon: '✏️', label: '지망생' },
-  { key: 'audience', icon: '👀', label: '감상자' },
+  { key: 'audience', icon: '👀', label: '일반' },
 ] as const;
 
 /** 작가 세부 옵션 */
@@ -39,5 +39,5 @@ export const TARGET_OPTIONS = [
   { key: 'verified',   icon: '✅', label: '인증 작가' },
   { key: 'unverified', icon: '🎨', label: '미인증 작가' },
   { key: 'aspiring',   icon: '✏️', label: '지망생' },
-  { key: 'audience',   icon: '👀', label: '감상자' },
+  { key: 'audience',   icon: '👀', label: '일반' },
 ] as const;

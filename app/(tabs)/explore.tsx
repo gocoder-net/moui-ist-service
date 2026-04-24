@@ -31,14 +31,14 @@ import { supabase } from '@/lib/supabase';
 const USER_TYPE_LABELS: Record<string, string> = {
   creator: '작가',
   aspiring: '지망생',
-  audience: '감상자',
+  audience: '일반',
 };
 
 type TabKey = 'creator' | 'aspiring' | 'audience';
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'creator', label: '작가' },
   { key: 'aspiring', label: '지망생' },
-  { key: 'audience', label: '감상자' },
+  { key: 'audience', label: '일반' },
 ];
 
 type ArtistCard = {
@@ -259,7 +259,7 @@ export default function ExploreScreen() {
           a.field?.toLowerCase().includes(q),
       );
     } else {
-      // 작가 탭: 작품 올린 유저만 표시 / 지망생·감상자: 전체
+      // 작가 탭: 작품 올린 유저만 표시 / 지망생·일반: 전체
       if (activeTab === 'creator') {
         list = list.filter((a) => a.artworkCount > 0);
       }
@@ -275,9 +275,30 @@ export default function ExploreScreen() {
     return list;
   })();
 
+  // 마지막 행 빈 칸 채우기
+  const paddedData = (() => {
+    const remainder = filtered.length % numCols;
+    if (remainder === 0) return filtered;
+    const fillers: ArtistCard[] = Array.from({ length: numCols - remainder }, (_, i) => ({
+      id: `__filler_${i}`,
+      name: null,
+      username: '',
+      field: null,
+      avatar_url: null,
+      user_type: '',
+      verified: false,
+      artworkCount: 0,
+      coverImage: null,
+    }));
+    return [...filtered, ...fillers];
+  })();
+
   const isMe = (item: ArtistCard) => user?.id === item.id;
 
   const renderArtistCard = ({ item, index }: { item: ArtistCard; index: number }) => {
+    if (item.id.startsWith('__filler_')) {
+      return <View style={styles.gridItem} />;
+    }
     const me = isMe(item);
     return (
       <Animated.View entering={FadeInDown.delay(80 + index * 40).duration(400).springify()} style={styles.gridItem}>
@@ -390,7 +411,7 @@ export default function ExploreScreen() {
         <Text style={[styles.topTitle, { color: C.fg }]}>작품구경</Text>
       </Animated.View>
 
-      {/* 유형 탭 (작가 / 지망생 / 감상자) */}
+      {/* 유형 탭 (작가 / 지망생 / 일반) */}
       <Animated.View entering={FadeInDown.delay(180).duration(400).springify()} style={styles.tabsRow}>
         {TABS.map((t) => {
           const active = activeTab === t.key;
@@ -461,7 +482,7 @@ export default function ExploreScreen() {
       ) : (
         <FlatList
           key={`${activeTab}-${numCols}`}
-          data={filtered}
+          data={paddedData}
           keyExtractor={(item) => item.id}
           renderItem={renderArtistCard}
           numColumns={numCols}

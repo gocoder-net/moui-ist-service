@@ -500,7 +500,7 @@ export default function OnboardingScreen() {
             <SelectionCard
               emoji="🎨"
               title="작가"
-              desc="작품을 올리고 감상자와 소통해요"
+              desc="작품을 올리고 소통해요"
               selected={selected === 'creator'}
               onPress={() => setSelected('creator')}
               delay={400}
@@ -515,7 +515,7 @@ export default function OnboardingScreen() {
             />
             <SelectionCard
               emoji="👀"
-              title="감상자"
+              title="일반"
               desc="작품을 감상하고 작가를 응원해요"
               selected={selected === 'audience'}
               onPress={() => setSelected('audience')}

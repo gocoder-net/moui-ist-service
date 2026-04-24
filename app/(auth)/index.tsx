@@ -334,7 +334,7 @@ export default function LandingScreen() {
         <View style={styles.divider} />
 
         <Text style={styles.copy}>
-          작가와 감상자가 만나는{'\n'}창작 커뮤니티
+          모든 예술인을 위한{'\n'}창작 커뮤니티
         </Text>
       </View>
 
@@ -356,7 +356,7 @@ export default function LandingScreen() {
         </View>
 
         <Text style={styles.tagline}>
-          작가와 감상자의 창작 커뮤니티
+          모든 예술인의 창작 커뮤니티
         </Text>
       </View>
 

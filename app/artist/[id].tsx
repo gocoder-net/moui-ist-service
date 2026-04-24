@@ -144,7 +144,7 @@ function detectSnsType(url: string): { key: string; icon: string; label: string 
   return { key: 'website', icon: '🌐', label: '웹사이트' };
 }
 
-const USER_TYPE_LABELS: Record<string, string> = { creator: '작가', aspiring: '지망생', audience: '감상자' };
+const USER_TYPE_LABELS: Record<string, string> = { creator: '작가', aspiring: '지망생', audience: '일반' };
 const USER_TYPE_EMOJI: Record<string, string> = { creator: '🎨', aspiring: '✏️', audience: '👀' };
 
 const FIELD_ICON_MAP: Record<string, string> = {

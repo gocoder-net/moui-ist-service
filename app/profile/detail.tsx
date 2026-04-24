@@ -16,7 +16,7 @@ import { getCreatorVerificationStatusText, getCreatorVerificationResetLabel } fr
 import { REGIONS, PROVINCE_LIST, parseRegion } from '@/constants/regions';
 import { spendPoints } from '@/lib/points';
 
-const USER_TYPE_LABELS = { creator: '작가', aspiring: '지망생', audience: '감상자' } as const;
+const USER_TYPE_LABELS = { creator: '작가', aspiring: '지망생', audience: '일반' } as const;
 const USER_TYPE_EMOJI = { creator: '🎨', aspiring: '✏️', audience: '👀' } as const;
 
 /* 분야 카테고리 */

@@ -398,7 +398,7 @@ export default function MouiScreen() {
                     </Text>
                   ) : (
                     <Text style={[styles.userTypeBadgeText, { color: C.gold }]}>
-                      {author.user_type === 'aspiring' ? '지망생' : '감상자'}
+                      {author.user_type === 'aspiring' ? '지망생' : '일반'}
                     </Text>
                   )}
                 </View>
