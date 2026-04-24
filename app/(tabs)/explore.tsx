@@ -189,7 +189,7 @@ function PlayfulDiamond({
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, profile: myProfile } = useAuth();
   const { colors: C } = useThemeMode();
   const { width: screenW } = useWindowDimensions();
   const MAX_CONTENT_W = 680;
@@ -555,6 +555,24 @@ export default function ExploreScreen() {
             </Pressable>
           );
         })}
+        {user?.id && myProfile && (
+          <Pressable
+            onPress={() => router.push(`/artist/${myProfile.username}`)}
+            style={({ pressed }) => [styles.tabItem, pressed && { opacity: 0.7 }]}
+            hitSlop={8}
+          >
+            <View style={styles.myTabRow}>
+              {myProfile.avatar_url ? (
+                <Image source={{ uri: myProfile.avatar_url }} style={styles.myTabAvatar} resizeMode="cover" />
+              ) : (
+                <View style={[styles.myTabAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
+                  <Text style={{ fontSize: 8, fontWeight: '800', color: C.fg }}>나</Text>
+                </View>
+              )}
+              <Text style={[styles.tabLabel, { color: C.gold }]}>내 작품</Text>
+            </View>
+          </Pressable>
+        )}
       </Animated.View>
 
       {/* 검색 바 */}
@@ -961,5 +979,16 @@ const styles = StyleSheet.create({
   masonryTitle: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  myTabRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  myTabAvatar: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
 });
