@@ -10,6 +10,7 @@ import {
   useWindowDimensions,
   Modal,
   FlatList,
+  ScrollView,
   Alert,
   TextInput,
   ActivityIndicator,
@@ -54,6 +55,31 @@ const ARTWORK_PAGE_SIZE = 3;
 const Fonts = {
   serif: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
 };
+
+/* ── Spinning Diamond ── */
+function SpinningDiamond({ size = 14, color = '#C8A96E', active = true }: { size?: number; color?: string; active?: boolean }) {
+  const rot = useSharedValue(0);
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    if (!active) { rot.value = 0; scale.value = 1; return; }
+    rot.value = withRepeat(withTiming(360, { duration: 4000, easing: Easing.linear }), -1, false);
+    scale.value = withRepeat(
+      withSequence(
+        withTiming(1.15, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.9, { duration: 1200, easing: Easing.inOut(Easing.ease) }),
+      ), -1, true,
+    );
+  }, [active]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rot.value}deg` }, { scale: scale.value }],
+  }));
+
+  return (
+    <Animated.View style={[{ width: size, height: size, borderWidth: 2, borderColor: color }, animStyle]} />
+  );
+}
 
 /* ── Bottom Tab Bar ── */
 function BottomTabBar() {
@@ -517,8 +543,8 @@ export default function ArtistPortfolioScreen() {
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'works' | 'collections' | 'exhibitions'>(
-    tab === 'exhibitions' ? 'exhibitions' : tab === 'collections' ? 'collections' : 'works',
+  const [activeTab, setActiveTab] = useState<'works' | 'exhibitions'>(
+    tab === 'exhibitions' ? 'exhibitions' : 'works',
   );
 
   // Collections
@@ -530,6 +556,7 @@ export default function ArtistPortfolioScreen() {
     artworks: Artwork[];
   };
   const [collections, setCollections] = useState<CollectionWithArtworks[]>([]);
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
 
   // Chat request state
   const [chatModalVisible, setChatModalVisible] = useState(false);
@@ -987,16 +1014,6 @@ export default function ArtistPortfolioScreen() {
                   {activeTab === 'works' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
                 </Pressable>
                 <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
-                {collections.length > 0 && (
-                  <>
-                    <Pressable style={styles.statItem} onPress={() => setActiveTab('collections')}>
-                      <AnimatedCounter to={collections.length} style={[styles.statNumber, { color: activeTab === 'collections' ? C.gold : C.fg }]} />
-                      <Text style={[styles.statLabel, { color: activeTab === 'collections' ? C.gold : C.muted }]}>컬렉션</Text>
-                      {activeTab === 'collections' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
-                    </Pressable>
-                    <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
-                  </>
-                )}
                 <Pressable style={styles.statItem} onPress={() => setActiveTab('exhibitions')}>
                   <AnimatedCounter to={exhibitions.length} style={[styles.statNumber, { color: activeTab === 'exhibitions' ? C.gold : C.fg }]} />
                   <Text style={[styles.statLabel, { color: activeTab === 'exhibitions' ? C.gold : C.muted }]}>3D전시관</Text>
@@ -1032,89 +1049,96 @@ export default function ArtistPortfolioScreen() {
 
         {/* ═══ GALLERY / COLLECTIONS / EXHIBITIONS SECTION ═══ */}
         {activeTab === 'works' ? (
-          artworks.length > 0 ? (
-            <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-              <Text style={[styles.sectionLabel, { color: C.muted }]}>WORKS</Text>
-              <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
-
-              {artworks.map((aw, idx) => (
-                <ArtworkCard
-                  key={aw.id}
-                  artwork={aw}
-                  cardW={feedCardW}
-                  onPress={() => openViewer(idx)}
-                  C={C}
-                />
-              ))}
-
-              {loadingMore && (
-                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                  <ActivityIndicator color={C.gold} size="small" />
-                </View>
-              )}
-            </View>
-          ) : (
-            <View style={styles.emptySection}>
-              <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
-              <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 작품이 없습니다</Text>
-            </View>
-          )
-        ) : activeTab === 'collections' ? (
-          collections.length > 0 ? (
-            <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-              <Text style={[styles.sectionLabel, { color: C.muted }]}>COLLECTIONS</Text>
-              <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
-
-              {collections.map((col) => (
-                <View key={col.id} style={[styles.colSection, { backgroundColor: C.card }]}>
-                  {/* Collection header */}
-                  <View style={styles.colHeader}>
-                    {col.cover_image_url ? (
-                      <Image
-                        source={{ uri: col.cover_image_url }}
-                        style={styles.colCoverImg}
-                        resizeMode="cover"
-                      />
-                    ) : null}
-                    <View style={styles.colHeaderText}>
-                      <Text style={[styles.colTitle, { color: C.fg }]}>{col.title}</Text>
-                      {col.description ? (
-                        <Text style={[styles.colDesc, { color: C.muted }]} numberOfLines={2}>{col.description}</Text>
-                      ) : null}
-                      <Text style={[styles.colCount, { color: C.mutedLight }]}>{col.artworks.length}개 작품</Text>
+          <>
+            {/* Collection filter circles */}
+            {collections.length > 0 && (
+              <View style={[styles.colFilterWrap, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colFilterScroll}>
+                  {/* 전체 보기 */}
+                  <Pressable
+                    style={styles.colFilterItem}
+                    onPress={() => setSelectedCollectionId(null)}
+                  >
+                    <View style={[
+                      styles.colFilterCircle,
+                      { borderColor: selectedCollectionId === null ? C.gold : C.border },
+                    ]}>
+                      <View style={[styles.colFilterCircleInner, { backgroundColor: C.card, justifyContent: 'center', alignItems: 'center' }]}>
+                        <SpinningDiamond size={18} color={C.gold} active={selectedCollectionId === null} />
+                      </View>
                     </View>
-                  </View>
-                  {/* Collection artworks grid */}
-                  <View style={styles.colGrid}>
-                    {col.artworks.map((aw) => (
-                      <Pressable
+                    <Text style={[styles.colFilterName, { color: selectedCollectionId === null ? C.gold : C.muted }]}>전체</Text>
+                  </Pressable>
+                  {collections.map((col) => (
+                    <Pressable
+                      key={col.id}
+                      style={styles.colFilterItem}
+                      onPress={() => setSelectedCollectionId(prev => prev === col.id ? null : col.id)}
+                    >
+                      <View style={[
+                        styles.colFilterCircle,
+                        { borderColor: selectedCollectionId === col.id ? C.gold : C.border },
+                      ]}>
+                        {col.cover_image_url ? (
+                          <Image source={{ uri: col.cover_image_url }} style={styles.colFilterCircleInner} resizeMode="cover" />
+                        ) : (
+                          <View style={[styles.colFilterCircleInner, { backgroundColor: C.card, justifyContent: 'center', alignItems: 'center' }]}>
+                            <Text style={{ fontSize: 20 }}>📂</Text>
+                          </View>
+                        )}
+                      </View>
+                      <Text style={[styles.colFilterName, { color: selectedCollectionId === col.id ? C.gold : C.muted }]} numberOfLines={1}>{col.title}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            )}
+            {(() => {
+              const selectedCol = selectedCollectionId ? collections.find(c => c.id === selectedCollectionId) : null;
+              const displayArtworks = selectedCol ? selectedCol.artworks : artworks;
+              const sectionTitle = selectedCol ? selectedCol.title.toUpperCase() : 'WORKS';
+              return displayArtworks.length > 0 ? (
+                <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
+                  <Text style={[styles.sectionLabel, { color: C.muted }]}>{sectionTitle}</Text>
+                  <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
+
+                  {displayArtworks.map((aw) => {
+                    const idx = selectedCol
+                      ? selectedCol.artworks.findIndex(a => a.id === aw.id)
+                      : artworks.findIndex(a => a.id === aw.id);
+                    return (
+                      <ArtworkCard
                         key={aw.id}
-                        style={({ pressed }) => [styles.colGridItem, pressed && { opacity: 0.8 }]}
+                        artwork={aw}
+                        cardW={feedCardW}
                         onPress={() => {
-                          const colIdx = col.artworks.findIndex(a => a.id === aw.id);
-                          setViewerArtworks(col.artworks);
-                          setViewerIndex(colIdx >= 0 ? colIdx : 0);
-                          setViewerVisible(true);
+                          if (selectedCol) {
+                            setViewerArtworks(selectedCol.artworks);
+                            setViewerIndex(idx >= 0 ? idx : 0);
+                            setViewerVisible(true);
+                          } else {
+                            openViewer(idx);
+                          }
                         }}
-                      >
-                        <Image
-                          source={{ uri: aw.image_url }}
-                          style={styles.colGridImage}
-                          resizeMode="cover"
-                        />
-                        <Text style={[styles.colGridTitle, { color: C.fg }]} numberOfLines={1}>{aw.title}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                        C={C}
+                      />
+                    );
+                  })}
+
+                  {!selectedCol && loadingMore && (
+                    <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                      <ActivityIndicator color={C.gold} size="small" />
+                    </View>
+                  )}
                 </View>
-              ))}
-            </View>
-          ) : (
-            <View style={styles.emptySection}>
-              <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
-              <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 컬렉션이 없습니다</Text>
-            </View>
-          )
+              ) : (
+                <View style={styles.emptySection}>
+                  <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
+                  <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 작품이 없습니다</Text>
+                </View>
+              );
+            })()}
+          </>
         ) : (
           exhibitions.length > 0 ? (
             <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
@@ -1825,7 +1849,40 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     letterSpacing: 2,
   },
-  /* Collection styles */
+  /* Collection filter circles */
+  colFilterWrap: {
+    paddingTop: 16,
+    paddingBottom: 4,
+  },
+  colFilterScroll: {
+    paddingHorizontal: 20,
+    gap: 16,
+  },
+  colFilterItem: {
+    alignItems: 'center',
+    width: 68,
+  },
+  colFilterCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2.5,
+    padding: 2,
+  },
+  colFilterCircleInner: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 30,
+    overflow: 'hidden',
+  },
+  colFilterName: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 6,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  /* Collection tab styles */
   colSection: {
     borderRadius: 16,
     overflow: 'hidden',
