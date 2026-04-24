@@ -240,6 +240,10 @@ export default function ProfileScreen() {
     }
   }, [user, userType, verified]);
 
+  /* 모임 */
+  const [myMouiCount, setMyMouiCount] = useState(0);
+  const [joinedMouiCount, setJoinedMouiCount] = useState(0);
+
   /* 전시관 · 최근 작품 */
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [exNumMap, setExNumMap] = useState<Map<string, number>>(new Map());
@@ -274,6 +278,16 @@ export default function ProfileScreen() {
     }
   }, [user]);
 
+  const fetchMouiCounts = useCallback(async () => {
+    if (!user) return;
+    const [{ count: created }, { count: joined }] = await Promise.all([
+      (supabase as any).from('moui_posts').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      (supabase as any).from('moui_participants').select('moui_post_id', { count: 'exact', head: true }).eq('user_id', user.id),
+    ]);
+    setMyMouiCount(created ?? 0);
+    setJoinedMouiCount(joined ?? 0);
+  }, [user]);
+
   const fetchRecentArtworks = useCallback(async () => {
     if (!user) return;
     const { data } = await supabase
@@ -290,7 +304,8 @@ export default function ProfileScreen() {
       fetchExhibitions();
       fetchRecentArtworks();
       fetchVerificationStatus();
-    }, [fetchExhibitions, fetchRecentArtworks, fetchVerificationStatus]),
+      fetchMouiCounts();
+    }, [fetchExhibitions, fetchRecentArtworks, fetchVerificationStatus, fetchMouiCounts]),
   );
 
   const handleDelete = useCallback((id: string) => {
@@ -635,6 +650,43 @@ export default function ProfileScreen() {
             )}
           </Animated.View>
         )}
+
+        {/* 내 모임 */}
+        {user?.id && (
+          <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
+            <View style={s.exSectionHeader}>
+              <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>🤝 내 모임</Text>
+              <Pressable
+                style={({ pressed }) => [s.exNewBtn, { borderColor: C.gold }, pressed && { opacity: 0.7 }]}
+                onPress={() => router.push('/moui/create')}
+              >
+                <Text style={[s.exNewBtnText, { color: C.gold }]}>+ 모임만들기</Text>
+              </Pressable>
+            </View>
+            <Pressable
+              style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
+              onPress={() => router.push('/(tabs)/moui?user=' + (profile?.username ?? '') as any)}
+            >
+              <Text style={s.menuIcon}>📋</Text>
+              <Text style={[s.menuLabel, { color: C.fg }]}>내가 만든 모임</Text>
+              <Text style={[s.mouiCount, { color: C.gold }]}>{myMouiCount}</Text>
+              <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
+            </Pressable>
+            <View style={[s.menuDivider, { backgroundColor: C.border, marginLeft: 48 }]} />
+            <Pressable
+              style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
+              onPress={() => {
+                router.push('/(tabs)/moui' as any);
+                // 참여중 필터는 로그인 후 필터 패널에서 선택
+              }}
+            >
+              <Text style={s.menuIcon}>🙋</Text>
+              <Text style={[s.menuLabel, { color: C.fg }]}>참여중인 모임</Text>
+              <Text style={[s.mouiCount, { color: C.gold }]}>{joinedMouiCount}</Text>
+              <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
+            </Pressable>
+          </Animated.View>
+        )}
       </ScrollView>
       </View>
     </View>
@@ -892,6 +944,11 @@ const s = StyleSheet.create({
   },
   menuArrow: {
     fontSize: 18,
+  },
+  mouiCount: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginRight: 4,
   },
   menuDivider: {
     height: 1,
