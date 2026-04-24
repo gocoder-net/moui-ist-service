@@ -113,6 +113,7 @@ export default function MouiScreen() {
   const [selectedDistance, setSelectedDistance] = useState<string | null>(null);
   const [showMyJoined, setShowMyJoined] = useState(false);
   const [showMyPosts, setShowMyPosts] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'available' | 'joined' | 'mine'>('all');
 
   const myRegion = parseRegion(profile?.region);
   const myProvince = myRegion?.province;
@@ -284,7 +285,23 @@ export default function MouiScreen() {
       });
     }
 
-    const sectionTitle = showMyJoined && showMyPosts ? '내 모임' : showMyJoined ? '참여중 모임' : showMyPosts ? '내가 만든 모임' : '모든 모임';
+    // 탭 필터
+    if (activeTab === 'available') {
+      filtered = filtered.filter(p => {
+        const deadlineExpired = p.recruit_deadline && new Date(p.recruit_deadline) < new Date();
+        const isClosed = p.status === 'closed' || !!deadlineExpired;
+        const isOwner = p.user_id === user?.id;
+        const isJoined = user ? p.moui_participants?.some(pt => pt.user_id === user.id) : false;
+        const isFull = (p.moui_participants?.length ?? 0) >= MAX_PARTICIPANTS;
+        return !isClosed && !isOwner && !isJoined && !isFull;
+      });
+    } else if (activeTab === 'joined' && user) {
+      filtered = filtered.filter(p => p.moui_participants?.some(pt => pt.user_id === user.id));
+    } else if (activeTab === 'mine' && user) {
+      filtered = filtered.filter(p => p.user_id === user.id);
+    }
+
+    const sectionTitle = activeTab === 'available' ? '참여가능 모임' : activeTab === 'joined' ? '참여중 모임' : activeTab === 'mine' ? '개설한 모임' : showMyJoined && showMyPosts ? '내 모임' : showMyJoined ? '참여중 모임' : showMyPosts ? '내가 만든 모임' : '모든 모임';
 
     if (!myProvince || !myDistrict) {
       return filtered.length > 0 ? [{ title: sectionTitle, data: filtered }] : [];
@@ -313,7 +330,7 @@ export default function MouiScreen() {
     if (close.length > 0) result.push({ title: '🚶 가까운 모임', data: close });
     if (far.length > 0) result.push({ title: '🚀 먼 모임', data: far });
     return result;
-  }, [posts, myDistrict, myProvince, selectedCategories, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts, user, searchQuery]);
+  }, [posts, myDistrict, myProvince, selectedCategories, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts, user, searchQuery, activeTab]);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -751,6 +768,29 @@ export default function MouiScreen() {
         </View>
       </Animated.View>
 
+      {/* 탭바: 전체 / 참여중 / 개설한 모임 */}
+      <View style={[styles.tabBar, { borderBottomColor: C.border }]}>
+        {([
+          { key: 'all' as const, label: '전체' },
+          { key: 'available' as const, label: '참여가능' },
+          { key: 'joined' as const, label: `참여중${user && myJoinedCount > 0 ? ` (${myJoinedCount})` : ''}` },
+          { key: 'mine' as const, label: `개설한 모임${user && myPostsCount > 0 ? ` (${myPostsCount})` : ''}` },
+        ]).map(tab => {
+          const isActive = activeTab === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              onPress={() => setActiveTab(tab.key)}
+              style={[styles.tabItem, isActive && { borderBottomColor: C.gold, borderBottomWidth: 2 }]}
+            >
+              <Text style={[styles.tabItemText, { color: isActive ? C.fg : C.muted }, isActive && { fontWeight: '800' }]}>
+                {tab.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       {/* 필터 오버레이 */}
       <Modal
         visible={showFilterPanel}
@@ -1150,6 +1190,23 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
+  /* 탭바 */
+  tabBar: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  tabItemText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
   collapsedFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
