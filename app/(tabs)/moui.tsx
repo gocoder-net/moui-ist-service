@@ -113,6 +113,7 @@ export default function MouiScreen() {
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [selectedDistance, setSelectedDistance] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'available' | 'joined' | 'mine'>('all');
+  const [descPopup, setDescPopup] = useState<{ title: string; content: string } | null>(null);
 
   const myRegion = parseRegion(profile?.region);
   const myProvince = myRegion?.province;
@@ -433,7 +434,12 @@ export default function MouiScreen() {
           </View>
 
           {/* 본문 */}
-          <Text style={[styles.postDesc, { color: C.fg, opacity: 0.7 }]} numberOfLines={3}>{item.description}</Text>
+          <View style={styles.descRow}>
+            <Text style={[styles.postDesc, { color: C.fg, opacity: 0.7, flex: 1 }]} numberOfLines={1}>{item.description}</Text>
+            <Pressable onPress={() => setDescPopup({ title: item.title, content: item.description })} style={({ pressed }) => [styles.descMoreBtn, pressed && { opacity: 0.6 }]}>
+              <Text style={[styles.descMoreText, { color: C.gold }]}>더보기</Text>
+            </Pressable>
+          </View>
 
           {/* 정보 박스 */}
           <View style={[styles.infoBox, { backgroundColor: C.bg, borderColor: C.border }]}>
@@ -943,6 +949,19 @@ export default function MouiScreen() {
         />
       )}
       </View>
+
+      {/* Description popup */}
+      <Modal visible={!!descPopup} transparent animationType="fade" onRequestClose={() => setDescPopup(null)}>
+        <Pressable style={styles.descPopupOverlay} onPress={() => setDescPopup(null)}>
+          <View style={[styles.descPopupBox, { backgroundColor: C.card }]}>
+            <Text style={[styles.descPopupTitle, { color: C.fg }]}>{descPopup?.title}</Text>
+            <Text style={[styles.descPopupContent, { color: C.fg, opacity: 0.8 }]}>{descPopup?.content}</Text>
+            <Pressable onPress={() => setDescPopup(null)} style={({ pressed }) => [styles.descPopupClose, { borderColor: C.border }, pressed && { opacity: 0.6 }]}>
+              <Text style={[styles.descPopupCloseText, { color: C.muted }]}>닫기</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -1324,6 +1343,53 @@ const styles = StyleSheet.create({
   postDesc: {
     fontSize: 13,
     lineHeight: 20,
+  },
+  descRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  descMoreBtn: {
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+  },
+  descMoreText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  descPopupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  descPopupBox: {
+    borderRadius: 16,
+    padding: 24,
+    maxWidth: 500,
+    width: '100%',
+    maxHeight: '70%',
+  },
+  descPopupTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  descPopupContent: {
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  descPopupClose: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  descPopupCloseText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   infoBox: {
     borderRadius: 12,
