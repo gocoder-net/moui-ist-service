@@ -557,6 +557,8 @@ export default function ArtistPortfolioScreen() {
   };
   const [collections, setCollections] = useState<CollectionWithArtworks[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
+  const colFilterScrollRef = useRef<ScrollView>(null);
+  const colFilterScrollX = useRef(0);
 
   // Chat request state
   const [chatModalVisible, setChatModalVisible] = useState(false);
@@ -1053,7 +1055,30 @@ export default function ArtistPortfolioScreen() {
             {/* Collection filter circles */}
             {collections.length > 0 && (
               <View style={[styles.colFilterWrap, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colFilterScroll}>
+                {Platform.OS === 'web' && collections.length > 3 && (
+                  <View style={styles.colFilterNavRow}>
+                    <Pressable
+                      style={({ pressed }) => [styles.colFilterNavBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
+                      onPress={() => colFilterScrollRef.current?.scrollTo({ x: Math.max(0, colFilterScrollX.current - 252), animated: true })}
+                    >
+                      <Text style={[styles.colFilterNavText, { color: C.muted }]}>←</Text>
+                    </Pressable>
+                    <Pressable
+                      style={({ pressed }) => [styles.colFilterNavBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
+                      onPress={() => colFilterScrollRef.current?.scrollTo({ x: colFilterScrollX.current + 252, animated: true })}
+                    >
+                      <Text style={[styles.colFilterNavText, { color: C.muted }]}>→</Text>
+                    </Pressable>
+                  </View>
+                )}
+                <ScrollView
+                  ref={colFilterScrollRef}
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.colFilterScroll}
+                  onScroll={(e) => { colFilterScrollX.current = e.nativeEvent.contentOffset.x; }}
+                  scrollEventThrottle={16}
+                >
                   {/* 전체 보기 */}
                   <Pressable
                     style={styles.colFilterItem}
@@ -1853,6 +1878,25 @@ const styles = StyleSheet.create({
   colFilterWrap: {
     paddingTop: 16,
     paddingBottom: 4,
+  },
+  colFilterNavRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 6,
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  colFilterNavBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  colFilterNavText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   colFilterScroll: {
     paddingHorizontal: 20,

@@ -416,7 +416,7 @@ export default function ProfileScreen() {
 
   const handleDeleteCollection = useCallback(
     (col: ArtworkCollection) => {
-      confirmAlert('컬렉션 삭제', `"${col.title}" 컬렉션을 삭제하시겠습니까?\n(작품은 삭제되지 않습니다)`, async () => {
+      confirmAlert('아카이브 삭제', `"${col.title}" 아카이브를 삭제하시겠습니까?\n(작품은 삭제되지 않습니다)`, async () => {
         try {
           if (col.cover_image_url) {
             const parts = col.cover_image_url.split('/artworks/');
@@ -432,7 +432,7 @@ export default function ProfileScreen() {
           }
           fetchCollections();
         } catch (err) {
-          console.error('컬렉션 삭제 중 오류:', err);
+          console.error('아카이브 삭제 중 오류:', err);
         }
       });
     },
@@ -636,11 +636,11 @@ export default function ProfileScreen() {
           </Animated.View>
         )}
 
-        {/* 나의 컬렉션 (creator/aspiring) */}
+        {/* 나의 아카이브 (creator/aspiring) */}
         {(userType === 'creator' || userType === 'aspiring') && user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
             <View style={s.exSectionHeader}>
-              <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>📂 나의 컬렉션</Text>
+              <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>📂 나의 아카이브</Text>
               <View style={s.exHeaderRight}>
                 {Platform.OS === 'web' && collections.length > 1 && (
                   <View style={s.exScrollBtns}>
@@ -664,7 +664,7 @@ export default function ProfileScreen() {
                   style={({ pressed }) => [s.exNewBtn, { borderColor: C.gold }, pressed && { opacity: 0.7 }]}
                   onPress={() => router.push('/collection/create')}
                 >
-                  <Text style={[s.exNewBtnText, { color: C.gold }]}>+ 새 컬렉션</Text>
+                  <Text style={[s.exNewBtnText, { color: C.gold }]}>+ 새 아카이브</Text>
                 </Pressable>
               </View>
             </View>
@@ -673,7 +673,7 @@ export default function ProfileScreen() {
               onPress={() => router.push(`/artist/${profile?.username ?? user.id}?tab=collections`)}
             >
               <Text style={s.menuIcon}>📂</Text>
-              <Text style={[s.menuLabel, { color: C.fg }]}>내 컬렉션 보기</Text>
+              <Text style={[s.menuLabel, { color: C.fg }]}>내 아카이브 보기</Text>
               <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
             </Pressable>
             <View style={[s.menuDivider, { backgroundColor: C.border, marginLeft: 48 }]} />

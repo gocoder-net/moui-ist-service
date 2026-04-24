@@ -96,7 +96,7 @@ export default function CreateCollectionScreen() {
 
   const handleSave = async () => {
     if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
-    if (!title.trim()) { showAlert('알림', '컬렉션 이름을 입력해주세요.'); return; }
+    if (!title.trim()) { showAlert('알림', '아카이브 이름을 입력해주세요.'); return; }
     if (selectedIds.size === 0) { showAlert('알림', '작품을 1개 이상 선택해주세요.'); return; }
 
     setLoading(true);
@@ -174,7 +174,7 @@ export default function CreateCollectionScreen() {
 
       router.back();
     } catch (err) {
-      console.error('컬렉션 저장 오류:', err);
+      console.error('아카이브 저장 오류:', err);
       showAlert('오류', '알 수 없는 오류가 발생했습니다.');
     } finally {
       setLoading(false);
@@ -200,7 +200,7 @@ export default function CreateCollectionScreen() {
           >
             <Text style={[styles.backText, { color: C.fg }]}>← 뒤로</Text>
           </Pressable>
-          <Text style={[styles.topTitle, { color: C.fg }]}>{isEditing ? '컬렉션 수정' : '컬렉션 만들기'}</Text>
+          <Text style={[styles.topTitle, { color: C.fg }]}>{isEditing ? '아카이브 수정' : '아카이브 만들기'}</Text>
           <Pressable
             style={({ pressed }) => [styles.saveBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.6 }, loading && { opacity: 0.4 }]}
             onPress={handleSave}
@@ -235,7 +235,7 @@ export default function CreateCollectionScreen() {
 
           {/* Title */}
           <Animated.View entering={FadeInDown.delay(200).duration(400).springify()}>
-            <Text style={[styles.label, { color: C.fg }]}>컬렉션 이름 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+            <Text style={[styles.label, { color: C.fg }]}>아카이브 이름 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
             <TextInput
               style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
               value={title}
@@ -252,7 +252,7 @@ export default function CreateCollectionScreen() {
               style={[styles.input, styles.textArea, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
               value={description}
               onChangeText={setDescription}
-              placeholder="컬렉션에 대한 설명"
+              placeholder="아카이브에 대한 설명"
               placeholderTextColor={C.mutedLight}
               multiline
               textAlignVertical="top"
