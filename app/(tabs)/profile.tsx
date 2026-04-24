@@ -220,6 +220,25 @@ export default function ProfileScreen() {
   const emoji = USER_TYPE_EMOJI[userType];
   const label = USER_TYPE_LABELS[userType];
   const avatarUrl = profile?.avatar_url;
+  const verified = (profile as any)?.verified;
+
+  /* 작가 인증 상태 */
+  const [verificationStatus, setVerificationStatus] = useState<'none' | 'pending' | 'approved' | 'rejected'>('none');
+
+  const fetchVerificationStatus = useCallback(async () => {
+    if (!user || verified) return;
+    const { data } = await (supabase as any)
+      .from('verification_requests')
+      .select('status')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (data && data.length > 0) {
+      setVerificationStatus(data[0].status);
+    } else {
+      setVerificationStatus('none');
+    }
+  }, [user, userType, verified]);
 
   /* 전시관 · 최근 작품 */
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
@@ -270,7 +289,8 @@ export default function ProfileScreen() {
     useCallback(() => {
       fetchExhibitions();
       fetchRecentArtworks();
-    }, [fetchExhibitions, fetchRecentArtworks]),
+      fetchVerificationStatus();
+    }, [fetchExhibitions, fetchRecentArtworks, fetchVerificationStatus]),
   );
 
   const handleDelete = useCallback((id: string) => {
@@ -423,6 +443,42 @@ export default function ProfileScreen() {
             </Pressable>
           </View>
         </Animated.View>
+
+        {/* 작가 인증 */}
+        {!verified && (
+          <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.verificationCard, { backgroundColor: C.card }]}>
+            {verificationStatus === 'pending' ? (
+              <View style={s.verificationRow}>
+                <Text style={s.verificationIcon}>🔍</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.verificationLabel, { color: C.muted }]}>작가 인증</Text>
+                  <Text style={[s.verificationValue, { color: C.fg }]}>심사 중</Text>
+                </View>
+                <View style={[s.verificationPendingBadge, { backgroundColor: 'rgba(200,169,110,0.15)', borderColor: C.gold }]}>
+                  <Text style={[s.verificationPendingText, { color: C.gold }]}>심사 중</Text>
+                </View>
+              </View>
+            ) : (
+              <View style={s.verificationRow}>
+                <Text style={s.verificationIcon}>✅</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.verificationLabel, { color: C.muted }]}>작가 인증</Text>
+                  <Text style={[s.verificationValue, { color: C.fg }]}>
+                    {verificationStatus === 'rejected' ? '반려되었습니다' : '인증이 필요합니다'}
+                  </Text>
+                </View>
+                <Pressable
+                  style={({ pressed }) => [s.verificationBtn, { borderColor: C.gold }, pressed && { opacity: 0.7 }]}
+                  onPress={() => router.push('/profile/verification')}
+                >
+                  <Text style={[s.verificationBtnText, { color: C.gold }]}>
+                    {verificationStatus === 'rejected' ? '재신청하기' : '작가인증 하기'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </Animated.View>
+        )}
 
         {/* 내 위치 */}
         <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.locationCard, { backgroundColor: C.card }]}>
@@ -730,6 +786,50 @@ const s = StyleSheet.create({
   pointsInfoText: {
     fontSize: 11,
     letterSpacing: 0.5,
+  },
+
+  /* 작가 인증 */
+  verificationCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 12,
+  },
+  verificationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  verificationIcon: {
+    fontSize: 20,
+  },
+  verificationLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  verificationValue: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  verificationBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  verificationBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  verificationPendingBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  verificationPendingText: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   /* 내 위치 */

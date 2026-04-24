@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
   StyleSheet, View, Text, Pressable, TextInput, FlatList,
-  KeyboardAvoidingView, Platform, ActivityIndicator, ScrollView, Linking,
+  KeyboardAvoidingView, Platform, ActivityIndicator, Linking,
   type NativeSyntheticEvent, type TextInputKeyPressEventData,
 } from 'react-native';
 import { Image } from 'expo-image';
@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { parseRegion } from '@/constants/regions';
-import { MOUI_CATEGORIES, TARGET_OPTIONS, FIELD_OPTIONS } from '@/constants/moui';
+import { TARGET_OPTIONS, FIELD_OPTIONS } from '@/constants/moui';
 
 type MouiParticipant = {
   user_id: string;
@@ -101,6 +101,7 @@ export default function MouiChatScreen() {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showInfo, setShowInfo] = useState(true);
+  const [showTags, setShowTags] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   // Load post data and messages
@@ -240,14 +241,8 @@ export default function MouiChatScreen() {
     );
   }
 
-  const author = post.profiles;
   const participants = post.moui_participants ?? [];
   const targetKeys = post.target_types?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
-  const remainingDays = post.recruit_deadline
-    ? Math.max(0, Math.ceil((new Date(post.recruit_deadline).getTime() - Date.now()) / 86400000))
-    : null;
-  const deadlineExpired = post.recruit_deadline && new Date(post.recruit_deadline) < new Date();
-  const isClosed = post.status === 'closed' || !!deadlineExpired;
   const recruitPeriod = formatRecruitPeriod(post.recruit_start, post.recruit_deadline);
 
   const AvatarBubble = ({ senderId }: { senderId: string }) => {
@@ -286,150 +281,127 @@ export default function MouiChatScreen() {
           </Pressable>
         </View>
 
-        {/* Meeting Info (collapsible) */}
+        {/* Meeting Info (collapsible) — 핵심 정보만 */}
         {showInfo && (
-          <ScrollView style={[styles.infoSection, { borderBottomColor: C.border }]} nestedScrollEnabled>
-            <View style={styles.infoContent}>
-              {/* Category + Status */}
-              <View style={styles.infoTopRow}>
-                {post.category && (() => {
-                  const cat = MOUI_CATEGORIES.find(c => c.key === post.category);
-                  return cat ? (
-                    <View style={[styles.categoryChip, { backgroundColor: C.gold + '22', borderColor: C.gold + '55' }]}>
-                      <Text style={[styles.categoryChipText, { color: C.gold }]}>{cat.icon} {cat.label}</Text>
-                    </View>
-                  ) : null;
-                })()}
-                <View style={[styles.statusBadge, { backgroundColor: isClosed ? C.danger + '22' : '#22c55e22' }]}>
-                  <Text style={[styles.statusText, { color: isClosed ? C.danger : '#22c55e' }]}>
-                    {isClosed ? '마감' : remainingDays !== null ? `D-${remainingDays}` : '모집 중'}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Description */}
-              <Text style={[styles.descText, { color: C.fg, opacity: 0.7 }]}>{post.description}</Text>
-
-              {/* Info box */}
-              <View style={[styles.infoBox, { backgroundColor: C.bg, borderColor: C.border }]}>
-                {post.meeting_date && (
-                  <View style={styles.infoRow}>
-                    <Text style={[styles.infoLabel, { color: C.muted }]}>일시</Text>
-                    <Text style={[styles.infoValue, { color: C.fg }]}>
-                      {formatMeetingDate(post.meeting_date)}
-                      {post.frequency && (post.frequency === 'regular' ? '  ·  정기' : '  ·  1회성')}
-                    </Text>
-                  </View>
-                )}
-                {(post.region || post.address) && (() => {
-                  const regionLabel = formatRegionLabel(post.region);
-                  const locationText = [regionLabel, post.address].filter(Boolean).join(' ');
-                  return locationText ? (
-                    <View style={styles.infoRow}>
-                      <Text style={[styles.infoLabel, { color: C.muted }]}>장소</Text>
-                      {post.map_url ? (
-                        <Pressable onPress={() => Linking.openURL(post.map_url!)}>
-                          <Text style={[styles.infoValue, { color: C.gold, textDecorationLine: 'underline' }]} numberOfLines={1}>{locationText}</Text>
-                        </Pressable>
-                      ) : (
-                        <Text style={[styles.infoValue, { color: C.fg }]} numberOfLines={1}>{locationText}</Text>
-                      )}
-                    </View>
-                  ) : null;
-                })()}
-                {recruitPeriod && (
-                  <View style={styles.infoRow}>
-                    <Text style={[styles.infoLabel, { color: C.muted }]}>모집</Text>
-                    <Text style={[styles.infoValue, { color: C.fg }]}>{recruitPeriod}</Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Tags */}
-              {(post.fields || targetKeys.length > 0) && (
-                <View style={styles.tagsSection}>
-                  {post.fields && (
-                    <View style={styles.tagRow}>
-                      <Text style={[styles.tagLabel, { color: C.muted }]}>분야</Text>
-                      <View style={styles.tagList}>
-                        {post.fields.trim() === '전체' ? (
-                          <View style={[styles.tag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                            <Text style={[styles.tagText, { color: C.gold }]}>전체 분야</Text>
-                          </View>
+          <View style={[styles.infoSection, { backgroundColor: C.card, borderBottomColor: C.border }]}>
+            {/* 참여자 (맨 위) */}
+            {participants.length > 0 && (
+              <View>
+                <Text style={[styles.participantsLabel, { color: C.muted }]}>참여자 ({participants.length}명)</Text>
+                <View style={styles.participantAvatars}>
+                  {participants.slice(0, 8).map(pt => (
+                    <Pressable key={pt.user_id} onPress={() => pt.profiles?.username && router.push(`/artist/${pt.profiles.username}` as any)} style={styles.participantItem}>
+                      <View style={[styles.participantAvatar, { backgroundColor: C.bg, borderColor: C.border }]}>
+                        {pt.profiles?.avatar_url ? (
+                          <Image source={{ uri: pt.profiles.avatar_url }} style={styles.participantAvatarImg} contentFit="cover" />
                         ) : (
-                          post.fields.split(',').map(f => {
-                            const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
-                            return (
-                              <View key={f.trim()} style={[styles.tag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                                <Text style={[styles.tagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
-                              </View>
-                            );
-                          })
+                          <Text style={{ fontSize: 10 }}>{pt.profiles?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
                         )}
                       </View>
-                    </View>
-                  )}
-                  {targetKeys.length > 0 && (
-                    <View style={styles.tagRow}>
-                      <Text style={[styles.tagLabel, { color: C.muted }]}>대상</Text>
-                      <View style={styles.tagList}>
-                        {targetKeys.map(key => {
-                          const t = TARGET_OPTIONS.find(o => o.key === key);
-                          return t ? (
-                            <View key={key} style={[styles.tag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22' }]}>
-                              <Text style={[styles.tagText, { color: C.fg, opacity: 0.82 }]}>{t.icon} {t.label}</Text>
-                            </View>
-                          ) : null;
-                        })}
-                      </View>
-                    </View>
-                  )}
-                </View>
-              )}
-
-              {/* Participants */}
-              {participants.length > 0 && (
-                <View style={styles.participantsRow}>
-                  <Text style={[styles.participantsLabel, { color: C.muted }]}>참여자 ({participants.length}명)</Text>
-                  <View style={styles.participantAvatars}>
-                    {participants.slice(0, 8).map(pt => (
-                      <Pressable key={pt.user_id} onPress={() => pt.profiles?.username && router.push(`/artist/${pt.profiles.username}` as any)}>
-                        <View style={[styles.participantAvatar, { backgroundColor: C.bg, borderColor: C.border }]}>
-                          {pt.profiles?.avatar_url ? (
-                            <Image source={{ uri: pt.profiles.avatar_url }} style={styles.participantAvatarImg} contentFit="cover" />
-                          ) : (
-                            <Text style={{ fontSize: 10 }}>{pt.profiles?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
-                          )}
-                        </View>
-                      </Pressable>
-                    ))}
-                    {participants.length > 8 && (
+                      <Text style={[styles.participantName, { color: C.fg }]} numberOfLines={1}>
+                        {pt.profiles?.name ?? pt.profiles?.username ?? ''}
+                      </Text>
+                    </Pressable>
+                  ))}
+                  {participants.length > 8 && (
+                    <View style={styles.participantItem}>
                       <View style={[styles.participantAvatar, { backgroundColor: C.card, borderColor: C.border }]}>
                         <Text style={{ fontSize: 9, fontWeight: '700', color: C.muted }}>+{participants.length - 8}</Text>
                       </View>
-                    )}
-                  </View>
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* 정보 박스 */}
+            <View style={[styles.infoBox, { backgroundColor: C.bg, borderColor: C.border }]}>
+              {post.meeting_date && (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.infoLabel, { color: C.muted }]}>일시</Text>
+                  <Text style={[styles.infoValue, { color: C.fg }]}>
+                    {formatMeetingDate(post.meeting_date)}
+                    {post.frequency && (post.frequency === 'regular' ? '  ·  정기' : '  ·  1회성')}
+                  </Text>
                 </View>
               )}
-
-              {/* Author */}
-              {author && (
-                <Pressable
-                  onPress={() => router.push(`/artist/${author.username}` as any)}
-                  style={styles.authorRow}
-                >
-                  <View style={[styles.authorAvatar, { backgroundColor: C.bg }]}>
-                    {author.avatar_url ? (
-                      <Image source={{ uri: author.avatar_url }} style={styles.authorAvatarImg} contentFit="cover" />
+              {(post.region || post.address) && (() => {
+                const regionLabel = formatRegionLabel(post.region);
+                const locationText = [regionLabel, post.address].filter(Boolean).join(' ');
+                return locationText ? (
+                  <View style={styles.infoRow}>
+                    <Text style={[styles.infoLabel, { color: C.muted }]}>장소</Text>
+                    {post.map_url ? (
+                      <Pressable onPress={() => Linking.openURL(post.map_url!)}>
+                        <Text style={[styles.infoValue, { color: C.gold, textDecorationLine: 'underline' }]} numberOfLines={1}>{locationText}</Text>
+                      </Pressable>
                     ) : (
-                      <Text style={{ fontSize: 10 }}>{author.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+                      <Text style={[styles.infoValue, { color: C.fg }]} numberOfLines={1}>{locationText}</Text>
                     )}
                   </View>
-                  <Text style={[styles.authorName, { color: C.muted }]}>주최: {author.name ?? author.username}</Text>
-                </Pressable>
+                ) : null;
+              })()}
+              {recruitPeriod && (
+                <View style={styles.infoRow}>
+                  <Text style={[styles.infoLabel, { color: C.muted }]}>모집</Text>
+                  <Text style={[styles.infoValue, { color: C.fg }]}>{recruitPeriod}</Text>
+                </View>
               )}
             </View>
-          </ScrollView>
+
+            {/* 태그: 분야 + 모집 대상 (접이식) */}
+            {(post.fields || targetKeys.length > 0) && (
+              <>
+                <Pressable
+                  onPress={() => setShowTags(v => !v)}
+                  style={[styles.tagToggle, { borderColor: C.border }]}
+                >
+                  <Text style={[styles.tagToggleText, { color: C.muted }]}>분야 · 모집대상</Text>
+                  <IconSymbol name={showTags ? 'chevron.up' : 'chevron.down'} size={12} color={C.muted} />
+                </Pressable>
+                {showTags && (
+                  <View style={styles.postMetaSection}>
+                    {post.fields && (
+                      <View style={styles.postMetaRow}>
+                        <Text style={[styles.postMetaLabel, { color: C.muted }]}>분야</Text>
+                        <View style={styles.postTagRow}>
+                          {post.fields.trim() === '전체' ? (
+                            <View style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                              <Text style={[styles.postTagText, { color: C.gold }]}>전체 분야</Text>
+                            </View>
+                          ) : (
+                            post.fields.split(',').map(f => {
+                              const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
+                              return (
+                                <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                                  <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
+                                </View>
+                              );
+                            })
+                          )}
+                        </View>
+                      </View>
+                    )}
+                    {targetKeys.length > 0 && (
+                      <View style={styles.postMetaRow}>
+                        <Text style={[styles.postMetaLabel, { color: C.muted }]}>모집 대상</Text>
+                        <View style={styles.postTagRow}>
+                          {targetKeys.map(key => {
+                            const t = TARGET_OPTIONS.find(o => o.key === key);
+                            return t ? (
+                              <View key={key} style={[styles.postTag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22' }]}>
+                                <Text style={[styles.postTagText, { color: C.fg, opacity: 0.82 }]}>{t.icon} {t.label}</Text>
+                              </View>
+                            ) : null;
+                          })}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+                )}
+              </>
+            )}
+          </View>
         )}
 
         {/* Messages */}
@@ -456,8 +428,8 @@ export default function MouiChatScreen() {
                   ) : <View style={styles.msgAvatarSpacer} />
                 )}
                 <View style={[styles.msgBody, isMe && styles.msgBodyMe]}>
-                  {!isMe && showAvatar && (
-                    <Text style={[styles.senderName, { color: C.muted }]}>
+                  {showAvatar && (
+                    <Text style={[styles.senderName, { color: C.muted, textAlign: isMe ? 'right' : 'left' }]}>
                       {profile?.name ?? profile?.username ?? ''}
                     </Text>
                   )}
@@ -563,42 +535,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  /* Info section */
+  /* Info section — moui.tsx 카드 스타일 그대로 */
   infoSection: {
-    maxHeight: 320,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  infoContent: {
-    padding: 16,
+    padding: 14,
     gap: 10,
-  },
-  infoTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  categoryChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  categoryChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  descText: {
-    fontSize: 13,
-    lineHeight: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   infoBox: {
     borderRadius: 12,
@@ -621,83 +562,84 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
-  tagsSection: {
+  tagToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 6,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
   },
-  tagRow: {
+  tagToggleText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  postMetaSection: {
+    gap: 8,
+    paddingTop: 2,
+  },
+  postMetaRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
+    gap: 10,
   },
-  tagLabel: {
-    width: 30,
-    fontSize: 11,
+  postMetaLabel: {
+    width: 54,
+    fontSize: 12,
     fontWeight: '700',
-    lineHeight: 24,
+    lineHeight: 28,
   },
-  tagList: {
+  postTagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
     flex: 1,
   },
-  tag: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+  postTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
     borderWidth: 1,
   },
-  tagText: {
-    fontSize: 10,
+  postTagText: {
+    fontSize: 11,
     fontWeight: '700',
-  },
-  participantsRow: {
-    gap: 6,
   },
   participantsLabel: {
     fontSize: 11,
     fontWeight: '700',
+    marginBottom: 8,
   },
   participantAvatars: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
+    gap: 10,
+  },
+  participantItem: {
+    alignItems: 'center',
+    width: 46,
+    gap: 4,
   },
   participantAvatar: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
     borderWidth: 1,
   },
   participantAvatarImg: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
   },
-  authorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  authorAvatar: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  authorAvatarImg: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-  },
-  authorName: {
-    fontSize: 11,
+  participantName: {
+    fontSize: 10,
     fontWeight: '600',
+    textAlign: 'center',
+    width: '100%',
   },
 
   /* Messages */

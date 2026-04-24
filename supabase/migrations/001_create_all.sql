@@ -366,3 +366,60 @@ CREATE POLICY "Participants can insert moui_chat_messages"
       OR EXISTS (SELECT 1 FROM public.moui_posts p WHERE p.id = moui_chat_messages.moui_post_id AND p.user_id = auth.uid())
     )
   );
+
+-- =========================
+-- Realtime 활성화
+-- =========================
+ALTER PUBLICATION supabase_realtime ADD TABLE public.chat_messages;
+ALTER PUBLICATION supabase_realtime ADD TABLE public.moui_chat_messages;
+
+-- 작가 인증 요청
+CREATE TABLE public.verification_requests (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  image_url text NOT NULL,
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+  admin_note text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+ALTER TABLE public.verification_requests ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "verification_requests_select" ON public.verification_requests
+  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "verification_requests_insert" ON public.verification_requests
+  FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+CREATE TRIGGER on_verification_requests_updated
+  BEFORE UPDATE ON public.verification_requests
+  FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 관리자가 모든 인증 요청 조회 가능
+CREATE POLICY "admin_verification_requests_select" ON public.verification_requests
+  FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND username = 'gocoder')
+  );
+
+-- 인증 승인 RPC
+CREATE OR REPLACE FUNCTION public.admin_approve_verification(request_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE v_user_id uuid;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND username = 'gocoder') THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+  SELECT user_id INTO v_user_id FROM verification_requests WHERE id = request_id;
+  IF v_user_id IS NULL THEN RAISE EXCEPTION 'Request not found'; END IF;
+  UPDATE verification_requests SET status = 'approved' WHERE id = request_id;
+  UPDATE profiles SET verified = true WHERE id = v_user_id;
+END; $$;
+
+-- 인증 반려 RPC
+CREATE OR REPLACE FUNCTION public.admin_reject_verification(request_id uuid, note text DEFAULT NULL)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND username = 'gocoder') THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+  UPDATE verification_requests SET status = 'rejected', admin_note = note WHERE id = request_id;
+END; $$;

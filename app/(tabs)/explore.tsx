@@ -239,7 +239,9 @@ export default function ExploreScreen() {
   const tabCounts = (() => {
     const counts: Record<TabKey, number> = { creator: 0, aspiring: 0, audience: 0 };
     artists.forEach((a) => {
-      if (a.artworkCount > 0 && a.user_type in counts) counts[a.user_type as TabKey]++;
+      if (!(a.user_type in counts)) return;
+      if (a.user_type === 'creator' && a.artworkCount === 0) return;
+      counts[a.user_type as TabKey]++;
     });
     return counts;
   })();
@@ -257,8 +259,10 @@ export default function ExploreScreen() {
           a.field?.toLowerCase().includes(q),
       );
     } else {
-      // 기본: 작품 올린 유저만 표시
-      list = list.filter((a) => a.artworkCount > 0);
+      // 작가 탭: 작품 올린 유저만 표시 / 지망생·감상자: 전체
+      if (activeTab === 'creator') {
+        list = list.filter((a) => a.artworkCount > 0);
+      }
     }
 
     if (user?.id) {

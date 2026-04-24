@@ -235,7 +235,7 @@ export default function ChatScreen() {
   const sections = [
     ...(mouiChats.length > 0 ? [{ title: '모임 채팅', data: mouiChats as any[], type: 'moui' as const }] : []),
     ...(received.length > 0 ? [{ title: '받은 요청', data: received as any[], type: 'received' as const }] : []),
-    ...(active.length > 0 ? [{ title: '채팅', data: active as any[], type: 'active' as const }] : []),
+    ...(active.length > 0 ? [{ title: '일대일 채팅', data: active as any[], type: 'active' as const }] : []),
     ...(sent.length > 0 ? [{ title: '보낸 요청', data: sent as any[], type: 'sent' as const }] : []),
   ];
 

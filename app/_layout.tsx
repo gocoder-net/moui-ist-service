@@ -93,6 +93,8 @@ function RootNavigator() {
           <Stack.Screen name="profile/detail" options={{ headerShown: false }} />
           <Stack.Screen name="profile/points" options={{ headerShown: false }} />
           <Stack.Screen name="profile/settings" options={{ headerShown: false }} />
+          <Stack.Screen name="profile/verification" options={{ headerShown: false }} />
+          <Stack.Screen name="profile/admin" options={{ headerShown: false }} />
           <Stack.Screen name="chat/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal', headerShown: true }} />
         </Stack>

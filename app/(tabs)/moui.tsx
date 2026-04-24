@@ -306,6 +306,7 @@ export default function MouiScreen() {
 
   const renderPost = ({ item, index }: { item: MouiPost; index: number }) => {
     const author = item.profiles;
+    const authorName = author?.name ?? author?.username ?? '회원';
     const isOwner = item.user_id === user?.id;
     const deadlineExpired = item.recruit_deadline && new Date(item.recruit_deadline) < new Date();
     const isClosed = item.status === 'closed' || !!deadlineExpired;
@@ -374,6 +375,39 @@ export default function MouiScreen() {
 
           {/* 제목 */}
           <Text style={[styles.postTitle, { color: C.fg }]}>{item.title}</Text>
+          <View style={styles.postAuthorMetaRow}>
+            <Pressable
+              onPress={() => author?.username && router.push(`/artist/${author.username}`)}
+              style={styles.postAuthorMetaLink}
+            >
+              <View style={[styles.postAvatar, { backgroundColor: C.bg }]}>
+                {author?.avatar_url ? (
+                  <Image source={{ uri: author.avatar_url }} style={styles.postAvatarImg} contentFit="cover" />
+                ) : (
+                  <Text style={styles.postAvatarEmoji}>{author?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+                )}
+              </View>
+              <Text style={[styles.postAuthorMetaName, { color: C.muted }]}>{authorName}</Text>
+              {author && (
+                <View style={[styles.userTypeBadge, { borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.1)' }]}>
+                  {author.user_type === 'creator' ? (
+                    <Text style={[styles.userTypeBadgeText, { color: C.gold }]}>
+                      작가 <Text style={{ color: author.verified ? '#22c55e' : C.danger }}>
+                        {author.verified ? '인증' : '인증 전'}
+                      </Text>
+                    </Text>
+                  ) : (
+                    <Text style={[styles.userTypeBadgeText, { color: C.gold }]}>
+                      {author.user_type === 'aspiring' ? '지망생' : '감상자'}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </Pressable>
+            <Text style={[styles.postTitleMeta, { color: C.muted }]} numberOfLines={1}>
+              {`· ${formatDate(item.created_at)}`}
+            </Text>
+          </View>
 
           {/* 본문 */}
           <Text style={[styles.postDesc, { color: C.fg, opacity: 0.7 }]} numberOfLines={3}>{item.description}</Text>
@@ -504,38 +538,6 @@ export default function MouiScreen() {
             ) : null;
           })()}
 
-          {/* 작성자 */}
-          <View style={[styles.postFooter, { borderTopColor: C.border }]}>
-            <Pressable
-              onPress={() => author?.username && router.push(`/artist/${author.username}`)}
-              style={styles.authorRow}
-            >
-              <View style={[styles.postAvatar, { backgroundColor: C.bg }]}>
-                {author?.avatar_url ? (
-                  <Image source={{ uri: author.avatar_url }} style={styles.postAvatarImg} contentFit="cover" />
-                ) : (
-                  <Text style={styles.postAvatarEmoji}>{author?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
-                )}
-              </View>
-              <Text style={[styles.postAuthor, { color: C.muted }]}>{author?.name ?? '회원'}</Text>
-              {author && (
-                <View style={[styles.userTypeBadge, { borderColor: C.gold, backgroundColor: 'rgba(200,169,110,0.1)' }]}>
-                  {author.user_type === 'creator' ? (
-                    <Text style={[styles.userTypeBadgeText, { color: C.gold }]}>
-                      작가 <Text style={{ color: author.verified ? '#22c55e' : C.danger }}>
-                        {author.verified ? '인증' : '인증 전'}
-                      </Text>
-                    </Text>
-                  ) : (
-                    <Text style={[styles.userTypeBadgeText, { color: C.gold }]}>
-                      {author.user_type === 'aspiring' ? '지망생' : '감상자'}
-                    </Text>
-                  )}
-                </View>
-              )}
-              <Text style={[styles.postTime, { color: C.muted }]}>· {formatDate(item.created_at)}</Text>
-            </Pressable>
-          </View>
           {(isJoined || isOwner) && (
             <Pressable
               onPress={() => router.push(`/moui/${item.id}` as any)}
@@ -614,8 +616,10 @@ export default function MouiScreen() {
       <View style={styles.innerContainer}>
       {/* 헤더 */}
       <Animated.View entering={FadeIn.delay(50).duration(200)} style={[styles.header, { borderBottomColor: C.border }]}>
-        <View style={styles.headerLeft}>
+        <View style={styles.headerTopRow}>
           <Text style={[styles.headerTitle, { color: C.fg }]}>모임</Text>
+        </View>
+        <View style={styles.headerMetaRow}>
           <Pressable
             onPress={() => router.push('/profile/detail?focus=region')}
             style={({ pressed }) => [
@@ -628,74 +632,75 @@ export default function MouiScreen() {
             ]}
           >
             <Text
+              numberOfLines={1}
               style={[
                 styles.regionChipText,
                 { color: activityRegion ? C.gold : C.muted },
               ]}
             >
-              {activityRegion ? `📍 ${activityRegion}` : '📍 지역 설정'}
+              {activityRegion ? `📍 설정 위치: ${activityRegion}` : '📍 위치 설정'}
             </Text>
           </Pressable>
-        </View>
-        <View style={styles.headerRight}>
-          <Pressable
-            onPress={() => setShowFilterPanel(v => !v)}
-            style={({ pressed }) => [
-              styles.filterToggleBtn,
-              {
-                borderColor: filterButtonActive ? C.gold + '99' : C.border,
-                backgroundColor: filterButtonActive ? C.gold + '16' : C.card,
-                shadowColor: filterButtonActive ? C.gold : '#000000',
-              },
-              pressed && styles.headerActionPressed,
-            ]}
-          >
-            <View
-              style={[
-                styles.filterToggleIconWrap,
-                { backgroundColor: filterButtonActive ? C.gold + '24' : C.bg },
+          <View style={styles.headerRight}>
+            <Pressable
+              onPress={() => setShowFilterPanel(v => !v)}
+              style={({ pressed }) => [
+                styles.filterToggleBtn,
+                {
+                  borderColor: filterButtonActive ? C.gold + '99' : C.border,
+                  backgroundColor: filterButtonActive ? C.gold + '16' : C.card,
+                  shadowColor: filterButtonActive ? C.gold : '#000000',
+                },
+                pressed && styles.headerActionPressed,
               ]}
             >
-              <Ionicons
-                name={showFilterPanel ? 'options' : 'options-outline'}
-                size={12}
-                color={filterButtonActive ? C.goldLight : C.fg}
-              />
-            </View>
-            <Text style={[styles.filterToggleBtnText, { color: filterButtonActive ? C.fg : C.muted }]}>
-              필터
-            </Text>
-            {activeFilterCount > 0 && (
-              <View style={[styles.filterToggleBadge, { backgroundColor: C.gold, borderColor: C.bg }]}>
-                <Text style={[styles.filterToggleBadgeText, { color: C.bg }]}>
-                  {activeFilterCount}
-                </Text>
+              <View
+                style={[
+                  styles.filterToggleIconWrap,
+                  { backgroundColor: filterButtonActive ? C.gold + '24' : C.bg },
+                ]}
+              >
+                <Ionicons
+                  name={showFilterPanel ? 'options' : 'options-outline'}
+                  size={12}
+                  color={filterButtonActive ? C.goldLight : C.fg}
+                />
               </View>
-            )}
-          </Pressable>
-          <Pressable
-            onPress={() => {
-              if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
-              router.push('/moui/create');
-            }}
-            style={({ pressed }) => [
-              styles.headerBtn,
-              { shadowColor: createButtonShadow },
-              pressed && styles.headerActionPressed,
-            ]}
-          >
-            <LinearGradient
-              colors={createButtonGradient}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.headerBtnGradient, { borderColor: createButtonBorder }]}
+              <Text style={[styles.filterToggleBtnText, { color: filterButtonActive ? C.fg : C.muted }]}>
+                필터
+              </Text>
+              {activeFilterCount > 0 && (
+                <View style={[styles.filterToggleBadge, { backgroundColor: C.gold, borderColor: C.bg }]}>
+                  <Text style={[styles.filterToggleBadgeText, { color: C.bg }]}>
+                    {activeFilterCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
+                router.push('/moui/create');
+              }}
+              style={({ pressed }) => [
+                styles.headerBtn,
+                { shadowColor: createButtonShadow },
+                pressed && styles.headerActionPressed,
+              ]}
             >
-              <View style={[styles.headerBtnIconWrap, { backgroundColor: createButtonIconBg }]}>
-                <Ionicons name="sparkles" size={13} color={createButtonText} />
-              </View>
-              <Text style={[styles.headerBtnText, { color: createButtonText }]}>모임만들기</Text>
-            </LinearGradient>
-          </Pressable>
+              <LinearGradient
+                colors={createButtonGradient}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.headerBtnGradient, { borderColor: createButtonBorder }]}
+              >
+                <View style={[styles.headerBtnIconWrap, { backgroundColor: createButtonIconBg }]}>
+                  <Ionicons name="sparkles" size={13} color={createButtonText} />
+                </View>
+                <Text style={[styles.headerBtnText, { color: createButtonText }]}>모임만들기</Text>
+              </LinearGradient>
+            </Pressable>
+          </View>
         </View>
       </Animated.View>
 
@@ -860,31 +865,39 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 10,
     paddingHorizontal: 20,
     paddingVertical: 14,
     borderBottomWidth: 1,
   },
-  headerLeft: {
-    flex: 1,
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingRight: 12,
+    gap: 12,
+  },
+  headerMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    flexWrap: 'wrap',
+    flexShrink: 0,
+    marginLeft: 'auto',
   },
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
     letterSpacing: 1,
+    flexShrink: 1,
   },
   regionChip: {
+    maxWidth: '100%',
+    flexShrink: 1,
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 10,
@@ -1129,6 +1142,27 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     lineHeight: 24,
   },
+  postTitleMeta: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  postAuthorMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: -2,
+  },
+  postAuthorMetaLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  postAuthorMetaName: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
   postDesc: {
     fontSize: 13,
     lineHeight: 20,
@@ -1185,13 +1219,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
   },
-  postFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 4,
-    borderTopWidth: 1,
-  },
   ownerActionRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -1233,9 +1260,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.5,
-  },
-  postTime: {
-    fontSize: 11,
   },
   statusBadge: {
     paddingHorizontal: 14,

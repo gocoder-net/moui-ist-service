@@ -49,25 +49,47 @@ function detectSnsType(url: string): { key: string; icon: string; label: string 
   const lower = url.toLowerCase();
   if (lower.includes('instagram.com') || lower.includes('instagr.am'))
     return { key: 'instagram', icon: '📸', label: 'Instagram' };
+  if (lower.includes('threads.net'))
+    return { key: 'threads', icon: '🧵', label: 'Threads' };
   if (lower.includes('twitter.com') || lower.includes('x.com'))
     return { key: 'twitter', icon: '🐦', label: 'X (Twitter)' };
   if (lower.includes('youtube.com') || lower.includes('youtu.be'))
     return { key: 'youtube', icon: '🎬', label: 'YouTube' };
+  if (lower.includes('tiktok.com'))
+    return { key: 'tiktok', icon: '🎵', label: 'TikTok' };
+  if (lower.includes('facebook.com') || lower.includes('fb.com'))
+    return { key: 'facebook', icon: '👥', label: 'Facebook' };
+  if (lower.includes('linkedin.com'))
+    return { key: 'linkedin', icon: '💼', label: 'LinkedIn' };
   if (lower.includes('behance.net'))
     return { key: 'behance', icon: '🎨', label: 'Behance' };
   if (lower.includes('dribbble.com'))
     return { key: 'dribbble', icon: '🏀', label: 'Dribbble' };
+  if (lower.includes('artstation.com'))
+    return { key: 'artstation', icon: '🖼️', label: 'ArtStation' };
+  if (lower.includes('pixiv.net'))
+    return { key: 'pixiv', icon: '🖌️', label: 'Pixiv' };
   if (lower.includes('github.com'))
     return { key: 'github', icon: '💻', label: 'GitHub' };
+  if (lower.includes('notion.so') || lower.includes('notion.site'))
+    return { key: 'notion', icon: '🗂️', label: 'Notion' };
+  if (lower.includes('blog.naver.com'))
+    return { key: 'blog', icon: '📝', label: '네이버 블로그' };
+  if (lower.includes('brunch.co.kr'))
+    return { key: 'blog', icon: '🍞', label: '브런치' };
+  if (lower.includes('tistory.com'))
+    return { key: 'blog', icon: '📔', label: '티스토리' };
+  if (lower.includes('medium.com'))
+    return { key: 'blog', icon: '✒️', label: 'Medium' };
+  if (lower.includes('soundcloud.com'))
+    return { key: 'soundcloud', icon: '🔊', label: 'SoundCloud' };
+  if (lower.includes('spotify.com'))
+    return { key: 'spotify', icon: '🎧', label: 'Spotify' };
+  if (lower.includes('bandcamp.com'))
+    return { key: 'bandcamp', icon: '💿', label: 'Bandcamp' };
+  if (lower.includes('vimeo.com'))
+    return { key: 'vimeo', icon: '🎞️', label: 'Vimeo' };
   return { key: 'website', icon: '🌐', label: '웹사이트' };
-}
-
-function snsIconForKey(key: string): string {
-  const map: Record<string, string> = {
-    instagram: '📸', twitter: '🐦', youtube: '🎬', behance: '🎨',
-    dribbble: '🏀', github: '💻', website: '🌐',
-  };
-  return map[key] ?? '🔗';
 }
 
 export default function ProfileDetailScreen() {
@@ -615,20 +637,33 @@ export default function ProfileDetailScreen() {
               <Text style={[styles.fieldLabel, { color: C.muted }]}>활동명</Text>
               <TextInput style={[styles.input, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]} value={name} onChangeText={setName} placeholder="활동명" placeholderTextColor={C.mutedLight} />
 
-              <Text style={[styles.fieldLabel, { color: C.muted }]}>본명 (필수)</Text>
-              <TextInput
-                style={[
-                  styles.input,
-                  { backgroundColor: C.bg, borderColor: C.border, color: C.fg },
-                  realNameLocked && styles.inputReadonly,
-                ]}
-                value={realName}
-                onChangeText={setRealName}
-                placeholder="실명 입력"
-                placeholderTextColor={C.mutedLight}
-                editable={!realNameLocked}
-                selectTextOnFocus={!realNameLocked}
-              />
+              <View style={styles.fieldLabelRow}>
+                <Text style={[styles.fieldLabel, styles.fieldLabelCompact, { color: C.muted }]}>본명 (필수)</Text>
+                {realNameLocked && (
+                  <View style={[styles.readonlyBadge, { backgroundColor: C.bg, borderColor: C.border }]}>
+                    <Text style={[styles.readonlyBadgeText, { color: C.muted }]}>🔒 수정 불가</Text>
+                  </View>
+                )}
+              </View>
+              {realNameLocked ? (
+                <View style={[styles.readonlyInput, { backgroundColor: C.bg, borderColor: C.border }]}>
+                  <Text style={[styles.readonlyInputText, { color: C.fg }]}>{realName}</Text>
+                  <View style={[styles.readonlyInputChip, { backgroundColor: C.card, borderColor: C.border }]}>
+                    <Text style={[styles.readonlyInputChipText, { color: C.mutedLight }]}>가입 시 등록됨</Text>
+                  </View>
+                </View>
+              ) : (
+                <TextInput
+                  style={[
+                    styles.input,
+                    { backgroundColor: C.bg, borderColor: C.border, color: C.fg },
+                  ]}
+                  value={realName}
+                  onChangeText={setRealName}
+                  placeholder="실명 입력"
+                  placeholderTextColor={C.mutedLight}
+                />
+              )}
               <Text style={[styles.fieldHelp, { color: C.mutedLight }]}>
                 {realNameLocked
                   ? '가입 시 등록한 본명이며, 본인인증을 위해 꼭 필요해요. 등록 후에는 변경할 수 없어요.'
@@ -1099,6 +1134,18 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     marginTop: 12,
   },
+  fieldLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  fieldLabelCompact: {
+    marginTop: 0,
+    marginBottom: 0,
+  },
   input: {
     borderWidth: 1,
     borderRadius: 12,
@@ -1106,8 +1153,39 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 15,
   },
-  inputReadonly: {
-    opacity: 0.72,
+  readonlyBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  readonlyBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  readonlyInput: {
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    minHeight: 82,
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  readonlyInputText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  readonlyInputChip: {
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  readonlyInputChipText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   fieldHelp: {
     fontSize: 11,

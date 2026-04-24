@@ -190,6 +190,7 @@ export default function ChatRoomScreen() {
   }, [doEndChat]);
 
   const otherName = otherUser?.name ?? otherUser?.username ?? '...';
+  const headerName = otherName === '...' ? otherName : `${otherName}님`;
 
   const AvatarBubble = ({ profile }: { profile: Profile | null }) =>
     profile?.avatar_url ? (
@@ -219,7 +220,15 @@ export default function ChatRoomScreen() {
       <View style={styles.innerContainer}>
       {/* Header */}
       <View style={[styles.header, { paddingTop: insets.top + 8, borderBottomColor: C.border }]}>
-        <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
+        <Pressable
+          onPress={() => router.replace('/chat' as any)}
+          style={({ pressed }) => [
+            styles.backBtn,
+            { borderColor: C.border, backgroundColor: C.card },
+            pressed && { opacity: 0.75 },
+          ]}
+          hitSlop={12}
+        >
           <IconSymbol name="chevron.left" size={20} color={C.fg} />
         </Pressable>
         <Pressable
@@ -233,12 +242,24 @@ export default function ChatRoomScreen() {
               <Text style={{ fontSize: 14 }}>{otherUser?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
             </View>
           )}
-          <Text style={[styles.headerTitle, { color: C.fg }]} numberOfLines={1}>
-            {otherName}
-            <Text style={[styles.headerSub, { color: C.muted }]}>님과의 작당모의</Text>
-          </Text>
+          <View style={styles.headerTextWrap}>
+            <Text style={[styles.headerTitle, { color: C.fg }]} numberOfLines={1}>
+              {headerName}
+            </Text>
+            <Text style={[styles.headerSub, { color: C.muted }]} numberOfLines={1}>
+              일대일 채팅
+            </Text>
+          </View>
         </Pressable>
-        <Pressable onPress={endChat} style={styles.endBtn} hitSlop={12}>
+        <Pressable
+          onPress={endChat}
+          style={({ pressed }) => [
+            styles.endBtn,
+            { borderColor: C.danger + '55', backgroundColor: C.danger + '10' },
+            pressed && { opacity: 0.75 },
+          ]}
+          hitSlop={12}
+        >
           <Text style={[styles.endBtnText, { color: C.danger }]}>채팅 종료</Text>
         </Pressable>
       </View>
@@ -266,6 +287,16 @@ export default function ChatRoomScreen() {
                 ) : <View style={styles.msgAvatarSpacer} />
               )}
               <View style={[styles.msgBody, isMe && styles.msgBodyMe]}>
+                {showAvatar && (
+                  <Text style={[styles.senderName, { color: C.muted }]}>
+                    {otherUser?.name ?? otherUser?.username ?? ''}
+                  </Text>
+                )}
+                {isMe && prevMsg?.sender_id !== item.sender_id && (
+                  <Text style={[styles.senderName, { color: C.muted, textAlign: 'right' }]}>
+                    {myProfile?.name ?? myProfile?.username ?? ''}
+                  </Text>
+                )}
                 <View style={[
                   styles.msgBubble,
                   isMe
@@ -346,44 +377,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
+    gap: 10,
   },
   backBtn: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
+    borderWidth: 1,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   endBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    flexShrink: 0,
   },
   endBtnText: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 12,
+    fontWeight: '700',
   },
   headerCenter: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
+    justifyContent: 'flex-start',
+    gap: 10,
+    minWidth: 0,
   },
   headerAvatar: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(200,169,110,0.28)',
   },
   headerAvatarFallback: {
     justifyContent: 'center',
     alignItems: 'center',
   },
+  headerTextWrap: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
   headerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.2,
   },
   headerSub: {
-    fontSize: 12,
-    fontWeight: '400',
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   messageList: {
     padding: 16,
@@ -422,6 +470,11 @@ const styles = StyleSheet.create({
   },
   msgBodyMe: {
     alignItems: 'flex-end',
+  },
+  senderName: {
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 2,
   },
   msgBubble: {
     paddingHorizontal: 14,

@@ -8,8 +8,9 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { signOut } = useAuth();
+  const { signOut, profile } = useAuth();
   const { mode, colors: C, toggleTheme } = useThemeMode();
+  const isAdmin = profile?.username === 'gocoder';
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
@@ -38,6 +39,20 @@ export default function SettingsScreen() {
           />
         </View>
       </Animated.View>
+
+      {/* 관리자 */}
+      {isAdmin && (
+        <Animated.View entering={FadeInDown.delay(150).duration(400).springify()} style={[styles.card, { backgroundColor: C.card }]}>
+          <Text style={[styles.sectionTitle, { color: C.muted }]}>관리자</Text>
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push('/profile/admin')}
+          >
+            <Text style={[styles.rowLabel, { color: C.fg }]}>🛡️ 인증 심사</Text>
+            <Text style={[styles.rowArrow, { color: C.muted }]}>›</Text>
+          </Pressable>
+        </Animated.View>
+      )}
 
       {/* 계정 */}
       <Animated.View entering={FadeInDown.delay(200).duration(400).springify()} style={[styles.card, { backgroundColor: C.card }]}>
