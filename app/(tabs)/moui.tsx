@@ -370,18 +370,6 @@ export default function MouiScreen() {
               ) : <View />;
             })()}
             <View style={styles.cardTopRight}>
-              {showJoinBtn && (
-                <Pressable
-                  onPress={() => handleJoin(item.id)}
-                  style={({ pressed }) => [
-                    styles.joinBtn,
-                    { backgroundColor: C.gold, borderColor: C.gold },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                >
-                  <Text style={[styles.joinBtnText, { color: C.bg }]}>참석하기 ({JOIN_COST}MOUI)</Text>
-                </Pressable>
-              )}
               {isJoined && !isOwner && (
                 <Pressable
                   onPress={() => handleLeave(item.id)}
@@ -572,6 +560,19 @@ export default function MouiScreen() {
               </View>
             ) : null;
           })()}
+
+          {showJoinBtn && (
+            <Pressable
+              onPress={() => handleJoin(item.id)}
+              style={({ pressed }) => [
+                styles.joinBtn,
+                { backgroundColor: '#87CEEB', borderColor: '#7AC0DD' },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={[styles.joinBtnText, { color: '#fff' }]}>참석</Text>
+            </Pressable>
+          )}
 
           {(isJoined || isOwner) && (
             <Pressable
@@ -1395,14 +1396,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   joinBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    paddingVertical: 10,
     borderRadius: 10,
     borderWidth: 1,
-    alignSelf: 'flex-start',
+    alignItems: 'center',
+    marginTop: 8,
   },
   joinBtnText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
 
