@@ -538,7 +538,7 @@ const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12
 
 /* ── Main Page ── */
 export default function ArtistPortfolioScreen() {
-  const { id: rawId, tab, artworkId } = useLocalSearchParams<{ id: string; tab?: string; artworkId?: string }>();
+  const { id: rawId, tab, artworkId, collectionId: paramCollectionId } = useLocalSearchParams<{ id: string; tab?: string; artworkId?: string; collectionId?: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -727,6 +727,11 @@ export default function ArtistPortfolioScreen() {
         }),
       );
       setCollections(colsWithArt);
+      // URL에 collectionId가 있으면 works 탭에서 해당 아카이브 선택
+      if (paramCollectionId && colsWithArt.find(c => c.id === paramCollectionId)) {
+        setActiveTab('works');
+        setSelectedCollectionId(paramCollectionId);
+      }
     } else {
       setCollections([]);
     }
@@ -1268,13 +1273,16 @@ export default function ArtistPortfolioScreen() {
                         resizeMode="cover"
                       />
                     ) : null}
-                    <View style={styles.colHeaderText}>
-                      <Text style={[styles.colTitle, { color: C.fg }]}>{col.title}</Text>
+                    <Pressable style={styles.colHeaderText} onPress={() => {
+                      setSelectedCollectionId(col.id);
+                      setActiveTab('works');
+                    }}>
+                      <Text style={[styles.colTitle, { color: C.gold }]}>{col.title} →</Text>
                       {col.description ? (
                         <Text style={[styles.colDesc, { color: C.muted }]} numberOfLines={2}>{col.description}</Text>
                       ) : null}
                       <Text style={[styles.colCount, { color: C.mutedLight }]}>{col.artworks.length}개 작품</Text>
-                    </View>
+                    </Pressable>
                   </View>
                   <View style={styles.colGrid}>
                     {visibleArtworks.map((aw) => (

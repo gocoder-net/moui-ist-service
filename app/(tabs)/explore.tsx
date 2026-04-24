@@ -67,6 +67,7 @@ type FeedItem = {
   extra?: string;
   artwork_index?: number; // index in artist's artworks for viewer
   aspect?: number; // width/height ratio for masonry
+  exhibition_num?: number; // 3D exhibition number for direct entry
 };
 
 /* ── 배경 떠다니는 도형 ── */
@@ -196,6 +197,7 @@ export default function ExploreScreen() {
   const numCols = 3;
   const [artists, setArtists] = useState<ArtistCard[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
+  const [feedVisible, setFeedVisible] = useState(10);
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [loading, setLoading] = useState(true);
@@ -287,14 +289,20 @@ export default function ExploreScreen() {
       });
     });
 
-    // 2. Exhibitions (published)
-    const { data: ex } = await supabase
+    // 2. Exhibitions (published) - created_at ASC for numbering
+    const { data: exAll } = await supabase
       .from('exhibitions')
       .select('id, title, description, poster_image_url, user_id, room_type')
       .eq('is_published', true)
-      .order('created_at', { ascending: false })
-      .limit(10);
-    ex?.forEach(e => {
+      .order('created_at', { ascending: true });
+    // Per-user exhibition numbering (1-based, creation order)
+    const userExNum = new Map<string, number>();
+    const exWithNum = (exAll ?? []).map(e => {
+      const num = (userExNum.get(e.user_id) ?? 0) + 1;
+      userExNum.set(e.user_id, num);
+      return { ...e, num };
+    });
+    exWithNum.forEach(e => {
       if (!e.poster_image_url) return;
       const p = profileMap.get(e.user_id);
       if (!p) return;
@@ -308,6 +316,7 @@ export default function ExploreScreen() {
         artist_name: p.name ?? p.username,
         artist_avatar: p.avatar_url,
         artist_username: p.username,
+        exhibition_num: e.num,
       });
     });
 
@@ -538,7 +547,7 @@ export default function ExploreScreen() {
           return (
             <Pressable
               key={t.key}
-              onPress={() => setActiveTab(t.key)}
+              onPress={() => { setActiveTab(t.key); setFeedVisible(10); }}
               style={({ pressed }) => [
                 styles.tabItem,
                 pressed && { opacity: 0.7 },
@@ -607,29 +616,52 @@ export default function ExploreScreen() {
             <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 작품이 없습니다</Text>
           </View>
         ) : (
-          <ScrollView contentContainerStyle={styles.listContent} showsVerticalScrollIndicator={false}>
+          <ScrollView
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            onScroll={({ nativeEvent }) => {
+              const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+              if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 300) {
+                setFeedVisible(prev => Math.min(prev + 10, feedItems.length));
+              }
+            }}
+            scrollEventThrottle={200}
+          >
             <View style={styles.masonryWrap}>
               {/* Left column */}
               <View style={styles.masonryCol}>
-                {feedItems.filter((_, i) => i % 2 === 0).map((item, idx) => (
+                {feedItems.slice(0, feedVisible).filter((_, i) => i % 2 === 0).map((item, idx) => (
                   <Animated.View key={item.id} entering={FadeInDown.delay(60 + idx * 40).duration(400).springify()}>
                     <Pressable
-                      style={({ pressed }) => [styles.masonryCard, { borderColor: C.border }, pressed && { opacity: 0.85 }]}
+                      style={({ pressed }) => [
+                        styles.masonryCard,
+                        { borderColor: item.type === 'exhibition' ? 'rgba(70,140,220,0.8)' : item.type === 'collection' ? 'rgba(160,90,220,0.8)' : C.border },
+                        item.type === 'exhibition' && { borderWidth: 3.5 },
+                        item.type === 'collection' && { borderWidth: 3.5 },
+                        pressed && { opacity: 0.85 },
+                      ]}
                       onPress={() => {
                         if (item.type === 'artwork') {
                           router.push(`/artist/${item.artist_username}?artworkId=${(item.artwork_index ?? 0) + 1}`);
                         } else if (item.type === 'exhibition') {
-                          router.push(`/artist/${item.artist_username}?tab=exhibitions`);
+                          router.push(`/3dexhibition/${item.artist_username}/${item.exhibition_num ?? 1}`);
                         } else {
-                          router.push(`/artist/${item.artist_username}?tab=collections`);
+                          router.push(`/artist/${item.artist_username}?collectionId=${item.id.replace('col_', '')}`);
                         }
                       }}
                     >
-                      <Image
-                        source={{ uri: item.image_url }}
-                        style={[styles.masonryImage, { aspectRatio: item.aspect ?? 1 }]}
-                        resizeMode="cover"
-                      />
+                      <View>
+                        <Image
+                          source={{ uri: item.image_url }}
+                          style={[styles.masonryImage, { aspectRatio: item.aspect ?? 1 }]}
+                          resizeMode="cover"
+                        />
+                        {item.type !== 'artwork' && (
+                          <View style={styles.masonryTypeBadge}>
+                            <Text style={styles.masonryTypeEmoji}>{item.type === 'exhibition' ? '🏛️' : '📂'}</Text>
+                          </View>
+                        )}
+                      </View>
                       <View style={styles.masonryInfo}>
                         <View style={styles.masonryArtistRow}>
                           {item.artist_avatar ? (
@@ -649,25 +681,38 @@ export default function ExploreScreen() {
               </View>
               {/* Right column */}
               <View style={styles.masonryCol}>
-                {feedItems.filter((_, i) => i % 2 === 1).map((item, idx) => (
+                {feedItems.slice(0, feedVisible).filter((_, i) => i % 2 === 1).map((item, idx) => (
                   <Animated.View key={item.id} entering={FadeInDown.delay(80 + idx * 40).duration(400).springify()}>
                     <Pressable
-                      style={({ pressed }) => [styles.masonryCard, { borderColor: C.border }, pressed && { opacity: 0.85 }]}
+                      style={({ pressed }) => [
+                        styles.masonryCard,
+                        { borderColor: item.type === 'exhibition' ? 'rgba(70,140,220,0.8)' : item.type === 'collection' ? 'rgba(160,90,220,0.8)' : C.border },
+                        item.type === 'exhibition' && { borderWidth: 3.5 },
+                        item.type === 'collection' && { borderWidth: 3.5 },
+                        pressed && { opacity: 0.85 },
+                      ]}
                       onPress={() => {
                         if (item.type === 'artwork') {
                           router.push(`/artist/${item.artist_username}?artworkId=${(item.artwork_index ?? 0) + 1}`);
                         } else if (item.type === 'exhibition') {
-                          router.push(`/artist/${item.artist_username}?tab=exhibitions`);
+                          router.push(`/3dexhibition/${item.artist_username}/${item.exhibition_num ?? 1}`);
                         } else {
-                          router.push(`/artist/${item.artist_username}?tab=collections`);
+                          router.push(`/artist/${item.artist_username}?collectionId=${item.id.replace('col_', '')}`);
                         }
                       }}
                     >
-                      <Image
-                        source={{ uri: item.image_url }}
-                        style={[styles.masonryImage, { aspectRatio: item.aspect ?? 1 }]}
-                        resizeMode="cover"
-                      />
+                      <View>
+                        <Image
+                          source={{ uri: item.image_url }}
+                          style={[styles.masonryImage, { aspectRatio: item.aspect ?? 1 }]}
+                          resizeMode="cover"
+                        />
+                        {item.type !== 'artwork' && (
+                          <View style={styles.masonryTypeBadge}>
+                            <Text style={styles.masonryTypeEmoji}>{item.type === 'exhibition' ? '🏛️' : '📂'}</Text>
+                          </View>
+                        )}
+                      </View>
                       <View style={styles.masonryInfo}>
                         <View style={styles.masonryArtistRow}>
                           {item.artist_avatar ? (
@@ -955,6 +1000,20 @@ const styles = StyleSheet.create({
   },
   masonryImage: {
     width: '100%',
+  },
+  masonryTypeBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 8,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  masonryTypeEmoji: {
+    fontSize: 12,
   },
   masonryInfo: {
     padding: 8,

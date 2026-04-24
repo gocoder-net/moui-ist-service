@@ -20,6 +20,15 @@ const SecureStoreAdapter = {
   },
 };
 
+/**
+ * Supabase Storage 이미지를 썸네일로 변환
+ * /object/public/bucket/path → /render/image/public/bucket/path?width=W&quality=Q
+ */
+export function thumbnailUrl(url: string, width = 400, quality = 70): string {
+  if (!url || !url.includes('/storage/v1/object/public/')) return url;
+  return url.replace('/storage/v1/object/public/', `/storage/v1/render/image/public/`) + `?width=${width}&quality=${quality}`;
+}
+
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: Platform.OS !== "web" ? SecureStoreAdapter : undefined,
