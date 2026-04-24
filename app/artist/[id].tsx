@@ -748,6 +748,7 @@ export default function ArtistPortfolioScreen() {
   const hasMoreRef = useRef(false);
   const loadingMoreRef = useRef(false);
   const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
   const [mouiCount, setMouiCount] = useState(0);
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
@@ -790,7 +791,9 @@ export default function ArtistPortfolioScreen() {
 
   // Follower list modal
   const [followerModalVisible, setFollowerModalVisible] = useState(false);
+  const [connectionTab, setConnectionTab] = useState<'followers' | 'following'>('followers');
   const [followers, setFollowers] = useState<{ id: string; username: string; name: string | null; avatar_url: string | null; latest_artwork_url: string | null }[]>([]);
+  const [followings, setFollowings] = useState<{ id: string; username: string; name: string | null; avatar_url: string | null; latest_artwork_url: string | null }[]>([]);
 
   // Viewer state
   const [viewerVisible, setViewerVisible] = useState(false);
@@ -896,6 +899,8 @@ export default function ArtistPortfolioScreen() {
       hasMoreRef.current = more;
     }
     setFollowerCount(followCountRes.count ?? 0);
+    const { count: fgCount } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', uid);
+    setFollowingCount(fgCount ?? 0);
     setMouiCount(mouiRes.count ?? 0);
     if (exhibitionsRes.data) {
       setExhibitions(exhibitionsRes.data);
@@ -1076,28 +1081,31 @@ export default function ArtistPortfolioScreen() {
     Alert.alert('완료', '채팅 요청을 보냈습니다!');
   };
 
+  const loadConnectionList = async (p: any) => {
+    const { data: aw } = await supabase
+      .from('artworks')
+      .select('image_url')
+      .eq('user_id', p.id)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    return { ...p, latest_artwork_url: aw?.[0]?.image_url ?? null };
+  };
+
   const openFollowerList = async () => {
     if (!resolvedId) return;
-    const { data } = await supabase
-      .from('follows')
-      .select('follower_id, profiles!follows_follower_id_fkey(id, username, name, avatar_url)')
-      .eq('following_id', resolvedId);
-    if (data) {
-      const profileList = data.map((d: any) => d.profiles).filter(Boolean);
-      // 각 팔로워의 최신 작품 가져오기
-      const withArtworks = await Promise.all(
-        profileList.map(async (p: any) => {
-          const { data: aw } = await supabase
-            .from('artworks')
-            .select('image_url')
-            .eq('user_id', p.id)
-            .order('created_at', { ascending: false })
-            .limit(1);
-          return { ...p, latest_artwork_url: aw?.[0]?.image_url ?? null };
-        }),
-      );
-      setFollowers(withArtworks);
-    }
+    const [{ data: fwData }, { data: fgData }] = await Promise.all([
+      supabase.from('follows').select('follower_id, profiles!follows_follower_id_fkey(id, username, name, avatar_url)').eq('following_id', resolvedId),
+      supabase.from('follows').select('following_id, profiles!follows_following_id_fkey(id, username, name, avatar_url)').eq('follower_id', resolvedId),
+    ]);
+    const fwList = fwData?.map((d: any) => d.profiles).filter(Boolean) ?? [];
+    const fgList = fgData?.map((d: any) => d.profiles).filter(Boolean) ?? [];
+    const [fwWithArt, fgWithArt] = await Promise.all([
+      Promise.all(fwList.map(loadConnectionList)),
+      Promise.all(fgList.map(loadConnectionList)),
+    ]);
+    setFollowers(fwWithArt);
+    setFollowings(fgWithArt);
+    setConnectionTab('followers');
     setFollowerModalVisible(true);
   };
 
@@ -1357,7 +1365,7 @@ export default function ArtistPortfolioScreen() {
                         }}
                       >
                         <Text style={[styles.followBtnText, { color: C.bg }, isFollowing && { color: C.gold }]}>
-                          {isFollowing ? '✓ 팔로잉' : '+ 팔로우'}
+                          {isFollowing ? '연결됨' : '연결하기'}
                         </Text>
                       </Pressable>
                       <Pressable
@@ -1390,7 +1398,7 @@ export default function ArtistPortfolioScreen() {
                         <Text style={[styles.followBtnText, {
                           color: chatStatus === 'pending' ? C.gold : C.bg,
                         }]}>
-                          {chatStatus === 'pending' ? '⏳ 수락 대기중'
+                          {chatStatus === 'pending' ? '수락 대기중'
                             : chatStatus === 'accepted' ? '💬 채팅'
                             : '채팅걸기'}
                         </Text>
@@ -1421,8 +1429,8 @@ export default function ArtistPortfolioScreen() {
                 </Pressable>
                 <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
                 <Pressable style={styles.statItem} onPress={openFollowerList}>
-                  <AnimatedCounter to={followerCount} style={[styles.statNumber, { color: C.fg }]} />
-                  <Text style={[styles.statLabel, { color: C.muted }]}>팔로워</Text>
+                  <AnimatedCounter to={followerCount + followingCount} style={[styles.statNumber, { color: C.fg }]} />
+                  <Text style={[styles.statLabel, { color: C.muted }]}>연결</Text>
                 </Pressable>
                 <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
                 <Pressable style={styles.statItem} onPress={() => {
@@ -1697,7 +1705,7 @@ export default function ArtistPortfolioScreen() {
         ) : (
           exhibitions.length > 0 ? (
             <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-              <Text style={[styles.sectionLabel, { color: C.muted }]}>EXHIBITIONS</Text>
+              <Text style={[styles.sectionLabel, { color: C.muted }]}>3D EXHIBITIONS</Text>
               <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
 
               {exhibitions.map((ex, idx) => {
@@ -1865,49 +1873,73 @@ export default function ArtistPortfolioScreen() {
         </KeyboardAvoidingView>
       </Modal>
 
-      {/* Follower list modal */}
+      {/* Connection list modal */}
       <Modal visible={followerModalVisible} transparent animationType="fade" onRequestClose={() => setFollowerModalVisible(false)}>
         <View style={styles.chatModalOverlay}>
           <Pressable style={StyleSheet.absoluteFill} onPress={() => setFollowerModalVisible(false)} />
-          <View style={[styles.chatModalBox, { backgroundColor: C.card, maxHeight: 400 }]}>
-            <Text style={[styles.chatModalTitle, { color: C.fg }]}>팔로워 {followerCount}명</Text>
-            {followers.length === 0 ? (
-              <Text style={[{ color: C.muted, textAlign: 'center', paddingVertical: 20, fontSize: 13 }]}>아직 팔로워가 없습니다</Text>
-            ) : (
-              <FlatList
-                data={followers}
-                keyExtractor={(item) => item.id}
-                style={{ maxHeight: 300 }}
-                renderItem={({ item }) => (
-                  <Pressable
-                    style={({ pressed }) => [styles.followerRow, pressed && { opacity: 0.7 }]}
-                    onPress={() => {
-                      setFollowerModalVisible(false);
-                      router.push(`/artist/${item.username}`);
-                    }}
-                  >
-                    {item.avatar_url ? (
-                      <Image source={{ uri: item.avatar_url }} style={styles.followerAvatar} resizeMode="cover" />
-                    ) : (
-                      <View style={[styles.followerAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={{ fontSize: 14, fontWeight: '700', color: C.fg }}>
-                          {(item.name ?? item.username ?? '?').charAt(0).toUpperCase()}
-                        </Text>
+          <View style={[styles.chatModalBox, { backgroundColor: C.card, maxHeight: 450 }]}>
+            <Text style={[styles.chatModalTitle, { color: C.fg }]}>연결</Text>
+            {/* Tabs */}
+            <View style={styles.connectionTabs}>
+              <Pressable
+                style={[styles.connectionTab, connectionTab === 'followers' && { borderBottomColor: C.gold, borderBottomWidth: 2 }]}
+                onPress={() => setConnectionTab('followers')}
+              >
+                <Text style={[styles.connectionTabText, { color: connectionTab === 'followers' ? C.gold : C.muted }]}>
+                  나를 연결한 {followers.length}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.connectionTab, connectionTab === 'following' && { borderBottomColor: C.gold, borderBottomWidth: 2 }]}
+                onPress={() => setConnectionTab('following')}
+              >
+                <Text style={[styles.connectionTabText, { color: connectionTab === 'following' ? C.gold : C.muted }]}>
+                  내가 연결한 {followings.length}
+                </Text>
+              </Pressable>
+            </View>
+            {(() => {
+              const list = connectionTab === 'followers' ? followers : followings;
+              return list.length === 0 ? (
+                <Text style={[{ color: C.muted, textAlign: 'center', paddingVertical: 20, fontSize: 13 }]}>
+                  {connectionTab === 'followers' ? '아직 따르는 사람이 없습니다' : '아직 따르는 사람이 없습니다'}
+                </Text>
+              ) : (
+                <FlatList
+                  data={list}
+                  keyExtractor={(item) => item.id}
+                  style={{ maxHeight: 300 }}
+                  renderItem={({ item }) => (
+                    <Pressable
+                      style={({ pressed }) => [styles.followerRow, pressed && { opacity: 0.7 }]}
+                      onPress={() => {
+                        setFollowerModalVisible(false);
+                        router.push(`/artist/${item.username}`);
+                      }}
+                    >
+                      {item.avatar_url ? (
+                        <Image source={{ uri: item.avatar_url }} style={styles.followerAvatar} resizeMode="cover" />
+                      ) : (
+                        <View style={[styles.followerAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: C.fg }}>
+                            {(item.name ?? item.username ?? '?').charAt(0).toUpperCase()}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.followerName, { color: C.fg }]}>{item.name ?? item.username}</Text>
+                        <Text style={[styles.followerUsername, { color: C.muted }]}>@{item.username}</Text>
                       </View>
-                    )}
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.followerName, { color: C.fg }]}>{item.name ?? item.username}</Text>
-                      <Text style={[styles.followerUsername, { color: C.muted }]}>@{item.username}</Text>
-                    </View>
-                    {item.latest_artwork_url ? (
-                      <Image source={{ uri: item.latest_artwork_url }} style={styles.followerArtwork} resizeMode="cover" />
-                    ) : (
-                      <Text style={{ color: C.muted, fontSize: 16 }}>›</Text>
-                    )}
-                  </Pressable>
-                )}
-              />
-            )}
+                      {item.latest_artwork_url ? (
+                        <Image source={{ uri: item.latest_artwork_url }} style={styles.followerArtwork} resizeMode="cover" />
+                      ) : (
+                        <Text style={{ color: C.muted, fontSize: 16 }}>›</Text>
+                      )}
+                    </Pressable>
+                  )}
+                />
+              );
+            })()}
           </View>
         </View>
       </Modal>
@@ -2117,13 +2149,13 @@ const styles = StyleSheet.create({
 
   /* Follow */
   followBtn: {
-    paddingHorizontal: 11,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
     borderWidth: 1,
   },
   followBtnText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     letterSpacing: 0.3,
   },
@@ -2172,6 +2204,21 @@ const styles = StyleSheet.create({
   },
 
   /* Follower list */
+  connectionTabs: {
+    flexDirection: 'row',
+    marginBottom: 12,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(128,128,128,0.15)',
+  },
+  connectionTab: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  connectionTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
   followerRow: {
     flexDirection: 'row',
     alignItems: 'center',
