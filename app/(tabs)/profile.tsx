@@ -572,7 +572,7 @@ export default function ProfileScreen() {
         </Animated.View>
 
         {/* 나의 작품 (creator/aspiring) — 최근 수정 10개 미리보기 */}
-        {(userType === 'creator' || userType === 'aspiring') && user?.id && (
+        {user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
             <View style={s.exSectionHeader}>
               <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>🎨 나의 작품</Text>
@@ -637,7 +637,7 @@ export default function ProfileScreen() {
         )}
 
         {/* 나의 아카이브 (creator/aspiring) */}
-        {(userType === 'creator' || userType === 'aspiring') && user?.id && (
+        {user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
             <View style={s.exSectionHeader}>
               <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>📂 나의 아카이브</Text>
@@ -721,7 +721,7 @@ export default function ProfileScreen() {
         )}
 
         {/* 내 전시관 */}
-        {(userType === 'creator' || userType === 'aspiring') && user?.id && (
+        {user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
             <View style={s.exSectionHeader}>
               <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>🏛️ 내 전시관</Text>
