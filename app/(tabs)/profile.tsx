@@ -66,6 +66,13 @@ type RecentArtwork = {
   image_url: string;
 };
 
+type ArtworkCollection = {
+  id: string;
+  title: string;
+  cover_image_url: string | null;
+  artwork_count: number;
+};
+
 const ROOM_EMOJI: Record<string, string> = { small: '🏠', medium: '🏛️', large: '🏰' };
 const ROOM_LABEL: Record<string, string> = { small: '소형', medium: '중형', large: '대형' };
 
@@ -248,6 +255,9 @@ export default function ProfileScreen() {
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [exNumMap, setExNumMap] = useState<Map<string, number>>(new Map());
   const [recentArtworks, setRecentArtworks] = useState<RecentArtwork[]>([]);
+  const [collections, setCollections] = useState<ArtworkCollection[]>([]);
+  const colScrollRef = useRef<ScrollView>(null);
+  const colScrollX = useRef(0);
   const exScrollRef = useRef<ScrollView>(null);
   const exScrollX = useRef(0);
   const artScrollRef = useRef<ScrollView>(null);
@@ -299,13 +309,35 @@ export default function ProfileScreen() {
     if (data) setRecentArtworks(data as RecentArtwork[]);
   }, [user]);
 
+  const fetchCollections = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from('artwork_collections')
+      .select('id, title, cover_image_url')
+      .eq('user_id', user.id)
+      .order('sort_order', { ascending: true });
+    if (!data) return;
+    // Count artworks per collection
+    const withCounts: ArtworkCollection[] = await Promise.all(
+      data.map(async (col) => {
+        const { count } = await supabase
+          .from('collection_artworks')
+          .select('id', { count: 'exact', head: true })
+          .eq('collection_id', col.id);
+        return { ...col, artwork_count: count ?? 0 };
+      }),
+    );
+    setCollections(withCounts);
+  }, [user]);
+
   useFocusEffect(
     useCallback(() => {
       fetchExhibitions();
       fetchRecentArtworks();
+      fetchCollections();
       fetchVerificationStatus();
       fetchMouiCounts();
-    }, [fetchExhibitions, fetchRecentArtworks, fetchVerificationStatus, fetchMouiCounts]),
+    }, [fetchExhibitions, fetchRecentArtworks, fetchCollections, fetchVerificationStatus, fetchMouiCounts]),
   );
 
   const handleDelete = useCallback((id: string) => {
@@ -380,6 +412,31 @@ export default function ProfileScreen() {
       });
     },
     [fetchRecentArtworks],
+  );
+
+  const handleDeleteCollection = useCallback(
+    (col: ArtworkCollection) => {
+      confirmAlert('컬렉션 삭제', `"${col.title}" 컬렉션을 삭제하시겠습니까?\n(작품은 삭제되지 않습니다)`, async () => {
+        try {
+          if (col.cover_image_url) {
+            const parts = col.cover_image_url.split('/artworks/');
+            if (parts[1]) {
+              await supabase.storage.from('artworks').remove([decodeURIComponent(parts[1])]);
+            }
+          }
+          await supabase.from('collection_artworks').delete().eq('collection_id', col.id);
+          const { error } = await supabase.from('artwork_collections').delete().eq('id', col.id);
+          if (error) {
+            if (Platform.OS === 'web') window.alert('삭제 실패: ' + error.message);
+            return;
+          }
+          fetchCollections();
+        } catch (err) {
+          console.error('컬렉션 삭제 중 오류:', err);
+        }
+      });
+    },
+    [fetchCollections],
   );
 
   let delayCounter = 300;
@@ -573,6 +630,90 @@ export default function ProfileScreen() {
                     onEdit={() => router.push(`/artwork/create?artworkId=${item.id}`)}
                     onDelete={() => handleDeleteArtwork(item)}
                   />
+                ))}
+              </ScrollView>
+            )}
+          </Animated.View>
+        )}
+
+        {/* 나의 컬렉션 (creator/aspiring) */}
+        {(userType === 'creator' || userType === 'aspiring') && user?.id && (
+          <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
+            <View style={s.exSectionHeader}>
+              <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>📂 나의 컬렉션</Text>
+              <View style={s.exHeaderRight}>
+                {Platform.OS === 'web' && collections.length > 1 && (
+                  <View style={s.exScrollBtns}>
+                    <TouchableOpacity
+                      style={[s.exScrollBtn, { borderColor: C.border }]}
+                      activeOpacity={0.5}
+                      onPress={() => colScrollRef.current?.scrollTo({ x: Math.max(0, colScrollX.current - 172), animated: true })}
+                    >
+                      <Text style={[s.exScrollBtnText, { color: C.muted }]}>←</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[s.exScrollBtn, { borderColor: C.border }]}
+                      activeOpacity={0.5}
+                      onPress={() => colScrollRef.current?.scrollTo({ x: colScrollX.current + 172, animated: true })}
+                    >
+                      <Text style={[s.exScrollBtnText, { color: C.muted }]}>→</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+                <Pressable
+                  style={({ pressed }) => [s.exNewBtn, { borderColor: C.gold }, pressed && { opacity: 0.7 }]}
+                  onPress={() => router.push('/collection/create')}
+                >
+                  <Text style={[s.exNewBtnText, { color: C.gold }]}>+ 새 컬렉션</Text>
+                </Pressable>
+              </View>
+            </View>
+            <Pressable
+              style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
+              onPress={() => router.push(`/artist/${profile?.username ?? user.id}?tab=collections`)}
+            >
+              <Text style={s.menuIcon}>📂</Text>
+              <Text style={[s.menuLabel, { color: C.fg }]}>내 컬렉션 보기</Text>
+              <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
+            </Pressable>
+            <View style={[s.menuDivider, { backgroundColor: C.border, marginLeft: 48 }]} />
+            {collections.length > 0 && (
+              <ScrollView
+                ref={colScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={s.exList}
+                onScroll={(e) => { colScrollX.current = e.nativeEvent.contentOffset.x; }}
+                scrollEventThrottle={16}
+              >
+                {collections.map((col) => (
+                  <View key={col.id} style={[s.collectionCard, { borderColor: C.border }]}>
+                    {col.cover_image_url ? (
+                      <Image source={{ uri: col.cover_image_url }} style={s.collectionCover} contentFit="cover" />
+                    ) : (
+                      <View style={[s.collectionCoverEmpty, { backgroundColor: C.bg }]}>
+                        <Text style={{ fontSize: 28 }}>📂</Text>
+                      </View>
+                    )}
+                    <View style={s.collectionInfo}>
+                      <Text style={[s.collectionTitle, { color: C.fg }]} numberOfLines={1}>{col.title}</Text>
+                      <Text style={[s.collectionCount, { color: C.muted }]}>{col.artwork_count}개 작품</Text>
+                    </View>
+                    <View style={s.collectionActions}>
+                      <Pressable
+                        style={({ pressed }) => [s.collectionActionBtn, pressed && { opacity: 0.6 }]}
+                        onPress={() => router.push(`/collection/create?collectionId=${col.id}`)}
+                      >
+                        <Text style={[s.collectionActionText, { color: C.gold }]}>수정</Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [s.collectionActionBtn, pressed && { opacity: 0.6 }]}
+                        onPress={() => handleDeleteCollection(col)}
+                      >
+                        <Text style={[s.collectionActionText, { color: C.danger }]}>삭제</Text>
+                      </Pressable>
+                    </View>
+                  </View>
                 ))}
               </ScrollView>
             )}
@@ -1099,5 +1240,49 @@ const s = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  /* Collection card */
+  collectionCard: {
+    width: 156,
+    borderRadius: 14,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginRight: 4,
+  },
+  collectionCover: {
+    width: '100%',
+    height: 100,
+  },
+  collectionCoverEmpty: {
+    width: '100%',
+    height: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  collectionInfo: {
+    padding: 8,
+  },
+  collectionTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  collectionCount: {
+    fontSize: 10,
+    marginTop: 2,
+  },
+  collectionActions: {
+    flexDirection: 'row',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingBottom: 8,
+  },
+  collectionActionBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  collectionActionText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
 });

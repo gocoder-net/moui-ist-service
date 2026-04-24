@@ -239,6 +239,70 @@ export type Database = {
           },
         ];
       };
+      artwork_collections: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          description: string | null;
+          cover_image_url: string | null;
+          sort_order: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          title: string;
+          description?: string | null;
+          cover_image_url?: string | null;
+          sort_order?: number;
+        };
+        Update: {
+          title?: string;
+          description?: string | null;
+          cover_image_url?: string | null;
+          sort_order?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "artwork_collections_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      collection_artworks: {
+        Row: {
+          id: string;
+          collection_id: string;
+          artwork_id: string;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          collection_id: string;
+          artwork_id: string;
+          sort_order?: number;
+        };
+        Update: {
+          sort_order?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "collection_artworks_collection_id_fkey";
+            columns: ["collection_id"];
+            referencedRelation: "artwork_collections";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "collection_artworks_artwork_id_fkey";
+            columns: ["artwork_id"];
+            referencedRelation: "artworks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       chat_requests: {
         Row: {
           id: string;

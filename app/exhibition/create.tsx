@@ -215,6 +215,7 @@ export default function CreateExhibitionScreen() {
       positionY: posYcm,
       widthCm: artW,
       heightCm: artH,
+      existingArtworkId: pa.id,
       existingImageUrl: pa.image_url,
     };
     setArtworks(prev => [...prev, newArt]);
@@ -400,25 +401,16 @@ export default function CreateExhibitionScreen() {
         let artworkId: string | null = null;
 
         if (art.existingArtworkId) {
-          // 기존 작품 업데이트
+          // 기존 작품은 원본 사이즈를 보존하고, 부가 이미지만 업데이트
           const { error: artUpdateErr } = await supabase.from('artworks')
             .update({
-              title: art.title, image_url: imageUrl,
-              year: art.year || null,
-              medium: art.medium || null,
-              width_cm: art.widthCm,
-              height_cm: art.heightCm,
-              edition: art.edition || null,
-              description: art.description || null,
               image_top_url: topUrl, image_bottom_url: bottomUrl,
               image_left_url: leftUrl, image_right_url: rightUrl,
             })
             .eq('id', art.existingArtworkId);
           if (!artUpdateErr) artworkId = art.existingArtworkId;
-        }
-
-        if (!artworkId) {
-          // 새 작품 삽입
+        } else {
+          // 새 작품 삽입 (포트폴리오에서 선택하지 않은 경우만)
           const { data: artData } = await supabase.from('artworks')
             .insert({
               user_id: user.id, title: art.title, image_url: imageUrl,
