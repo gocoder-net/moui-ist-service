@@ -14,6 +14,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { getCreatorVerificationStatusText, getCreatorVerificationResetLabel } from '@/constants/creator-verification';
 import { REGIONS, PROVINCE_LIST, parseRegion } from '@/constants/regions';
+import { spendPoints } from '@/lib/points';
 
 const USER_TYPE_LABELS = { creator: '작가', aspiring: '지망생', audience: '감상자' } as const;
 const USER_TYPE_EMOJI = { creator: '🎨', aspiring: '✏️', audience: '👀' } as const;
@@ -97,10 +98,9 @@ export default function ProfileDetailScreen() {
   const [regionDistrict, setRegionDistrict] = useState('');
   const [showProvincePicker, setShowProvincePicker] = useState(false);
   const [showDistrictPicker, setShowDistrictPicker] = useState(false);
-  // SNS: 3개 URL 슬롯
-  const [snsUrl1, setSnsUrl1] = useState('');
-  const [snsUrl2, setSnsUrl2] = useState('');
-  const [snsUrl3, setSnsUrl3] = useState('');
+  // 링크: 동적 배열
+  const [links, setLinks] = useState<string[]>([]);
+  const [linkInput, setLinkInput] = useState('');
 
   // focus=region이면 자동 편집 모드 진입 + 지역 강조
   useEffect(() => {
@@ -141,21 +141,25 @@ export default function ProfileDetailScreen() {
     }
   };
 
-  /* SNS links → Record 변환 (자동 감지) */
+  /* 링크 배열 → Record 변환 (자동 감지) */
   function buildSnsLinks(): Record<string, string> {
     const result: Record<string, string> = {};
-    for (const url of [snsUrl1, snsUrl2, snsUrl3]) {
+    let counter: Record<string, number> = {};
+    for (const url of links) {
       const trimmed = url.trim();
       if (!trimmed) continue;
       const { key } = detectSnsType(trimmed);
-      // 같은 플랫폼이 여러개면 뒤의 것이 덮어씀 (충돌 시)
-      result[key] = trimmed;
+      // 같은 플랫폼이 여러개면 key에 번호 추가
+      const count = counter[key] ?? 0;
+      const finalKey = count === 0 ? key : `${key}_${count}`;
+      result[finalKey] = trimmed;
+      counter[key] = count + 1;
     }
     return result;
   }
 
-  /* 기존 SNS links → URL 슬롯으로 변환 */
-  function parseSnsToSlots() {
+  /* 기존 SNS links → 배열로 변환 */
+  function parseLinksFromProfile(): string[] {
     const parsed: Record<string, string> = (() => {
       if (!profile?.sns_links) return {};
       if (typeof profile.sns_links === 'string') {
@@ -166,11 +170,57 @@ export default function ProfileDetailScreen() {
       }
       return {};
     })();
-    const urls = Object.values(parsed).filter(Boolean);
-    setSnsUrl1(urls[0] ?? '');
-    setSnsUrl2(urls[1] ?? '');
-    setSnsUrl3(urls[2] ?? '');
+    return Object.values(parsed).filter(Boolean);
   }
+
+  /* 링크 추가 (3번째부터 300 MOUI 차감) */
+  const addLink = async () => {
+    const url = linkInput.trim();
+    if (!url) return;
+    if (links.includes(url)) {
+      const msg = '이미 추가된 링크입니다.';
+      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('안내', msg);
+      return;
+    }
+
+    const newCount = links.length + 1;
+    if (newCount > 2) {
+      const points = profile?.points ?? 0;
+      const COST = 300;
+      if (points < COST) {
+        const msg = `3번째 링크부터는 ${COST} MOUI가 필요합니다.\n현재 보유: ${points} MOUI`;
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('포인트 부족', msg);
+        return;
+      }
+      const confirmed = Platform.OS === 'web'
+        ? window.confirm(`링크 추가에 ${COST} MOUI가 차감됩니다.\n계속하시겠습니까?`)
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              '링크 추가',
+              `3번째 링크부터는 ${COST} MOUI가 차감됩니다.`,
+              [{ text: '취소', style: 'cancel', onPress: () => resolve(false) }, { text: '추가', onPress: () => resolve(true) }],
+            );
+          });
+      if (!confirmed) return;
+
+      // 포인트 차감 + 내역 기록
+      if (user) {
+        const { error } = await spendPoints(user.id, COST, '링크 추가');
+        if (error) {
+          Platform.OS === 'web' ? window.alert(error) : Alert.alert('오류', error);
+          return;
+        }
+        await refreshProfile();
+      }
+    }
+
+    setLinks(prev => [...prev, url]);
+    setLinkInput('');
+  };
+
+  const removeLink = (index: number) => {
+    setLinks(prev => prev.filter((_, i) => i !== index));
+  };
 
   const handleChangeUserType = async (newType: 'creator' | 'aspiring' | 'audience') => {
     if (!user || !profile || newType === userType) return;
@@ -290,7 +340,8 @@ export default function ProfileDetailScreen() {
     setRegionDistrict(regionParsed?.district ?? '');
     setShowProvincePicker(false);
     setShowDistrictPicker(false);
-    parseSnsToSlots();
+    setLinks(parseLinksFromProfile());
+    setLinkInput('');
     setEditing(true);
   };
 
@@ -511,17 +562,20 @@ export default function ProfileDetailScreen() {
               </Animated.View>
             )}
 
-            {/* SNS */}
+            {/* 링크 */}
             {snsEntries.length > 0 && (
               <Animated.View entering={FadeInDown.delay(300).duration(400).springify()} style={[styles.card, { backgroundColor: C.card }]}>
-                <Text style={[styles.sectionTitle, { color: C.muted }]}>SNS</Text>
-                {snsEntries.map(([key, url]) => (
-                  <View key={key} style={styles.snsRow}>
-                    <Text style={styles.snsIcon}>{snsIconForKey(key)}</Text>
-                    <Text style={[styles.snsLabel, { color: C.muted }]}>{key}</Text>
-                    <Text style={[styles.snsUrl, { color: C.fg }]} numberOfLines={1}>{url}</Text>
-                  </View>
-                ))}
+                <Text style={[styles.sectionTitle, { color: C.muted }]}>링크</Text>
+                {snsEntries.map(([key, url]) => {
+                  const detected = detectSnsType(url);
+                  return (
+                    <View key={key} style={styles.snsRow}>
+                      <Text style={styles.snsIcon}>{detected.icon}</Text>
+                      <Text style={[styles.snsLabel, { color: C.muted }]}>{detected.label}</Text>
+                      <Text style={[styles.snsUrl, { color: C.fg }]} numberOfLines={1}>{url}</Text>
+                    </View>
+                  );
+                })}
               </Animated.View>
             )}
 
@@ -698,47 +752,55 @@ export default function ProfileDetailScreen() {
             </Animated.View>
 
             <Animated.View entering={FadeInDown.delay(250).duration(400).springify()} style={[styles.card, { backgroundColor: C.card }]}>
-              <Text style={[styles.sectionTitle, { color: C.muted }]}>SNS 링크</Text>
-              <Text style={[styles.snsHint, { color: C.mutedLight }]}>URL을 입력하면 자동으로 플랫폼을 감지합니다</Text>
-
-              <Text style={[styles.fieldLabel, { color: C.muted }]}>
-                {snsUrl1.trim() ? `${detectSnsType(snsUrl1).icon} ${detectSnsType(snsUrl1).label}` : '링크 1'}
+              <Text style={[styles.sectionTitle, { color: C.muted }]}>링크</Text>
+              <Text style={[styles.snsHint, { color: C.mutedLight }]}>
+                URL을 입력하고 추가 버튼을 눌러주세요 (2개 무료, 3개부터 300 MOUI)
               </Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]}
-                value={snsUrl1}
-                onChangeText={setSnsUrl1}
-                placeholder="https://instagram.com/..."
-                placeholderTextColor={C.mutedLight}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
 
-              <Text style={[styles.fieldLabel, { color: C.muted }]}>
-                {snsUrl2.trim() ? `${detectSnsType(snsUrl2).icon} ${detectSnsType(snsUrl2).label}` : '링크 2'}
-              </Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]}
-                value={snsUrl2}
-                onChangeText={setSnsUrl2}
-                placeholder="https://x.com/..."
-                placeholderTextColor={C.mutedLight}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
+              <View style={styles.linkInputRow}>
+                <TextInput
+                  style={[styles.input, styles.linkInputField, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]}
+                  value={linkInput}
+                  onChangeText={setLinkInput}
+                  placeholder="https://..."
+                  placeholderTextColor={C.mutedLight}
+                  autoCapitalize="none"
+                  keyboardType="url"
+                />
+                <Pressable
+                  onPress={addLink}
+                  style={({ pressed }) => [
+                    styles.linkAddBtn,
+                    { backgroundColor: C.gold, opacity: !linkInput.trim() ? 0.4 : pressed ? 0.8 : 1 },
+                  ]}
+                  disabled={!linkInput.trim()}
+                >
+                  <Text style={[styles.linkAddBtnText, { color: C.bg }]}>추가</Text>
+                </Pressable>
+              </View>
 
-              <Text style={[styles.fieldLabel, { color: C.muted }]}>
-                {snsUrl3.trim() ? `${detectSnsType(snsUrl3).icon} ${detectSnsType(snsUrl3).label}` : '링크 3'}
-              </Text>
-              <TextInput
-                style={[styles.input, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]}
-                value={snsUrl3}
-                onChangeText={setSnsUrl3}
-                placeholder="https://youtube.com/..."
-                placeholderTextColor={C.mutedLight}
-                autoCapitalize="none"
-                keyboardType="url"
-              />
+              {links.length > 0 && (
+                <View style={styles.linkList}>
+                  {links.map((url, index) => {
+                    const detected = detectSnsType(url);
+                    return (
+                      <View key={`${url}-${index}`} style={[styles.linkItem, { backgroundColor: C.bg, borderColor: C.border }]}>
+                        <Text style={styles.linkItemIcon}>{detected.icon}</Text>
+                        <View style={styles.linkItemInfo}>
+                          <Text style={[styles.linkItemLabel, { color: C.muted }]}>{detected.label}</Text>
+                          <Text style={[styles.linkItemUrl, { color: C.fg }]} numberOfLines={1}>{url}</Text>
+                        </View>
+                        {index >= 2 && (
+                          <Text style={[styles.linkItemCost, { color: C.gold }]}>300M</Text>
+                        )}
+                        <Pressable onPress={() => removeLink(index)} hitSlop={8}>
+                          <Text style={[styles.linkItemDelete, { color: C.danger }]}>삭제</Text>
+                        </Pressable>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
             </Animated.View>
 
             {/* 저장/취소 버튼 */}
@@ -975,7 +1037,59 @@ const styles = StyleSheet.create({
   },
   snsHint: {
     fontSize: 11,
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  linkInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  linkInputField: {
+    flex: 1,
+  },
+  linkAddBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  linkAddBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  linkList: {
+    marginTop: 12,
+    gap: 8,
+  },
+  linkItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  linkItemIcon: {
+    fontSize: 16,
+  },
+  linkItemInfo: {
+    flex: 1,
+    gap: 1,
+  },
+  linkItemLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  linkItemUrl: {
+    fontSize: 13,
+  },
+  linkItemCost: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  linkItemDelete: {
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   /* 편집 폼 */
