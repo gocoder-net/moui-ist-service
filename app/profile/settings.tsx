@@ -8,7 +8,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 export default function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { signOut, profile } = useAuth();
+            const { signOut, profile, adminMode, setAdminMode } = useAuth();
   const { mode, colors: C, toggleTheme } = useThemeMode();
   const isAdmin = profile?.username === 'gocoder';
 
@@ -51,6 +51,27 @@ export default function SettingsScreen() {
             <Text style={[styles.rowLabel, { color: C.fg }]}>🛡️ 인증 심사</Text>
             <Text style={[styles.rowArrow, { color: C.muted }]}>›</Text>
           </Pressable>
+          <Pressable
+            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+            onPress={() => router.push('/profile/members')}
+          >
+            <Text style={[styles.rowLabel, { color: C.fg }]}>👥 회원 리스트</Text>
+            <Text style={[styles.rowArrow, { color: C.muted }]}>›</Text>
+          </Pressable>
+          <View style={styles.row}>
+            <Text style={[styles.rowLabel, { color: adminMode ? C.danger : C.fg }]}>🔑 관리자 모드</Text>
+            <Switch
+              value={adminMode}
+              onValueChange={setAdminMode}
+              trackColor={{ false: '#262626', true: C.danger }}
+              thumbColor="#ffffff"
+            />
+          </View>
+          {adminMode && (
+            <Text style={{ color: C.danger, fontSize: 11, paddingHorizontal: 16, paddingBottom: 8 }}>
+              모든 콘텐츠 삭제 권한이 활성화되었습니다
+            </Text>
+          )}
         </Animated.View>
       )}
 

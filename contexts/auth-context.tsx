@@ -5,6 +5,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
@@ -20,6 +21,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
+  adminMode: boolean;
+  setAdminMode: (v: boolean) => void;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -28,6 +31,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [adminMode, setAdminModeState] = useState(false);
+
+  const setAdminMode = (v: boolean) => {
+    setAdminModeState(v);
+    AsyncStorage.setItem("admin_mode", v ? "1" : "0");
+  };
 
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase
@@ -36,6 +45,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq("id", userId)
       .single();
     setProfile(data);
+    if (data?.username === "gocoder") {
+      const stored = await AsyncStorage.getItem("admin_mode");
+      setAdminModeState(stored === "1");
+    } else {
+      setAdminModeState(false);
+    }
   };
 
   useEffect(() => {
@@ -118,6 +133,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signOut,
         refreshProfile,
+        adminMode: profile?.username === "gocoder" ? adminMode : false,
+        setAdminMode,
       }}
     >
       {children}

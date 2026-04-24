@@ -99,7 +99,7 @@ export default function MouiScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { user: userParam } = useLocalSearchParams<{ user?: string }>();
-  const { user, profile } = useAuth();
+  const { user, profile, adminMode } = useAuth();
   const { colors: C } = useThemeMode();
   const activityRegion = formatRegionLabel(profile?.region);
 
@@ -107,6 +107,7 @@ export default function MouiScreen() {
   const [loading, setLoading] = useState(true);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState(userParam ?? '');
+  const [showSearchBar, setShowSearchBar] = useState(!!(userParam));
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
@@ -368,12 +369,6 @@ export default function MouiScreen() {
           { backgroundColor: isOwner ? C.goldDim : C.card, borderColor: isOwner ? C.gold : C.border, borderWidth: isOwner ? 1.5 : 1 },
           isClosed && { opacity: 0.85 },
         ]}>
-          {/* 내가 만든 모의 라벨 */}
-          {isOwner && (
-            <View style={[styles.ownerLabel, { backgroundColor: C.gold }]}>
-              <Text style={[styles.ownerLabelText, { color: '#000' }]}>👑 내가 만든 모의</Text>
-            </View>
-          )}
           {/* 상단: 카테고리 + 참석취소 + 상태 배지 */}
           <View style={styles.cardTopRow}>
             {item.category && (() => {
@@ -444,7 +439,7 @@ export default function MouiScreen() {
           <View style={[styles.infoBox, { backgroundColor: C.bg, borderColor: C.border }]}>
             {item.meeting_date && (
               <View style={styles.infoRow}>
-                <Text style={[styles.infoLabel, { color: C.muted }]}>모이는 날</Text>
+                <Text style={[styles.infoLabel, { color: C.muted }]}>날짜</Text>
                 {user ? (
                   <Text style={[styles.infoValue, { color: C.fg }]}>
                     {formatMeetingDate(item.meeting_date)}
@@ -595,19 +590,26 @@ export default function MouiScreen() {
               <Text style={[styles.joinBtnText, { color: '#fff' }]}>채팅 입장</Text>
             </Pressable>
           )}
-          {isOwner && (
+          {(isOwner || adminMode) && (
             <View style={styles.ownerActionRow}>
-              <Pressable
-                onPress={() => router.push(`/moui/create?edit=${item.id}`)}
-                style={({ pressed }) => [styles.closeBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
-              >
-                <Text style={[styles.closeBtnText, { color: C.muted }]}>수정하기</Text>
-              </Pressable>
+              {isOwner && (
+                <Pressable
+                  onPress={() => router.push(`/moui/create?edit=${item.id}`)}
+                  style={({ pressed }) => [styles.closeBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
+                >
+                  <Text style={[styles.closeBtnText, { color: C.muted }]}>수정하기</Text>
+                </Pressable>
+              )}
               <Pressable
                 onPress={() => {
                   const msg = '이 모집글을 삭제하시겠습니까?';
                   const doDelete = async () => {
-                    const { error } = await (supabase as any).from('moui_posts').delete().eq('id', item.id);
+                    let error;
+                    if (adminMode && !isOwner) {
+                      ({ error } = await supabase.rpc('admin_delete_moui_post', { post_id: item.id }));
+                    } else {
+                      ({ error } = await (supabase as any).from('moui_posts').delete().eq('id', item.id));
+                    }
                     if (error) { showAlert('오류', '삭제 실패: ' + error.message); }
                     else { fetchPosts(); }
                   };
@@ -683,87 +685,92 @@ export default function MouiScreen() {
                 { color: activityRegion ? C.gold : C.muted },
               ]}
             >
-              {activityRegion ? `📍 설정 위치: ${activityRegion}` : '📍 위치 설정'}
+              {activityRegion ? `📍 ${activityRegion}` : '📍 위치 설정'}
             </Text>
           </Pressable>
-          <View style={styles.headerRight}>
-            <Pressable
-              onPress={() => setShowFilterPanel(v => !v)}
-              style={({ pressed }) => [
-                styles.filterToggleBtn,
-                {
-                  borderColor: filterButtonActive ? C.gold + '99' : C.border,
-                  backgroundColor: filterButtonActive ? C.gold + '16' : C.card,
-                  shadowColor: filterButtonActive ? C.gold : '#000000',
-                },
-                pressed && styles.headerActionPressed,
-              ]}
-            >
-              <View
-                style={[
-                  styles.filterToggleIconWrap,
-                  { backgroundColor: filterButtonActive ? C.gold + '24' : C.bg },
-                ]}
-              >
-                <Ionicons
-                  name={showFilterPanel ? 'options' : 'options-outline'}
-                  size={12}
-                  color={filterButtonActive ? C.goldLight : C.fg}
-                />
+          <View style={{ flex: 1 }} />
+          {/* 돋보기 */}
+          <Pressable
+            onPress={() => { setShowSearchBar(v => !v); if (showSearchBar) setSearchQuery(''); }}
+            style={({ pressed }) => [
+              styles.metaBtn,
+              {
+                borderColor: showSearchBar ? C.gold + '99' : C.border,
+                backgroundColor: showSearchBar ? C.gold + '16' : C.card,
+                paddingHorizontal: 7,
+              },
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <Ionicons name={showSearchBar ? 'search' : 'search-outline'} size={11} color={showSearchBar ? C.gold : C.fg} />
+          </Pressable>
+          {/* 필터 */}
+          <Pressable
+            onPress={() => setShowFilterPanel(v => !v)}
+            style={({ pressed }) => [
+              styles.metaBtn,
+              {
+                borderColor: filterButtonActive ? C.gold + '99' : C.border,
+                backgroundColor: filterButtonActive ? C.gold + '16' : C.card,
+              },
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <Ionicons
+              name={showFilterPanel ? 'options' : 'options-outline'}
+              size={11}
+              color={filterButtonActive ? C.gold : C.fg}
+            />
+            <Text style={{ color: filterButtonActive ? C.gold : C.muted, fontSize: 11, fontWeight: '700' }}>
+              필터
+            </Text>
+            {activeFilterCount > 0 && (
+              <View style={[styles.filterToggleBadge, { backgroundColor: C.gold, borderColor: C.bg }]}>
+                <Text style={[styles.filterToggleBadgeText, { color: C.bg }]}>
+                  {activeFilterCount}
+                </Text>
               </View>
-              <Text style={[styles.filterToggleBtnText, { color: filterButtonActive ? C.fg : C.muted }]}>
-                필터
-              </Text>
-              {activeFilterCount > 0 && (
-                <View style={[styles.filterToggleBadge, { backgroundColor: C.gold, borderColor: C.bg }]}>
-                  <Text style={[styles.filterToggleBadgeText, { color: C.bg }]}>
-                    {activeFilterCount}
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-            <Pressable
-              onPress={() => {
-                if (!user) { promptSignup(); return; }
-                router.push('/moui/create');
-              }}
-              style={({ pressed }) => [
-                styles.headerBtn,
-                { shadowColor: createButtonShadow },
-                pressed && styles.headerActionPressed,
-              ]}
-            >
-              <LinearGradient
-                colors={createButtonGradient}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={[styles.headerBtnGradient, { borderColor: createButtonBorder }]}
-              >
-                <View style={[styles.headerBtnIconWrap, { backgroundColor: createButtonIconBg }]}>
-                  <Ionicons name="sparkles" size={13} color={createButtonText} />
-                </View>
-                <Text style={[styles.headerBtnText, { color: createButtonText }]}>모임만들기</Text>
-              </LinearGradient>
-            </Pressable>
+            )}
+          </Pressable>
+          {/* 만들기 */}
+          <Pressable
+            onPress={() => {
+              if (!user) { promptSignup(); return; }
+              router.push('/moui/create');
+            }}
+            style={({ pressed }) => [
+              styles.metaBtn,
+              {
+                borderColor: '#3a6a9a',
+                backgroundColor: '#1a3a5c',
+              },
+              pressed && { opacity: 0.6 },
+            ]}
+          >
+            <Ionicons name="add" size={11} color="#87CEEB" />
+            <Text style={{ color: '#87CEEB', fontSize: 11, fontWeight: '700' }}>만들기</Text>
+          </Pressable>
+        </View>
+        {showSearchBar && (
+          <View style={[styles.searchBarWrap, { backgroundColor: C.card, borderColor: searchQuery ? C.gold + '88' : C.border }]}>
+            <Ionicons name="search" size={14} color={searchQuery ? C.gold : C.muted} style={{ marginRight: 6 }} />
+            <TextInput
+              value={searchQuery}
+              onChangeText={(text) => { setSearchQuery(text); if (text.trim()) setActiveTab('all'); }}
+              placeholder="모임을 검색하세요"
+              placeholderTextColor={C.muted}
+              style={[styles.searchBarInput, { color: C.fg }]}
+              autoCapitalize="none"
+              autoCorrect={false}
+              autoFocus
+            />
+            {searchQuery.length > 0 && (
+              <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+                <Ionicons name="close-circle" size={16} color={C.muted} />
+              </Pressable>
+            )}
           </View>
-        </View>
-        <View style={[styles.searchBarWrap, { backgroundColor: C.card, borderColor: searchQuery ? C.gold + '88' : C.border }]}>
-          <Ionicons name="search" size={14} color={searchQuery ? C.gold : C.muted} style={{ marginRight: 6 }} />
-          <TextInput
-            value={searchQuery}
-            onChangeText={(text) => { setSearchQuery(text); if (text.trim()) setActiveTab('all'); }}
-            placeholder="모임을 검색하세요"
-            placeholderTextColor={C.muted}
-            style={[styles.searchBarInput, { color: C.fg }]}
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {searchQuery.length > 0 && (
-            <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={16} color={C.muted} />
-            </Pressable>
-          )}
-        </View>
+        )}
       </Animated.View>
 
       {/* 탭바: 전체 / 참여중 / 만든 모임 — 검색 중이면 숨김 */}
@@ -1001,6 +1008,16 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 5,
+  },
+  metaBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    position: 'relative',
   },
   regionChipText: {
     fontSize: 11,

@@ -509,3 +509,101 @@ BEGIN
     UPDATE chat_requests SET receiver_last_read_at = now() WHERE id = request_id;
   END IF;
 END; $$;
+
+-- =========================
+-- 관리자 회원 삭제 RPC
+-- =========================
+CREATE OR REPLACE FUNCTION public.admin_delete_member(target_user_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  -- 관리자 확인
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND username = 'gocoder') THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+  -- 자기 자신 삭제 방지
+  IF target_user_id = auth.uid() THEN
+    RAISE EXCEPTION 'Cannot delete yourself';
+  END IF;
+
+  -- exhibition_artworks (exhibition cascade 전에)
+  DELETE FROM exhibition_artworks WHERE exhibition_id IN (SELECT id FROM exhibitions WHERE user_id = target_user_id);
+
+  -- moui 관련
+  DELETE FROM moui_chat_messages WHERE moui_post_id IN (SELECT id FROM moui_posts WHERE user_id = target_user_id);
+  DELETE FROM moui_participants WHERE moui_post_id IN (SELECT id FROM moui_posts WHERE user_id = target_user_id);
+  DELETE FROM moui_chat_messages WHERE sender_id = target_user_id;
+  DELETE FROM moui_participants WHERE user_id = target_user_id;
+  DELETE FROM moui_posts WHERE user_id = target_user_id;
+
+  -- chat 관련
+  DELETE FROM chat_messages WHERE request_id IN (SELECT id FROM chat_requests WHERE sender_id = target_user_id OR receiver_id = target_user_id);
+  DELETE FROM chat_requests WHERE sender_id = target_user_id OR receiver_id = target_user_id;
+
+  -- 기타
+  DELETE FROM follows WHERE follower_id = target_user_id OR following_id = target_user_id;
+  DELETE FROM verification_requests WHERE user_id = target_user_id;
+  DELETE FROM attendance WHERE user_id = target_user_id;
+  DELETE FROM point_history WHERE user_id = target_user_id;
+  DELETE FROM exhibitions WHERE user_id = target_user_id;
+  DELETE FROM artworks WHERE user_id = target_user_id;
+
+  -- 프로필 삭제
+  DELETE FROM profiles WHERE id = target_user_id;
+END; $$;
+
+-- 관리자 회원 수정 RPC
+CREATE OR REPLACE FUNCTION public.admin_update_member(
+  target_user_id uuid,
+  new_username text,
+  new_name text,
+  new_user_type text,
+  new_verified boolean,
+  new_points integer,
+  new_region text
+)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  v_old_points integer;
+  v_diff integer;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND username = 'gocoder') THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+
+  SELECT points INTO v_old_points FROM profiles WHERE id = target_user_id;
+  IF NOT FOUND THEN RAISE EXCEPTION 'User not found'; END IF;
+
+  v_diff := new_points - v_old_points;
+
+  UPDATE profiles SET
+    username = new_username,
+    name = new_name,
+    user_type = new_user_type,
+    verified = new_verified,
+    points = new_points,
+    region = new_region
+  WHERE id = target_user_id;
+
+  IF v_diff <> 0 THEN
+    INSERT INTO point_history (user_id, amount, balance, type, description)
+    VALUES (
+      target_user_id,
+      v_diff,
+      new_points,
+      CASE WHEN v_diff > 0 THEN 'admin_add' ELSE 'admin_deduct' END,
+      CASE WHEN v_diff > 0 THEN '관리자 포인트 지급 ' || v_diff ELSE '관리자 포인트 차감 ' || v_diff END
+    );
+  END IF;
+END; $$;
+
+-- 관리자 모임 삭제 RPC (다른 유저의 모임도 삭제 가능)
+CREATE OR REPLACE FUNCTION public.admin_delete_moui_post(post_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND username = 'gocoder') THEN
+    RAISE EXCEPTION 'Unauthorized';
+  END IF;
+  DELETE FROM moui_chat_messages WHERE moui_post_id = post_id;
+  DELETE FROM moui_participants WHERE moui_post_id = post_id;
+  DELETE FROM moui_posts WHERE id = post_id;
+END; $$;
