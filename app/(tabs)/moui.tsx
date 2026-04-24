@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet, View, Text, Pressable, SectionList, ActivityIndicator,
-  Platform, Alert, Linking, TextInput,
+  Platform, Alert, Linking, TextInput, Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -471,49 +471,43 @@ export default function MouiScreen() {
                 </View>
               ) : null;
             })()}
-          </View>
-
-          {/* 태그 영역: 분야 + 모집 대상 */}
-          {(item.fields || targetKeys.length > 0) && (
-            <View style={styles.postMetaSection}>
-              {item.fields && (
-                <View style={styles.postMetaRow}>
-                  <Text style={[styles.postMetaLabel, { color: C.muted }]}>분야</Text>
-                  <View style={styles.postTagRow}>
-                    {item.fields.trim() === '전체' ? (
-                      <View style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                        <Text style={[styles.postTagText, { color: C.gold }]}>🌐 전체 분야</Text>
-                      </View>
-                    ) : (
-                      item.fields.split(',').map(f => {
-                        const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
-                        return (
-                          <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                            <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
-                          </View>
-                        );
-                      })
-                    )}
-                  </View>
-                </View>
-              )}
-              {targetKeys.length > 0 && (
-                <View style={styles.postMetaRow}>
-                  <Text style={[styles.postMetaLabel, { color: C.muted }]}>모집 대상</Text>
-                  <View style={styles.postTagRow}>
-                    {targetKeys.map(key => {
-                      const t = TARGET_OPTIONS.find(o => o.key === key);
-                      return t ? (
-                        <View key={key} style={[styles.postTag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22' }]}>
-                          <Text style={[styles.postTagText, { color: C.fg, opacity: 0.82 }]}>{t.icon} {t.label}</Text>
+            {item.fields && (
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: C.muted }]}>분야</Text>
+                <View style={[styles.postTagRow, { flex: 1 }]}>
+                  {item.fields.trim() === '전체' ? (
+                    <View style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                      <Text style={[styles.postTagText, { color: C.gold }]}>🌐 전체 분야</Text>
+                    </View>
+                  ) : (
+                    item.fields.split(',').map(f => {
+                      const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
+                      return (
+                        <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                          <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
                         </View>
-                      ) : null;
-                    })}
-                  </View>
+                      );
+                    })
+                  )}
                 </View>
-              )}
-            </View>
-          )}
+              </View>
+            )}
+            {targetKeys.length > 0 && (
+              <View style={styles.infoRow}>
+                <Text style={[styles.infoLabel, { color: C.muted }]}>모집 대상</Text>
+                <View style={[styles.postTagRow, { flex: 1 }]}>
+                  {targetKeys.map(key => {
+                    const t = TARGET_OPTIONS.find(o => o.key === key);
+                    return t ? (
+                      <View key={key} style={[styles.postTag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22' }]}>
+                        <Text style={[styles.postTagText, { color: C.fg, opacity: 0.82 }]}>{t.icon} {t.label}</Text>
+                      </View>
+                    ) : null;
+                  })}
+                </View>
+              </View>
+            )}
+          </View>
 
           {/* 참여자 */}
           {(() => {
@@ -578,12 +572,12 @@ export default function MouiScreen() {
             <Pressable
               onPress={() => router.push(`/moui/${item.id}` as any)}
               style={({ pressed }) => [
-                styles.enterBtn,
-                { backgroundColor: C.gold },
+                styles.joinBtn,
+                { backgroundColor: '#5cb85c', borderColor: '#4cae4c' },
                 pressed && { opacity: 0.7 },
               ]}
             >
-              <Text style={[styles.enterBtnText, { color: C.bg }]}>입장하기</Text>
+              <Text style={[styles.joinBtnText, { color: '#fff' }]}>채팅 입장</Text>
             </Pressable>
           )}
           {isOwner && (
@@ -757,91 +751,96 @@ export default function MouiScreen() {
         </View>
       </Animated.View>
 
-      {/* 접이식 필터 패널 */}
-      {showFilterPanel && (
-        <Animated.View entering={FadeInDown.duration(200)} style={[styles.filterPanel, { backgroundColor: C.card, borderBottomColor: C.border }]}>
-          {/* 카테고리 */}
-          <View style={styles.filterSection}>
-            <Text style={[styles.filterSectionLabel, { color: C.muted }]}>카테고리</Text>
-            <View style={styles.filterChipRow}>
-              <Pressable
-                onPress={() => setSelectedCategories(new Set())}
-                style={[styles.filterChip, { backgroundColor: selectedCategories.size === 0 ? C.gold : C.bg, borderColor: selectedCategories.size === 0 ? C.gold : C.border }]}
-              >
-                <Text style={[styles.filterChipText, { color: selectedCategories.size === 0 ? C.bg : C.muted }]}>전체</Text>
-              </Pressable>
-              {MOUI_CATEGORIES.map(cat => {
-                const active = selectedCategories.has(cat.key);
-                return (
-                  <Pressable
-                    key={cat.key}
-                    onPress={() => setSelectedCategories(prev => {
-                      const next = new Set(prev);
-                      if (next.has(cat.key)) next.delete(cat.key); else next.add(cat.key);
-                      return next;
-                    })}
-                    style={[styles.filterChip, { backgroundColor: active ? C.gold : C.bg, borderColor: active ? C.gold : C.border }]}
-                  >
-                    <Text style={[styles.filterChipText, { color: active ? C.bg : C.muted }]}>{cat.icon} {cat.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* 거리 */}
-          {myRegion && (
+      {/* 필터 오버레이 */}
+      <Modal
+        visible={showFilterPanel}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFilterPanel(false)}
+      >
+        <Pressable style={styles.filterOverlayBackdrop} onPress={() => setShowFilterPanel(false)}>
+          <Pressable style={[styles.filterPanel, { backgroundColor: C.card, borderBottomColor: C.border }]} onPress={e => e.stopPropagation()}>
+            {/* 카테고리 */}
             <View style={styles.filterSection}>
-              <Text style={[styles.filterSectionLabel, { color: C.muted }]}>거리</Text>
+              <Text style={[styles.filterSectionLabel, { color: C.muted }]}>카테고리</Text>
               <View style={styles.filterChipRow}>
-                {([
-                  { key: null, label: '전체' },
-                  { key: 'near', label: '📍 근처' },
-                  { key: 'close', label: '🚶 가까운' },
-                  { key: 'far', label: '🚀 먼' },
-                ] as const).map(d => {
-                  const active = selectedDistance === d.key;
+                <Pressable
+                  onPress={() => setSelectedCategories(new Set())}
+                  style={[styles.filterChip, { backgroundColor: selectedCategories.size === 0 ? C.gold : C.bg, borderColor: selectedCategories.size === 0 ? C.gold : C.border }]}
+                >
+                  <Text style={[styles.filterChipText, { color: selectedCategories.size === 0 ? C.bg : C.muted }]}>전체</Text>
+                </Pressable>
+                {MOUI_CATEGORIES.map(cat => {
+                  const active = selectedCategories.has(cat.key);
                   return (
                     <Pressable
-                      key={d.key ?? 'all'}
-                      onPress={() => setSelectedDistance(d.key)}
-                      style={[styles.filterChip, { backgroundColor: active ? C.gold + '18' : C.bg, borderColor: active ? C.gold : C.border }]}
+                      key={cat.key}
+                      onPress={() => setSelectedCategories(prev => {
+                        const next = new Set(prev);
+                        if (next.has(cat.key)) next.delete(cat.key); else next.add(cat.key);
+                        return next;
+                      })}
+                      style={[styles.filterChip, { backgroundColor: active ? C.gold : C.bg, borderColor: active ? C.gold : C.border }]}
                     >
-                      <Text style={[styles.filterChipText, { color: active ? C.gold : C.muted }]}>{d.label}</Text>
+                      <Text style={[styles.filterChipText, { color: active ? C.bg : C.muted }]}>{cat.icon} {cat.label}</Text>
                     </Pressable>
                   );
                 })}
               </View>
             </View>
-          )}
 
-          {/* 내 모임 */}
-          {user && (myJoinedCount > 0 || myPostsCount > 0) && (
-            <View style={styles.filterSection}>
-              <Text style={[styles.filterSectionLabel, { color: C.muted }]}>내 모임</Text>
-              <View style={styles.filterChipRow}>
-                {myJoinedCount > 0 && (
-                  <Pressable
-                    onPress={() => setShowMyJoined(v => !v)}
-                    style={[styles.filterChip, { backgroundColor: showMyJoined ? C.gold + '18' : C.bg, borderColor: showMyJoined ? C.gold : C.border }]}
-                  >
-                    <Text style={[styles.filterChipText, { color: showMyJoined ? C.gold : C.muted }]}>참여중 ({myJoinedCount})</Text>
-                  </Pressable>
-                )}
-                {myPostsCount > 0 && (
-                  <Pressable
-                    onPress={() => setShowMyPosts(v => !v)}
-                    style={[styles.filterChip, { backgroundColor: showMyPosts ? C.gold + '18' : C.bg, borderColor: showMyPosts ? C.gold : C.border }]}
-                  >
-                    <Text style={[styles.filterChipText, { color: showMyPosts ? C.gold : C.muted }]}>내가 만든 ({myPostsCount})</Text>
-                  </Pressable>
-                )}
+            {/* 거리 */}
+            {myRegion && (
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterSectionLabel, { color: C.muted }]}>거리</Text>
+                <View style={styles.filterChipRow}>
+                  {([
+                    { key: null, label: '전체' },
+                    { key: 'near', label: '📍 근처' },
+                    { key: 'close', label: '🚶 가까운' },
+                    { key: 'far', label: '🚀 먼' },
+                  ] as const).map(d => {
+                    const active = selectedDistance === d.key;
+                    return (
+                      <Pressable
+                        key={d.key ?? 'all'}
+                        onPress={() => setSelectedDistance(d.key)}
+                        style={[styles.filterChip, { backgroundColor: active ? C.gold + '18' : C.bg, borderColor: active ? C.gold : C.border }]}
+                      >
+                        <Text style={[styles.filterChipText, { color: active ? C.gold : C.muted }]}>{d.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
               </View>
-            </View>
-          )}
+            )}
 
-          {/* 활성 필터 태그 + 초기화 */}
-          {activeFilterCount > 0 && (
+            {/* 내 모임 */}
+            {user && (myJoinedCount > 0 || myPostsCount > 0) && (
+              <View style={styles.filterSection}>
+                <Text style={[styles.filterSectionLabel, { color: C.muted }]}>내 모임</Text>
+                <View style={styles.filterChipRow}>
+                  {myJoinedCount > 0 && (
+                    <Pressable
+                      onPress={() => setShowMyJoined(v => !v)}
+                      style={[styles.filterChip, { backgroundColor: showMyJoined ? C.gold + '18' : C.bg, borderColor: showMyJoined ? C.gold : C.border }]}
+                    >
+                      <Text style={[styles.filterChipText, { color: showMyJoined ? C.gold : C.muted }]}>참여중 ({myJoinedCount})</Text>
+                    </Pressable>
+                  )}
+                  {myPostsCount > 0 && (
+                    <Pressable
+                      onPress={() => setShowMyPosts(v => !v)}
+                      style={[styles.filterChip, { backgroundColor: showMyPosts ? C.gold + '18' : C.bg, borderColor: showMyPosts ? C.gold : C.border }]}
+                    >
+                      <Text style={[styles.filterChipText, { color: showMyPosts ? C.gold : C.muted }]}>내가 만든 ({myPostsCount})</Text>
+                    </Pressable>
+                  )}
+                </View>
+              </View>
+            )}
+
+            {/* 활성 필터 태그 + 초기화 + 닫기 */}
             <View style={styles.activeFilterRow}>
               <View style={styles.activeFilterTags}>
                 {activeFilterTags.map((tag, i) => (
@@ -854,13 +853,20 @@ export default function MouiScreen() {
                   </Pressable>
                 ))}
               </View>
-              <Pressable onPress={clearFilters} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
-                <Text style={[styles.clearFiltersText, { color: C.danger }]}>초기화</Text>
-              </Pressable>
+              <View style={styles.filterActionBtns}>
+                {activeFilterCount > 0 && (
+                  <Pressable onPress={clearFilters} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
+                    <Text style={[styles.clearFiltersText, { color: C.danger }]}>초기화</Text>
+                  </Pressable>
+                )}
+                <Pressable onPress={() => setShowFilterPanel(false)} style={({ pressed }) => [styles.filterCloseBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}>
+                  <Text style={[styles.filterCloseBtnText, { color: C.fg }]}>닫기</Text>
+                </Pressable>
+              </View>
             </View>
-          )}
-        </Animated.View>
-      )}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
       {/* 활성 필터가 있을 때 패널 닫혀있어도 태그 표시 */}
       {!showFilterPanel && activeFilterCount > 0 && (
@@ -1062,12 +1068,20 @@ const styles = StyleSheet.create({
     transform: [{ scale: 0.98 }],
   },
 
-  /* 접이식 필터 패널 */
+  /* 필터 오버레이 */
+  filterOverlayBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-start',
+  },
   filterPanel: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 16,
+    paddingTop: 20,
     gap: 12,
     borderBottomWidth: 1,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   filterSection: {
     gap: 6,
@@ -1120,6 +1134,21 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     paddingLeft: 8,
+  },
+  filterActionBtns: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterCloseBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  filterCloseBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
   },
   collapsedFilterRow: {
     flexDirection: 'row',
