@@ -238,7 +238,7 @@ export default function ProfileScreen() {
       .select('id, title, room_type, poster_image_url, is_published, created_at')
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false })
-      .limit(10);
+      .limit(4);
     if (data) setExhibitions(data);
 
     // Compute creation-order number for URL (published only)
@@ -262,7 +262,7 @@ export default function ProfileScreen() {
       .select('id, title, image_url')
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false })
-      .limit(10);
+      .limit(4);
     if (data) setRecentArtworks(data as RecentArtwork[]);
   }, [user]);
 

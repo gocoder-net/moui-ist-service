@@ -341,6 +341,7 @@ export default function LoginScreen() {
         <FloatingShape shape="line" size={90} color={C.goldLight} opacity={0.08} top="68%" left="42%" duration={4500} delay={300} />
       </View>
 
+      <View style={styles.innerContainer}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -456,6 +457,7 @@ export default function LoginScreen() {
           </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
+      </View>
     </View>
   );
 }
@@ -464,6 +466,12 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: C.bg,
+  },
+  innerContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
   },
   scroll: {
     flexGrow: 1,
