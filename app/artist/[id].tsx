@@ -308,7 +308,9 @@ function ArtworkViewer({
   artistProfile?: Profile | null;
 }) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { width: screenW, height: screenH } = useWindowDimensions();
+  const { user } = useAuth();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [viewerHovered, setViewerHovered] = useState(false);
   const flatListRef = useRef<FlatList<Artwork>>(null);
@@ -317,9 +319,96 @@ function ArtworkViewer({
   const viewerImageHeight = isWebViewer ? screenH * 0.72 : screenH * 0.6;
   const viewerNavOffset = isWebViewer ? Math.max((screenW - viewerFrameWidth) / 2 + 18, 18) : 18;
 
+  // Likes & Comments
+  const [liked, setLiked] = useState(false);
+  const [likeCount, setLikeCount] = useState(0);
+  const [comments, setComments] = useState<{ id: string; content: string; user_id: string; username: string; avatar_url: string | null; created_at: string }[]>([]);
+  const [commentText, setCommentText] = useState('');
+  const [showComments, setShowComments] = useState(false);
+  const [commentCount, setCommentCount] = useState(0);
+  const likeScale = useSharedValue(1);
+  const likeRotation = useSharedValue(0);
+
+  const loadLikesComments = useCallback(async (artworkId: string) => {
+    const [{ count: lc }, { count: cc }] = await Promise.all([
+      supabase.from('artwork_likes').select('id', { count: 'exact', head: true }).eq('artwork_id', artworkId),
+      supabase.from('artwork_comments').select('id', { count: 'exact', head: true }).eq('artwork_id', artworkId),
+    ]);
+    setLikeCount(lc ?? 0);
+    setCommentCount(cc ?? 0);
+    if (user?.id) {
+      const { count: myLike } = await supabase.from('artwork_likes').select('id', { count: 'exact', head: true }).eq('artwork_id', artworkId).eq('user_id', user.id);
+      setLiked((myLike ?? 0) > 0);
+    }
+  }, [user]);
+
+  const loadCommentsList = useCallback(async (artworkId: string) => {
+    const { data } = await supabase
+      .from('artwork_comments')
+      .select('id, content, user_id, created_at, profiles!artwork_comments_user_id_fkey(username, avatar_url)')
+      .eq('artwork_id', artworkId)
+      .order('created_at', { ascending: true });
+    if (data) {
+      setComments(data.map((c: any) => ({
+        id: c.id,
+        content: c.content,
+        user_id: c.user_id,
+        username: c.profiles?.username ?? '',
+        avatar_url: c.profiles?.avatar_url ?? null,
+        created_at: c.created_at,
+      })));
+    }
+  }, []);
+
+  const toggleLike = async () => {
+    const aw = artworks[currentIndex];
+    if (!aw || !user?.id) return;
+    if (liked) {
+      await supabase.from('artwork_likes').delete().match({ artwork_id: aw.id, user_id: user.id });
+      setLiked(false);
+      setLikeCount(c => Math.max(0, c - 1));
+    } else {
+      await supabase.from('artwork_likes').insert({ artwork_id: aw.id, user_id: user.id });
+      setLiked(true);
+      setLikeCount(c => c + 1);
+      // 애니메이션
+      likeScale.value = withSequence(
+        withTiming(1.4, { duration: 150 }),
+        withTiming(1, { duration: 200 }),
+      );
+      likeRotation.value = withSequence(
+        withTiming(360, { duration: 600, easing: Easing.out(Easing.ease) }),
+        withTiming(360, { duration: 0 }),
+      );
+      setTimeout(() => { likeRotation.value = 0; }, 700);
+    }
+  };
+
+  const submitComment = async () => {
+    const aw = artworks[currentIndex];
+    if (!aw || !user?.id || !commentText.trim()) return;
+    await supabase.from('artwork_comments').insert({ artwork_id: aw.id, user_id: user.id, content: commentText.trim() });
+    setCommentText('');
+    setCommentCount(c => c + 1);
+    loadCommentsList(aw.id);
+  };
+
+  const likeAnimStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: likeScale.value }, { rotate: `${likeRotation.value}deg` }],
+  }));
+
   useEffect(() => {
     setCurrentIndex(initialIndex);
   }, [initialIndex]);
+
+  useEffect(() => {
+    const aw = artworks[currentIndex];
+    if (aw && visible) {
+      loadLikesComments(aw.id);
+      setShowComments(false);
+      setComments([]);
+    }
+  }, [currentIndex, visible, artworks, loadLikesComments]);
 
   if (!visible) return null;
 
@@ -520,12 +609,70 @@ function ArtworkViewer({
             )}
           </View>
 
-          {/* pagination */}
-          {artworks.length > 1 && (
-            <View style={styles.viewerDots}>
+          {/* Like + Comment + Pagination row */}
+          <View style={styles.viewerBottomRow}>
+            <View style={styles.viewerSocialRow}>
+              {/* Like button */}
+              <Pressable onPress={toggleLike} style={styles.viewerLikeBtn}>
+                <Animated.View style={[styles.viewerDiamond, liked && styles.viewerDiamondFilled, likeAnimStyle]} />
+                {likeCount > 0 && <Text style={styles.viewerLikeCount}>{likeCount}</Text>}
+              </Pressable>
+              {/* Comment button */}
+              <Pressable onPress={() => { setShowComments(!showComments); if (!showComments && artwork) loadCommentsList(artwork.id); }} style={styles.viewerCommentBtn}>
+                <Text style={styles.viewerCommentIcon}>💬</Text>
+                {commentCount > 0 && <Text style={styles.viewerCommentCount}>{commentCount}</Text>}
+              </Pressable>
+            </View>
+            {artworks.length > 1 && (
               <Text style={styles.viewerCounter}>
                 {currentIndex + 1} / {artworks.length}
               </Text>
+            )}
+          </View>
+
+          {/* Comments section */}
+          {showComments && (
+            <View style={styles.viewerCommentsSection}>
+              <ScrollView style={styles.viewerCommentsList} showsVerticalScrollIndicator={false}>
+                {comments.length === 0 ? (
+                  <Text style={styles.viewerCommentsEmpty}>아직 댓글이 없습니다</Text>
+                ) : (
+                  comments.map((c) => (
+                    <View key={c.id} style={styles.viewerCommentItem}>
+                      <Pressable onPress={() => { onClose(); router.push(`/artist/${c.username}`); }}>
+                        {c.avatar_url ? (
+                          <Image source={{ uri: c.avatar_url }} style={styles.viewerCommentAvatar} resizeMode="cover" />
+                        ) : (
+                          <View style={[styles.viewerCommentAvatar, { backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }]}>
+                            <Text style={{ color: '#fff', fontSize: 8, fontWeight: '700' }}>{c.username.charAt(0).toUpperCase()}</Text>
+                          </View>
+                        )}
+                      </Pressable>
+                      <View style={{ flex: 1 }}>
+                        <Pressable onPress={() => { onClose(); router.push(`/artist/${c.username}`); }}>
+                          <Text style={styles.viewerCommentUser}>{c.username}</Text>
+                        </Pressable>
+                        <Text style={styles.viewerCommentText}>{c.content}</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+              {user?.id && (
+                <View style={styles.viewerCommentInputRow}>
+                  <TextInput
+                    style={styles.viewerCommentInput}
+                    value={commentText}
+                    onChangeText={setCommentText}
+                    placeholder="댓글 달기..."
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    maxLength={200}
+                  />
+                  <Pressable onPress={submitComment} style={({ pressed }) => [styles.viewerCommentSend, pressed && { opacity: 0.6 }]}>
+                    <Text style={styles.viewerCommentSendText}>게시</Text>
+                  </Pressable>
+                </View>
+              )}
             </View>
           )}
         </LinearGradient>
@@ -576,6 +723,11 @@ export default function ArtistPortfolioScreen() {
   const [collections, setCollections] = useState<CollectionWithArtworks[]>([]);
   const [selectedCollectionId, setSelectedCollectionId] = useState<string | null>(null);
   const [colVisibleCounts, setColVisibleCounts] = useState<Record<string, number>>({});
+  const [colLikes, setColLikes] = useState<Record<string, { liked: boolean; count: number }>>({});
+  const [colCommentCounts, setColCommentCounts] = useState<Record<string, number>>({});
+  const [colCommentsOpen, setColCommentsOpen] = useState<string | null>(null);
+  const [colCommentsList, setColCommentsList] = useState<{ id: string; content: string; username: string; avatar_url: string | null }[]>([]);
+  const [colCommentText, setColCommentText] = useState('');
   const colFilterScrollRef = useRef<ScrollView>(null);
   const colFilterScrollX = useRef(0);
 
@@ -727,6 +879,24 @@ export default function ArtistPortfolioScreen() {
         }),
       );
       setCollections(colsWithArt);
+      // Load collection likes & comment counts
+      const likesMap: Record<string, { liked: boolean; count: number }> = {};
+      const ccMap: Record<string, number> = {};
+      await Promise.all(colsWithArt.map(async (c) => {
+        const [{ count: lc }, { count: cc }] = await Promise.all([
+          supabase.from('collection_likes').select('id', { count: 'exact', head: true }).eq('collection_id', c.id),
+          supabase.from('collection_comments').select('id', { count: 'exact', head: true }).eq('collection_id', c.id),
+        ]);
+        let myLiked = false;
+        if (user?.id) {
+          const { count: ml } = await supabase.from('collection_likes').select('id', { count: 'exact', head: true }).eq('collection_id', c.id).eq('user_id', user.id);
+          myLiked = (ml ?? 0) > 0;
+        }
+        likesMap[c.id] = { liked: myLiked, count: lc ?? 0 };
+        ccMap[c.id] = cc ?? 0;
+      }));
+      setColLikes(likesMap);
+      setColCommentCounts(ccMap);
       // URL에 collectionId가 있으면 works 탭에서 해당 아카이브 선택
       if (paramCollectionId && colsWithArt.find(c => c.id === paramCollectionId)) {
         setActiveTab('works');
@@ -858,6 +1028,40 @@ export default function ArtistPortfolioScreen() {
       setFollowers(withArtworks);
     }
     setFollowerModalVisible(true);
+  };
+
+  const toggleColLike = async (colId: string) => {
+    if (!user?.id) return;
+    const current = colLikes[colId];
+    if (current?.liked) {
+      await supabase.from('collection_likes').delete().match({ collection_id: colId, user_id: user.id });
+      setColLikes(prev => ({ ...prev, [colId]: { liked: false, count: Math.max(0, (prev[colId]?.count ?? 1) - 1) } }));
+    } else {
+      await supabase.from('collection_likes').insert({ collection_id: colId, user_id: user.id });
+      setColLikes(prev => ({ ...prev, [colId]: { liked: true, count: (prev[colId]?.count ?? 0) + 1 } }));
+    }
+  };
+
+  const openColComments = async (colId: string) => {
+    if (colCommentsOpen === colId) { setColCommentsOpen(null); return; }
+    const { data } = await supabase
+      .from('collection_comments')
+      .select('id, content, user_id, profiles!collection_comments_user_id_fkey(username, avatar_url)')
+      .eq('collection_id', colId)
+      .order('created_at', { ascending: true });
+    setColCommentsList(data?.map((c: any) => ({
+      id: c.id, content: c.content, username: c.profiles?.username ?? '', avatar_url: c.profiles?.avatar_url ?? null,
+    })) ?? []);
+    setColCommentsOpen(colId);
+    setColCommentText('');
+  };
+
+  const submitColComment = async () => {
+    if (!user?.id || !colCommentsOpen || !colCommentText.trim()) return;
+    await supabase.from('collection_comments').insert({ collection_id: colCommentsOpen, user_id: user.id, content: colCommentText.trim() });
+    setColCommentText('');
+    setColCommentCounts(prev => ({ ...prev, [colCommentsOpen]: (prev[colCommentsOpen] ?? 0) + 1 }));
+    openColComments(colCommentsOpen);
   };
 
   const heroContentStyle = useAnimatedStyle(() => ({
@@ -1277,7 +1481,7 @@ export default function ArtistPortfolioScreen() {
                       setSelectedCollectionId(col.id);
                       setActiveTab('works');
                     }}>
-                      <Text style={[styles.colTitle, { color: C.gold }]}>{col.title} →</Text>
+                      <Text style={[styles.colTitle, { color: C.gold }]}>{col.title} 📎</Text>
                       {col.description ? (
                         <Text style={[styles.colDesc, { color: C.muted }]} numberOfLines={2}>{col.description}</Text>
                       ) : null}
@@ -1312,6 +1516,60 @@ export default function ArtistPortfolioScreen() {
                     >
                       <Text style={[styles.colMoreText, { color: C.gold }]}>+ {Math.min(3, col.artworks.length - visibleCount)}개 더보기</Text>
                     </Pressable>
+                  )}
+
+                  {/* Like + Comment for archive */}
+                  <View style={styles.colSocialRow}>
+                    <Pressable onPress={() => toggleColLike(col.id)} style={styles.colSocialBtn}>
+                      <View style={[styles.colSocialDiamond, colLikes[col.id]?.liked && styles.colSocialDiamondFilled]} />
+                      {(colLikes[col.id]?.count ?? 0) > 0 && (
+                        <Text style={[styles.colSocialCount, { color: C.gold }]}>{colLikes[col.id].count}</Text>
+                      )}
+                    </Pressable>
+                    <Pressable onPress={() => openColComments(col.id)} style={styles.colSocialBtn}>
+                      <Text style={{ fontSize: 16 }}>💬</Text>
+                      {(colCommentCounts[col.id] ?? 0) > 0 && (
+                        <Text style={[styles.colSocialCount, { color: C.muted }]}>{colCommentCounts[col.id]}</Text>
+                      )}
+                    </Pressable>
+                  </View>
+
+                  {/* Comments expand */}
+                  {colCommentsOpen === col.id && (
+                    <View style={styles.colCommentsWrap}>
+                      {colCommentsList.length === 0 ? (
+                        <Text style={[styles.colCommentsEmpty, { color: C.muted }]}>아직 댓글이 없습니다</Text>
+                      ) : (
+                        colCommentsList.map((c) => (
+                          <Pressable key={c.id} style={styles.colCommentRow} onPress={() => router.push(`/artist/${c.username}`)}>
+                            {c.avatar_url ? (
+                              <Image source={{ uri: c.avatar_url }} style={styles.colCommentAvatar} resizeMode="cover" />
+                            ) : (
+                              <View style={[styles.colCommentAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
+                                <Text style={{ fontSize: 8, fontWeight: '700', color: C.fg }}>{c.username.charAt(0)}</Text>
+                              </View>
+                            )}
+                            <Text style={[styles.colCommentUser, { color: C.muted }]}>{c.username}</Text>
+                            <Text style={[styles.colCommentContent, { color: C.fg }]} numberOfLines={2}>{c.content}</Text>
+                          </Pressable>
+                        ))
+                      )}
+                      {user?.id && (
+                        <View style={[styles.colCommentInputRow, { borderTopColor: C.border }]}>
+                          <TextInput
+                            style={[styles.colCommentInput, { color: C.fg, backgroundColor: C.bg, borderColor: C.border }]}
+                            value={colCommentText}
+                            onChangeText={setColCommentText}
+                            placeholder="댓글 달기..."
+                            placeholderTextColor={C.mutedLight}
+                            maxLength={200}
+                          />
+                          <Pressable onPress={submitColComment} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
+                            <Text style={[styles.colCommentSendText, { color: C.gold }]}>게시</Text>
+                          </Pressable>
+                        </View>
+                      )}
+                    </View>
                   )}
                 </View>
                 );
@@ -2118,9 +2376,111 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#D94040',
   },
-  viewerDots: {
-    marginTop: 12,
+  viewerBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 12,
+  },
+  viewerSocialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  viewerLikeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  viewerDiamond: {
+    width: 22,
+    height: 22,
+    borderWidth: 2,
+    borderColor: '#C8A96E',
+    transform: [{ rotate: '45deg' }],
+  },
+  viewerDiamondFilled: {
+    backgroundColor: '#C8A96E',
+    borderRadius: 4,
+  },
+  viewerLikeCount: {
+    color: '#C8A96E',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  viewerCommentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  viewerCommentIcon: {
+    fontSize: 18,
+  },
+  viewerCommentCount: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  viewerCommentsSection: {
+    marginTop: 12,
+    maxHeight: 200,
+  },
+  viewerCommentsList: {
+    maxHeight: 140,
+  },
+  viewerCommentsEmpty: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 12,
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  viewerCommentItem: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 10,
+  },
+  viewerCommentAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  viewerCommentUser: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  viewerCommentText: {
+    color: '#fff',
+    fontSize: 12,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  viewerCommentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(255,255,255,0.15)',
+    paddingTop: 8,
+  },
+  viewerCommentInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 13,
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  viewerCommentSend: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  viewerCommentSendText: {
+    color: '#C8A96E',
+    fontSize: 13,
+    fontWeight: '800',
   },
   viewerCounter: {
     fontSize: 12,
@@ -2249,6 +2609,83 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.3,
+  },
+  colSocialRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(128,128,128,0.15)',
+  },
+  colSocialBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  colSocialDiamond: {
+    width: 18,
+    height: 18,
+    borderWidth: 2,
+    borderColor: '#C8A96E',
+    transform: [{ rotate: '45deg' }],
+  },
+  colSocialDiamondFilled: {
+    backgroundColor: '#C8A96E',
+    borderRadius: 3,
+  },
+  colSocialCount: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  colCommentsWrap: {
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+  },
+  colCommentsEmpty: {
+    fontSize: 12,
+    textAlign: 'center',
+    paddingVertical: 8,
+  },
+  colCommentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  colCommentAvatar: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    overflow: 'hidden',
+  },
+  colCommentUser: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  colCommentContent: {
+    fontSize: 12,
+    flex: 1,
+  },
+  colCommentInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 0.5,
+  },
+  colCommentInput: {
+    flex: 1,
+    fontSize: 13,
+    padding: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  colCommentSendText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
 });
 

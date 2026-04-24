@@ -117,6 +117,96 @@ export type Database = {
           },
         ];
       };
+      artwork_likes: {
+        Row: {
+          id: string;
+          artwork_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          artwork_id: string;
+          user_id: string;
+        };
+        Update: {};
+        Relationships: [
+          {
+            foreignKeyName: "artwork_likes_artwork_id_fkey";
+            columns: ["artwork_id"];
+            referencedRelation: "artworks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "artwork_likes_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      artwork_comments: {
+        Row: {
+          id: string;
+          artwork_id: string;
+          user_id: string;
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          artwork_id: string;
+          user_id: string;
+          content: string;
+        };
+        Update: {
+          content?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "artwork_comments_artwork_id_fkey";
+            columns: ["artwork_id"];
+            referencedRelation: "artworks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "artwork_comments_user_id_fkey";
+            columns: ["user_id"];
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      collection_likes: {
+        Row: {
+          id: string;
+          collection_id: string;
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          collection_id: string;
+          user_id: string;
+        };
+        Update: {};
+        Relationships: [];
+      };
+      collection_comments: {
+        Row: {
+          id: string;
+          collection_id: string;
+          user_id: string;
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          collection_id: string;
+          user_id: string;
+          content: string;
+        };
+        Update: {
+          content?: string;
+        };
+        Relationships: [];
+      };
       follows: {
         Row: {
           follower_id: string;
