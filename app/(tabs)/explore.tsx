@@ -106,7 +106,15 @@ function FloatingShape({
 }
 
 /* ── PlayfulDiamond ── */
-function PlayfulDiamond({ color = '#C8A96E' }: { color?: string }) {
+function PlayfulDiamond({
+  color = '#C8A96E',
+  size = 16,
+  borderWidth = 1.5,
+}: {
+  color?: string;
+  size?: number;
+  borderWidth?: number;
+}) {
   const rot = useSharedValue(0);
   const scale = useSharedValue(1);
 
@@ -147,7 +155,17 @@ function PlayfulDiamond({ color = '#C8A96E' }: { color?: string }) {
   }));
 
   return (
-    <Animated.View style={[{ width: 16, height: 16, borderWidth: 1.5, borderColor: color, transform: [{ rotate: '45deg' }] }, animStyle]} />
+    <Animated.View style={animStyle}>
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderWidth,
+          borderColor: color,
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+    </Animated.View>
   );
 }
 
@@ -421,12 +439,20 @@ export default function ExploreScreen() {
         </View>
       ) : filtered.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
-          <Text style={[styles.emptyText, { color: C.muted }]}>
-            {search.trim()
-              ? '검색 결과가 없습니다'
-              : `아직 등록된 ${USER_TYPE_LABELS[activeTab]}가 없습니다`}
-          </Text>
+          {search.trim() || activeTab !== 'audience' ? (
+            <>
+              <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
+              <Text style={[styles.emptyText, { color: C.muted }]}>
+                {search.trim()
+                  ? '검색 결과가 없습니다'
+                  : `아직 등록된 ${USER_TYPE_LABELS[activeTab]}가 없습니다`}
+              </Text>
+            </>
+          ) : (
+            <View style={styles.emptyLogoOnly}>
+              <PlayfulDiamond color={C.gold} size={22} borderWidth={1.8} />
+            </View>
+          )}
         </View>
       ) : (
         <FlatList
@@ -647,6 +673,11 @@ const styles = StyleSheet.create({
     height: 12,
     borderWidth: 1,
     transform: [{ rotate: '45deg' }],
+  },
+  emptyLogoOnly: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
   },
   emptyText: {
     fontSize: 14,

@@ -28,6 +28,14 @@ type ChatProfile = {
   region: string | null;
 };
 
+type MouiChatItem = {
+  id: string;
+  title: string;
+  category: string | null;
+  last_message: string | null;
+  participant_count: number;
+};
+
 type ChatRequestRow = {
   id: string;
   sender_id: string;
@@ -49,6 +57,7 @@ export default function ChatScreen() {
   const [received, setReceived] = useState<ChatRequestRow[]>([]);
   const [active, setActive] = useState<ChatRequestRow[]>([]);
   const [sent, setSent] = useState<ChatRequestRow[]>([]);
+  const [mouiChats, setMouiChats] = useState<MouiChatItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const loadData = useCallback(async () => {
@@ -92,9 +101,50 @@ export default function ChatScreen() {
       }
     }
 
+    // Moui group chats — posts I joined or own
+    const { data: myParticipations } = await (supabase as any)
+      .from('moui_participants')
+      .select('moui_post_id')
+      .eq('user_id', user.id);
+
+    const { data: myMouiPosts } = await (supabase as any)
+      .from('moui_posts')
+      .select('id')
+      .eq('user_id', user.id);
+
+    const mouiPostIds = new Set<string>();
+    for (const p of myParticipations ?? []) mouiPostIds.add(p.moui_post_id);
+    for (const p of myMouiPosts ?? []) mouiPostIds.add(p.id);
+
+    const mouiItems: MouiChatItem[] = [];
+    for (const postId of mouiPostIds) {
+      const { data: postData } = await (supabase as any)
+        .from('moui_posts')
+        .select('id, title, category, moui_participants(user_id)')
+        .eq('id', postId)
+        .single();
+      if (!postData) continue;
+
+      const { data: lastMsg } = await (supabase as any)
+        .from('moui_chat_messages')
+        .select('content')
+        .eq('moui_post_id', postId)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      mouiItems.push({
+        id: postData.id,
+        title: postData.title,
+        category: postData.category,
+        last_message: lastMsg?.[0]?.content ?? null,
+        participant_count: postData.moui_participants?.length ?? 0,
+      });
+    }
+
     setReceived((receivedData as any) ?? []);
     setActive((activeData as any) ?? []);
     setSent((sentData as any) ?? []);
+    setMouiChats(mouiItems);
     setLoading(false);
   }, [user?.id]);
 
@@ -183,12 +233,13 @@ export default function ChatScreen() {
   );
 
   const sections = [
-    ...(received.length > 0 ? [{ title: '받은 요청', data: received, type: 'received' as const }] : []),
-    ...(active.length > 0 ? [{ title: '채팅', data: active, type: 'active' as const }] : []),
-    ...(sent.length > 0 ? [{ title: '보낸 요청', data: sent, type: 'sent' as const }] : []),
+    ...(mouiChats.length > 0 ? [{ title: '모임 채팅', data: mouiChats as any[], type: 'moui' as const }] : []),
+    ...(received.length > 0 ? [{ title: '받은 요청', data: received as any[], type: 'received' as const }] : []),
+    ...(active.length > 0 ? [{ title: '채팅', data: active as any[], type: 'active' as const }] : []),
+    ...(sent.length > 0 ? [{ title: '보낸 요청', data: sent as any[], type: 'sent' as const }] : []),
   ];
 
-  const isEmpty = received.length === 0 && active.length === 0 && sent.length === 0;
+  const isEmpty = received.length === 0 && active.length === 0 && sent.length === 0 && mouiChats.length === 0;
 
   return (
     <View style={[styles.root, { paddingTop: insets.top, backgroundColor: C.bg }]}>
@@ -223,6 +274,33 @@ export default function ChatScreen() {
           )}
           renderItem={({ item, section }) => {
             const sec = section as (typeof sections)[number];
+
+            if (sec.type === 'moui') {
+              const mouiItem = item as MouiChatItem;
+              return (
+                <Pressable
+                  style={({ pressed }) => [styles.card, { backgroundColor: C.card }, pressed && { opacity: 0.8 }]}
+                  onPress={() => router.push(`/moui/${mouiItem.id}` as any)}
+                >
+                  <View style={styles.cardRow}>
+                    <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: C.goldDim }]}>
+                      <Text style={{ fontSize: 18 }}>🤝</Text>
+                    </View>
+                    <View style={styles.cardInfo}>
+                      <View style={styles.nameRow}>
+                        <Text style={[styles.cardName, { color: C.fg }]} numberOfLines={1}>{mouiItem.title}</Text>
+                        <View style={[styles.pendingBadge, { backgroundColor: C.goldDim }]}>
+                          <Text style={[styles.pendingText, { color: C.gold }]}>{mouiItem.participant_count}명</Text>
+                        </View>
+                      </View>
+                      <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={1}>
+                        {mouiItem.last_message ?? '아직 메시지가 없습니다'}
+                      </Text>
+                    </View>
+                  </View>
+                </Pressable>
+              );
+            }
 
             if (sec.type === 'received') {
               const sender = item.sender;

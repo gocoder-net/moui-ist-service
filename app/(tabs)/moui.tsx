@@ -4,6 +4,8 @@ import {
   Platform, Alert, Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
@@ -102,39 +104,74 @@ export default function MouiScreen() {
 
   const [posts, setPosts] = useState<MouiPost[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedField, setSelectedField] = useState<string | null>(null);
+  const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
   const [selectedDistance, setSelectedDistance] = useState<string | null>(null);
   const [showMyJoined, setShowMyJoined] = useState(false);
   const [showMyPosts, setShowMyPosts] = useState(false);
 
   const myRegion = parseRegion(profile?.region);
+  const myProvince = myRegion?.province;
+  const myDistrict = myRegion?.district;
 
   const fetchPosts = async () => {
-    let query = (supabase as any)
+    setLoading(true);
+    const query = (supabase as any)
       .from('moui_posts')
       .select('*, profiles(name, username, avatar_url, field, user_type, verified), moui_participants(user_id, profiles(name, username, avatar_url, user_type))')
       .order('created_at', { ascending: false });
-    if (selectedCategory) {
-      query = query.eq('category', selectedCategory);
-    }
     const { data } = await query;
     if (data) setPosts(data);
     setLoading(false);
   };
 
-  useFocusEffect(useCallback(() => { fetchPosts(); }, [selectedCategory]));
+  useFocusEffect(useCallback(() => { fetchPosts(); }, []));
 
   const MAX_PARTICIPANTS = 30;
 
-  const handleJoin = async (postId: string) => {
+  const JOIN_COST = 50;
+
+  const doJoin = async (postId: string) => {
+    if (!user) return;
+    // 포인트 차감
+    const { data: profileData } = await supabase.from('profiles').select('points').eq('id', user.id).single();
+    const currentPoints = profileData?.points ?? 0;
+    if (currentPoints < JOIN_COST) {
+      showAlert('알림', `모의(MOUI)가 부족합니다. (보유: ${currentPoints})`);
+      return;
+    }
+    const newBalance = currentPoints - JOIN_COST;
+    await supabase.from('profiles').update({ points: newBalance }).eq('id', user.id);
+    await (supabase as any).from('point_history').insert({
+      user_id: user.id,
+      amount: -JOIN_COST,
+      balance: newBalance,
+      type: 'moui_join',
+      description: '모임 참석',
+    });
+    await (supabase as any).from('moui_participants').insert({ moui_post_id: postId, user_id: user.id });
+    fetchPosts();
+  };
+
+  const handleJoin = (postId: string) => {
     if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
     const post = posts.find(p => p.id === postId);
     if (post && (post.moui_participants?.length ?? 0) >= MAX_PARTICIPANTS) {
       showAlert('알림', `참여 인원이 최대 ${MAX_PARTICIPANTS}명에 도달했습니다.`);
       return;
     }
-    await (supabase as any).from('moui_participants').insert({ moui_post_id: postId, user_id: user.id });
-    fetchPosts();
+    const msg = `${JOIN_COST} 모의(MOUI)를 사용합니다.`;
+    if (Platform.OS === 'web') {
+      if (!window.confirm(msg)) return;
+      doJoin(postId);
+    } else {
+      Alert.alert('모임 참석', msg, [
+        { text: '취소', style: 'cancel' },
+        { text: '참석', onPress: () => doJoin(postId) },
+      ]);
+    }
   };
 
   const handleLeave = async (postId: string) => {
@@ -153,8 +190,67 @@ export default function MouiScreen() {
     return posts.filter(p => p.user_id === user.id).length;
   }, [posts, user]);
 
+  const activeFilterTags = useMemo(() => {
+    const tags: { label: string; clear: () => void }[] = [];
+    if (selectedCategory) {
+      const cat = MOUI_CATEGORIES.find(c => c.key === selectedCategory);
+      if (cat) tags.push({ label: `${cat.icon} ${cat.label}`, clear: () => setSelectedCategory(null) });
+    }
+    if (selectedField) {
+      const fo = FIELD_OPTIONS.find(o => o.key === selectedField);
+      if (fo) tags.push({ label: `${fo.icon} ${fo.key}`, clear: () => setSelectedField(null) });
+    }
+    if (selectedTarget) {
+      const t = TARGET_OPTIONS.find(o => o.key === selectedTarget);
+      if (t) tags.push({ label: t.label, clear: () => setSelectedTarget(null) });
+    }
+    if (selectedDistance) {
+      const distMap: Record<string, string> = { near: '📍 근처', close: '🚶 가까운', far: '🚀 먼' };
+      tags.push({ label: distMap[selectedDistance], clear: () => setSelectedDistance(null) });
+    }
+    if (showMyJoined) tags.push({ label: '참여중', clear: () => setShowMyJoined(false) });
+    if (showMyPosts) tags.push({ label: '내 모임', clear: () => setShowMyPosts(false) });
+    return tags;
+  }, [selectedCategory, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts]);
+
+  const activeFilterCount = activeFilterTags.length;
+  const filterButtonActive = showFilterPanel || activeFilterCount > 0;
+  const createButtonGradient = ['#201A12', '#15110D'] as const;
+  const createButtonBorder = '#8F7443';
+  const createButtonShadow = C.gold;
+  const createButtonText = '#E3C78E';
+  const createButtonIconBg = 'rgba(200,169,110,0.16)';
+
+  const clearFilters = () => {
+    setSelectedCategory(null);
+    setSelectedField(null);
+    setSelectedTarget(null);
+    setSelectedDistance(null);
+    setShowMyJoined(false);
+    setShowMyPosts(false);
+  };
+
   const sections = useMemo(() => {
     let filtered = posts;
+
+    if (selectedCategory) {
+      filtered = filtered.filter(p => p.category === selectedCategory);
+    }
+
+    if (selectedField) {
+      filtered = filtered.filter(p => {
+        const fields = p.fields?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
+        return p.fields?.trim() === '전체' || fields.includes(selectedField);
+      });
+    }
+
+    if (selectedTarget) {
+      filtered = filtered.filter(p => {
+        const targets = p.target_types?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
+        return targets.includes(selectedTarget);
+      });
+    }
+
     if ((showMyJoined || showMyPosts) && user) {
       filtered = filtered.filter(p => {
         const joined = showMyJoined && p.moui_participants?.some(pt => pt.user_id === user.id);
@@ -165,7 +261,7 @@ export default function MouiScreen() {
 
     const sectionTitle = showMyJoined && showMyPosts ? '내 모임' : showMyJoined ? '참여중 모임' : showMyPosts ? '내가 만든 모임' : '모든 모임';
 
-    if (!myRegion) {
+    if (!myProvince || !myDistrict) {
       return filtered.length > 0 ? [{ title: sectionTitle, data: filtered }] : [];
     }
     const near: MouiPost[] = [];
@@ -174,9 +270,9 @@ export default function MouiScreen() {
     for (const p of filtered) {
       const pr = parseRegion(p.region);
       if (!pr) { far.push(p); continue; }
-      if (pr.province === myRegion.province && pr.district === myRegion.district) {
+      if (pr.province === myProvince && pr.district === myDistrict) {
         near.push(p);
-      } else if (pr.province === myRegion.province) {
+      } else if (pr.province === myProvince) {
         close.push(p);
       } else {
         far.push(p);
@@ -192,7 +288,7 @@ export default function MouiScreen() {
     if (close.length > 0) result.push({ title: '🚶 가까운 모임', data: close });
     if (far.length > 0) result.push({ title: '🚀 먼 모임', data: far });
     return result;
-  }, [posts, myRegion?.province, myRegion?.district, selectedDistance, showMyJoined, showMyPosts, user]);
+  }, [posts, myDistrict, myProvince, selectedCategory, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts, user]);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -215,6 +311,8 @@ export default function MouiScreen() {
     const isClosed = item.status === 'closed' || !!deadlineExpired;
     const participants = item.moui_participants ?? [];
     const isJoined = user ? participants.some(pt => pt.user_id === user.id) : false;
+    const isFull = participants.length >= MAX_PARTICIPANTS;
+    const showJoinBtn = !!user && !isOwner && !isClosed && !isJoined && !isFull;
 
     const targetKeys = item.target_types?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
 
@@ -224,7 +322,17 @@ export default function MouiScreen() {
 
     return (
       <Animated.View entering={FadeInDown.delay(index * 60).duration(300)}>
-        <View style={[styles.postCard, { backgroundColor: C.card, borderColor: C.border }, isClosed && { opacity: 0.85 }]}>
+        <View style={[
+          styles.postCard,
+          { backgroundColor: isOwner ? C.gold + '15' : C.card, borderColor: isOwner ? C.gold : C.border, borderWidth: isOwner ? 1.5 : 1 },
+          isClosed && { opacity: 0.85 },
+        ]}>
+          {/* 내가 만든 모의 라벨 */}
+          {isOwner && (
+            <View style={[styles.ownerLabel, { backgroundColor: C.gold }]}>
+              <Text style={[styles.ownerLabelText, { color: C.bg }]}>내가 만든 모의</Text>
+            </View>
+          )}
           {/* 상단: 카테고리 + 참석취소 + 상태 배지 */}
           <View style={styles.cardTopRow}>
             {item.category && (() => {
@@ -236,7 +344,19 @@ export default function MouiScreen() {
               ) : <View />;
             })()}
             <View style={styles.cardTopRight}>
-              {isJoined && (
+              {showJoinBtn && (
+                <Pressable
+                  onPress={() => handleJoin(item.id)}
+                  style={({ pressed }) => [
+                    styles.joinBtn,
+                    { backgroundColor: C.gold, borderColor: C.gold },
+                    pressed && { opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={[styles.joinBtnText, { color: C.bg }]}>참석하기 ({JOIN_COST}MOUI)</Text>
+                </Pressable>
+              )}
+              {isJoined && !isOwner && (
                 <Pressable
                   onPress={() => handleLeave(item.id)}
                   style={({ pressed }) => [styles.leaveBadge, { backgroundColor: C.danger + '15', borderColor: C.danger + '44' }, pressed && { opacity: 0.6 }]}
@@ -296,42 +416,54 @@ export default function MouiScreen() {
             })()}
           </View>
 
-          {/* 태그 영역: 분야 + 대상 */}
-          <View style={styles.postTagRow}>
-            {item.fields && (
-              item.fields.trim() === '전체' ? (
-                <View style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                  <Text style={[styles.postTagText, { color: C.gold }]}>🌐 전체 분야</Text>
+          {/* 태그 영역: 분야 + 모집 대상 */}
+          {(item.fields || targetKeys.length > 0) && (
+            <View style={styles.postMetaSection}>
+              {item.fields && (
+                <View style={styles.postMetaRow}>
+                  <Text style={[styles.postMetaLabel, { color: C.muted }]}>분야</Text>
+                  <View style={styles.postTagRow}>
+                    {item.fields.trim() === '전체' ? (
+                      <View style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                        <Text style={[styles.postTagText, { color: C.gold }]}>🌐 전체 분야</Text>
+                      </View>
+                    ) : (
+                      item.fields.split(',').map(f => {
+                        const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
+                        return (
+                          <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                            <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
                 </View>
-              ) : (
-                item.fields.split(',').map(f => {
-                  const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
-                  return (
-                    <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                      <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
-                    </View>
-                  );
-                })
-              )
-            )}
-            {targetKeys.map(key => {
-              const t = TARGET_OPTIONS.find(o => o.key === key);
-              return t ? (
-                <View key={key} style={[styles.postTag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22' }]}>
-                  <Text style={[styles.postTagText, { color: C.fg, opacity: 0.7 }]}>{t.icon} {t.label}</Text>
+              )}
+              {targetKeys.length > 0 && (
+                <View style={styles.postMetaRow}>
+                  <Text style={[styles.postMetaLabel, { color: C.muted }]}>모집 대상</Text>
+                  <View style={styles.postTagRow}>
+                    {targetKeys.map(key => {
+                      const t = TARGET_OPTIONS.find(o => o.key === key);
+                      return t ? (
+                        <View key={key} style={[styles.postTag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22' }]}>
+                          <Text style={[styles.postTagText, { color: C.fg, opacity: 0.82 }]}>{t.icon} {t.label}</Text>
+                        </View>
+                      ) : null;
+                    })}
+                  </View>
                 </View>
-              ) : null;
-            })}
-          </View>
+              )}
+            </View>
+          )}
 
           {/* 참여자 */}
           {(() => {
-            const isFull = participants.length >= MAX_PARTICIPANTS;
-            const showJoinBtn = user && !isOwner && !isClosed && !isJoined && !isFull;
             const displayParticipants = participants.slice(0, 6);
             const moreCount = participants.length - 6;
 
-            return (participants.length > 0 || showJoinBtn || (isFull && user && !isOwner && !isJoined)) ? (
+            return (participants.length > 0 || (isFull && user && !isOwner && !isJoined)) ? (
               <View style={[styles.participantsSection, { borderTopColor: C.border }]}>
                 {participants.length > 0 && (
                   <View style={styles.participantsList}>
@@ -365,25 +497,14 @@ export default function MouiScreen() {
                     </View>
                   </View>
                 )}
-                {showJoinBtn ? (
-                  <Pressable
-                    onPress={() => handleJoin(item.id)}
-                    style={({ pressed }) => [
-                      styles.joinBtn,
-                      { backgroundColor: C.gold, borderColor: C.gold },
-                      pressed && { opacity: 0.7 },
-                    ]}
-                  >
-                    <Text style={[styles.joinBtnText, { color: C.bg }]}>참석하기</Text>
-                  </Pressable>
-                ) : isFull && user && !isOwner && !isJoined ? (
+                {isFull && user && !isOwner && !isJoined ? (
                   <Text style={[styles.participantsLabel, { color: C.danger }]}>인원이 가득 찼습니다</Text>
                 ) : null}
               </View>
             ) : null;
           })()}
 
-          {/* 작성자 + 액션 */}
+          {/* 작성자 */}
           <View style={[styles.postFooter, { borderTopColor: C.border }]}>
             <Pressable
               onPress={() => author?.username && router.push(`/artist/${author.username}`)}
@@ -414,63 +535,75 @@ export default function MouiScreen() {
               )}
               <Text style={[styles.postTime, { color: C.muted }]}>· {formatDate(item.created_at)}</Text>
             </Pressable>
-            {isOwner && (
-              <>
-                <Pressable
-                  onPress={() => router.push(`/moui/create?edit=${item.id}`)}
-                  style={({ pressed }) => [styles.closeBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
-                >
-                  <Text style={[styles.closeBtnText, { color: C.muted }]}>수정하기</Text>
-                </Pressable>
+          </View>
+          {(isJoined || isOwner) && (
+            <Pressable
+              onPress={() => router.push(`/moui/${item.id}` as any)}
+              style={({ pressed }) => [
+                styles.enterBtn,
+                { backgroundColor: C.gold },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <Text style={[styles.enterBtnText, { color: C.bg }]}>입장하기</Text>
+            </Pressable>
+          )}
+          {isOwner && (
+            <View style={styles.ownerActionRow}>
+              <Pressable
+                onPress={() => router.push(`/moui/create?edit=${item.id}`)}
+                style={({ pressed }) => [styles.closeBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={[styles.closeBtnText, { color: C.muted }]}>수정하기</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const msg = '이 모집글을 삭제하시겠습니까?';
+                  const doDelete = async () => {
+                    const { error } = await (supabase as any).from('moui_posts').delete().eq('id', item.id);
+                    if (error) { showAlert('오류', '삭제 실패: ' + error.message); }
+                    else { fetchPosts(); }
+                  };
+                  if (Platform.OS === 'web') {
+                    if (!window.confirm(msg)) return;
+                    doDelete();
+                  } else {
+                    Alert.alert('삭제 확인', msg, [
+                      { text: '취소', style: 'cancel' },
+                      { text: '삭제', style: 'destructive', onPress: doDelete },
+                    ]);
+                  }
+                }}
+                style={({ pressed }) => [styles.closeBtn, { borderColor: C.danger + '55' }, pressed && { opacity: 0.6 }]}
+              >
+                <Text style={[styles.closeBtnText, { color: C.danger }]}>삭제하기</Text>
+              </Pressable>
+              {!isClosed && (
                 <Pressable
                   onPress={() => {
-                    const msg = '이 모집글을 삭제하시겠습니까?';
-                    const doDelete = async () => {
-                      const { error } = await (supabase as any).from('moui_posts').delete().eq('id', item.id);
-                      if (error) { showAlert('오류', '삭제 실패: ' + error.message); }
-                      else { fetchPosts(); }
-                    };
+                    const msg = remainingDays !== null
+                      ? `모집기간이 ${remainingDays}일 남았는데 마감하시겠습니까?`
+                      : '모집을 마감하시겠습니까?';
                     if (Platform.OS === 'web') {
                       if (!window.confirm(msg)) return;
-                      doDelete();
+                      (supabase as any).from('moui_posts').update({ status: 'closed' }).eq('id', item.id).then(() => fetchPosts());
                     } else {
-                      Alert.alert('삭제 확인', msg, [
+                      Alert.alert('마감 확인', msg, [
                         { text: '취소', style: 'cancel' },
-                        { text: '삭제', style: 'destructive', onPress: doDelete },
+                        { text: '마감', style: 'destructive', onPress: async () => {
+                          await (supabase as any).from('moui_posts').update({ status: 'closed' }).eq('id', item.id);
+                          fetchPosts();
+                        }},
                       ]);
                     }
                   }}
-                  style={({ pressed }) => [styles.closeBtn, { borderColor: C.danger + '55' }, pressed && { opacity: 0.6 }]}
+                  style={({ pressed }) => [styles.closeBtn, { borderColor: C.gold + '55', backgroundColor: C.gold + '11' }, pressed && { opacity: 0.6 }]}
                 >
-                  <Text style={[styles.closeBtnText, { color: C.danger }]}>삭제하기</Text>
+                  <Text style={[styles.closeBtnText, { color: C.gold }]}>마감하기</Text>
                 </Pressable>
-                {!isClosed && (
-                  <Pressable
-                    onPress={() => {
-                      const msg = remainingDays !== null
-                        ? `모집기간이 ${remainingDays}일 남았는데 마감하시겠습니까?`
-                        : '모집을 마감하시겠습니까?';
-                      if (Platform.OS === 'web') {
-                        if (!window.confirm(msg)) return;
-                        (supabase as any).from('moui_posts').update({ status: 'closed' }).eq('id', item.id).then(() => fetchPosts());
-                      } else {
-                        Alert.alert('마감 확인', msg, [
-                          { text: '취소', style: 'cancel' },
-                          { text: '마감', style: 'destructive', onPress: async () => {
-                            await (supabase as any).from('moui_posts').update({ status: 'closed' }).eq('id', item.id);
-                            fetchPosts();
-                          }},
-                        ]);
-                      }
-                    }}
-                    style={({ pressed }) => [styles.closeBtn, { borderColor: C.gold + '55', backgroundColor: C.gold + '11' }, pressed && { opacity: 0.6 }]}
-                  >
-                    <Text style={[styles.closeBtnText, { color: C.gold }]}>마감하기</Text>
-                  </Pressable>
-                )}
-              </>
-            )}
-          </View>
+              )}
+            </View>
+          )}
         </View>
       </Animated.View>
     );
@@ -500,116 +633,190 @@ export default function MouiScreen() {
                 { color: activityRegion ? C.gold : C.muted },
               ]}
             >
-              {activityRegion ? `📍 내 활동 지역: ${activityRegion}` : '📍 활동 지역 설정'}
+              {activityRegion ? `📍 ${activityRegion}` : '📍 지역 설정'}
             </Text>
           </Pressable>
         </View>
-        <Pressable
-          onPress={() => {
-            if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
-            router.push('/moui/create');
-          }}
-          style={({ pressed }) => [styles.headerBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.7 }]}
-        >
-          <Text style={[styles.headerBtnText, { color: C.bg }]}>+ 모집</Text>
-        </Pressable>
+        <View style={styles.headerRight}>
+          <Pressable
+            onPress={() => setShowFilterPanel(v => !v)}
+            style={({ pressed }) => [
+              styles.filterToggleBtn,
+              {
+                borderColor: filterButtonActive ? C.gold + '99' : C.border,
+                backgroundColor: filterButtonActive ? C.gold + '16' : C.card,
+                shadowColor: filterButtonActive ? C.gold : '#000000',
+              },
+              pressed && styles.headerActionPressed,
+            ]}
+          >
+            <View
+              style={[
+                styles.filterToggleIconWrap,
+                { backgroundColor: filterButtonActive ? C.gold + '24' : C.bg },
+              ]}
+            >
+              <Ionicons
+                name={showFilterPanel ? 'options' : 'options-outline'}
+                size={12}
+                color={filterButtonActive ? C.goldLight : C.fg}
+              />
+            </View>
+            <Text style={[styles.filterToggleBtnText, { color: filterButtonActive ? C.fg : C.muted }]}>
+              필터
+            </Text>
+            {activeFilterCount > 0 && (
+              <View style={[styles.filterToggleBadge, { backgroundColor: C.gold, borderColor: C.bg }]}>
+                <Text style={[styles.filterToggleBadgeText, { color: C.bg }]}>
+                  {activeFilterCount}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+          <Pressable
+            onPress={() => {
+              if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
+              router.push('/moui/create');
+            }}
+            style={({ pressed }) => [
+              styles.headerBtn,
+              { shadowColor: createButtonShadow },
+              pressed && styles.headerActionPressed,
+            ]}
+          >
+            <LinearGradient
+              colors={createButtonGradient}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={[styles.headerBtnGradient, { borderColor: createButtonBorder }]}
+            >
+              <View style={[styles.headerBtnIconWrap, { backgroundColor: createButtonIconBg }]}>
+                <Ionicons name="sparkles" size={13} color={createButtonText} />
+              </View>
+              <Text style={[styles.headerBtnText, { color: createButtonText }]}>모임만들기</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
       </Animated.View>
 
-      {/* 카테고리 필터 */}
-      <View style={styles.filterBar}>
-        <Pressable
-          onPress={() => setSelectedCategory(null)}
-          style={[
-            styles.filterChip,
-            { backgroundColor: selectedCategory === null ? C.gold : C.card },
-          ]}
-        >
-          <Text style={[styles.filterChipText, { color: selectedCategory === null ? C.bg : C.muted }]}>
-            전체
-          </Text>
-        </Pressable>
-        {MOUI_CATEGORIES.map(cat => {
-          const active = selectedCategory === cat.key;
-          return (
-            <Pressable
-              key={cat.key}
-              onPress={() => setSelectedCategory(active ? null : cat.key)}
-              style={[
-                styles.filterChip,
-                { backgroundColor: active ? C.gold : C.card },
-              ]}
-            >
-              <Text style={[styles.filterChipText, { color: active ? C.bg : C.muted }]}>
-                {cat.icon} {cat.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      {/* 거리 필터 */}
-      {myRegion && (
-        <View style={styles.distanceBar}>
-          {([
-            { key: null, label: '전체' },
-            { key: 'near', label: '📍 근처' },
-            { key: 'close', label: '🚶 가까운' },
-            { key: 'far', label: '🚀 먼' },
-          ] as const).map(d => {
-            const active = selectedDistance === d.key;
-            return (
+      {/* 접이식 필터 패널 */}
+      {showFilterPanel && (
+        <Animated.View entering={FadeInDown.duration(200)} style={[styles.filterPanel, { backgroundColor: C.card, borderBottomColor: C.border }]}>
+          {/* 카테고리 */}
+          <View style={styles.filterSection}>
+            <Text style={[styles.filterSectionLabel, { color: C.muted }]}>카테고리</Text>
+            <View style={styles.filterChipRow}>
               <Pressable
-                key={d.key ?? 'all'}
-                onPress={() => setSelectedDistance(d.key)}
-                style={[
-                  styles.distanceChip,
-                  { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.gold + '18' : 'transparent' },
-                ]}
+                onPress={() => setSelectedCategory(null)}
+                style={[styles.filterChip, { backgroundColor: selectedCategory === null ? C.gold : C.bg, borderColor: selectedCategory === null ? C.gold : C.border }]}
               >
-                <Text style={[styles.distanceChipText, { color: active ? C.gold : C.muted }]}>
-                  {d.label}
-                </Text>
+                <Text style={[styles.filterChipText, { color: selectedCategory === null ? C.bg : C.muted }]}>전체</Text>
               </Pressable>
-            );
-          })}
-        </View>
+              {MOUI_CATEGORIES.map(cat => {
+                const active = selectedCategory === cat.key;
+                return (
+                  <Pressable
+                    key={cat.key}
+                    onPress={() => setSelectedCategory(active ? null : cat.key)}
+                    style={[styles.filterChip, { backgroundColor: active ? C.gold : C.bg, borderColor: active ? C.gold : C.border }]}
+                  >
+                    <Text style={[styles.filterChipText, { color: active ? C.bg : C.muted }]}>{cat.icon} {cat.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* 거리 */}
+          {myRegion && (
+            <View style={styles.filterSection}>
+              <Text style={[styles.filterSectionLabel, { color: C.muted }]}>거리</Text>
+              <View style={styles.filterChipRow}>
+                {([
+                  { key: null, label: '전체' },
+                  { key: 'near', label: '📍 근처' },
+                  { key: 'close', label: '🚶 가까운' },
+                  { key: 'far', label: '🚀 먼' },
+                ] as const).map(d => {
+                  const active = selectedDistance === d.key;
+                  return (
+                    <Pressable
+                      key={d.key ?? 'all'}
+                      onPress={() => setSelectedDistance(d.key)}
+                      style={[styles.filterChip, { backgroundColor: active ? C.gold + '18' : C.bg, borderColor: active ? C.gold : C.border }]}
+                    >
+                      <Text style={[styles.filterChipText, { color: active ? C.gold : C.muted }]}>{d.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* 내 모임 */}
+          {user && (myJoinedCount > 0 || myPostsCount > 0) && (
+            <View style={styles.filterSection}>
+              <Text style={[styles.filterSectionLabel, { color: C.muted }]}>내 모임</Text>
+              <View style={styles.filterChipRow}>
+                {myJoinedCount > 0 && (
+                  <Pressable
+                    onPress={() => setShowMyJoined(v => !v)}
+                    style={[styles.filterChip, { backgroundColor: showMyJoined ? C.gold + '18' : C.bg, borderColor: showMyJoined ? C.gold : C.border }]}
+                  >
+                    <Text style={[styles.filterChipText, { color: showMyJoined ? C.gold : C.muted }]}>참여중 ({myJoinedCount})</Text>
+                  </Pressable>
+                )}
+                {myPostsCount > 0 && (
+                  <Pressable
+                    onPress={() => setShowMyPosts(v => !v)}
+                    style={[styles.filterChip, { backgroundColor: showMyPosts ? C.gold + '18' : C.bg, borderColor: showMyPosts ? C.gold : C.border }]}
+                  >
+                    <Text style={[styles.filterChipText, { color: showMyPosts ? C.gold : C.muted }]}>내가 만든 ({myPostsCount})</Text>
+                  </Pressable>
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* 활성 필터 태그 + 초기화 */}
+          {activeFilterCount > 0 && (
+            <View style={styles.activeFilterRow}>
+              <View style={styles.activeFilterTags}>
+                {activeFilterTags.map((tag, i) => (
+                  <Pressable
+                    key={i}
+                    onPress={tag.clear}
+                    style={[styles.activeFilterTag, { backgroundColor: C.gold + '18', borderColor: C.gold + '44' }]}
+                  >
+                    <Text style={[styles.activeFilterTagText, { color: C.gold }]}>{tag.label} ✕</Text>
+                  </Pressable>
+                ))}
+              </View>
+              <Pressable onPress={clearFilters} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
+                <Text style={[styles.clearFiltersText, { color: C.danger }]}>초기화</Text>
+              </Pressable>
+            </View>
+          )}
+        </Animated.View>
       )}
 
-      {/* 참여중 / 내가 만든 모임 토글 */}
-      {user && (myJoinedCount > 0 || myPostsCount > 0) && (
-        <View style={styles.joinedToggleBar}>
-          {myJoinedCount > 0 && (
-            <Pressable
-              onPress={() => setShowMyJoined(v => !v)}
-              style={[
-                styles.joinedToggleChip,
-                {
-                  borderColor: showMyJoined ? C.gold : C.border,
-                  backgroundColor: showMyJoined ? C.gold + '18' : 'transparent',
-                },
-              ]}
-            >
-              <Text style={[styles.joinedToggleText, { color: showMyJoined ? C.gold : C.muted }]}>
-                참여중 모임 ({myJoinedCount})
-              </Text>
-            </Pressable>
-          )}
-          {myPostsCount > 0 && (
-            <Pressable
-              onPress={() => setShowMyPosts(v => !v)}
-              style={[
-                styles.joinedToggleChip,
-                {
-                  borderColor: showMyPosts ? C.gold : C.border,
-                  backgroundColor: showMyPosts ? C.gold + '18' : 'transparent',
-                },
-              ]}
-            >
-              <Text style={[styles.joinedToggleText, { color: showMyPosts ? C.gold : C.muted }]}>
-                내가 만든 모임 ({myPostsCount})
-              </Text>
-            </Pressable>
-          )}
+      {/* 활성 필터가 있을 때 패널 닫혀있어도 태그 표시 */}
+      {!showFilterPanel && activeFilterCount > 0 && (
+        <View style={[styles.collapsedFilterRow, { borderBottomColor: C.border }]}>
+          <View style={styles.activeFilterTags}>
+            {activeFilterTags.map((tag, i) => (
+              <Pressable
+                key={i}
+                onPress={tag.clear}
+                style={[styles.activeFilterTag, { backgroundColor: C.gold + '18', borderColor: C.gold + '44' }]}
+              >
+                <Text style={[styles.activeFilterTagText, { color: C.gold }]}>{tag.label} ✕</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Pressable onPress={clearFilters} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
+            <Text style={[styles.clearFiltersText, { color: C.danger }]}>초기화</Text>
+          </Pressable>
         </View>
       )}
 
@@ -667,6 +874,11 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingRight: 12,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '800',
@@ -683,49 +895,154 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   headerBtn: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
+    borderRadius: 14,
+    overflow: 'hidden',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  headerBtnGradient: {
+    minHeight: 38,
+    paddingLeft: 8,
+    paddingRight: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  headerBtnIconWrap: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
   headerBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
+    letterSpacing: -0.1,
   },
 
-  /* 필터 바 */
-  filterBar: {
+  /* 필터 토글 */
+  filterToggleBtn: {
+    minHeight: 38,
+    minWidth: 60,
+    paddingLeft: 8,
+    paddingRight: 8,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    position: 'relative',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  filterToggleIconWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterToggleBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: -0.1,
+  },
+  filterToggleBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 3,
+    borderRadius: 8.5,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+  },
+  filterToggleBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+  },
+  headerActionPressed: {
+    opacity: 0.86,
+    transform: [{ scale: 0.98 }],
+  },
+
+  /* 접이식 필터 패널 */
+  filterPanel: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    gap: 12,
+    borderBottomWidth: 1,
+  },
+  filterSection: {
+    gap: 6,
+  },
+  filterSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+  },
+  filterChipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    gap: 6,
   },
   filterChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-  },
-  filterChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  /* 거리 필터 */
-  distanceBar: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 20,
-    paddingBottom: 10,
-  },
-  distanceChip: {
     paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
   },
-  distanceChipText: {
-    fontSize: 12,
+  filterChipText: {
+    fontSize: 11,
     fontWeight: '700',
+  },
+  activeFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(128,128,128,0.15)',
+  },
+  activeFilterTags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    flex: 1,
+  },
+  activeFilterTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  activeFilterTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  clearFiltersText: {
+    fontSize: 11,
+    fontWeight: '700',
+    paddingLeft: 8,
+  },
+  collapsedFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
   },
 
   /* 리스트 */
@@ -765,6 +1082,18 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: 10,
   },
+  ownerLabel: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: -2,
+  },
+  ownerLabelText: {
+    fontSize: 11,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -773,16 +1102,16 @@ const styles = StyleSheet.create({
   cardTopRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
   },
   leaveBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
     borderWidth: 1,
   },
   leaveBadgeText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   categorChipSmall: {
@@ -825,10 +1154,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
+  postMetaSection: {
+    gap: 8,
+    paddingTop: 2,
+  },
+  postMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
+  postMetaLabel: {
+    width: 54,
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 28,
+  },
   postTagRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    flex: 1,
   },
   postTag: {
     paddingHorizontal: 10,
@@ -846,6 +1191,13 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingTop: 4,
     borderTopWidth: 1,
+  },
+  ownerActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+    gap: 8,
+    paddingTop: 8,
   },
   authorRow: {
     flexDirection: 'row',
@@ -886,12 +1238,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
   },
   statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 10,
   },
   statusText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   closeBtn: {
@@ -959,21 +1311,16 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 
-  /* 참여중 모임 토글 */
-  joinedToggleBar: {
-    flexDirection: 'row',
-    gap: 8,
+  /* 입장하기 버튼 */
+  enterBtn: {
+    alignSelf: 'flex-end',
     paddingHorizontal: 20,
-    paddingBottom: 8,
+    paddingVertical: 10,
+    borderRadius: 12,
   },
-  joinedToggleChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 16,
-    borderWidth: 1,
+  enterBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
   },
-  joinedToggleText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
+
 });

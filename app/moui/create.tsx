@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, TextInput, Pressable, ScrollView,
-  ActivityIndicator, Alert, Platform,
+  Alert, Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -9,8 +9,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import { spendPoints } from '@/lib/points';
-import { parseRegion } from '@/constants/regions';
-import { REGIONS, PROVINCE_LIST } from '@/constants/regions';
+import { parseRegion, REGIONS, PROVINCE_LIST } from '@/constants/regions';
 import { MOUI_CATEGORIES, MOUI_POST_COST, FIELD_OPTIONS, TARGET_TOP, TARGET_CREATOR_SUB } from '@/constants/moui';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -287,14 +286,21 @@ export default function CreateMouiScreen() {
         setSubmitting(false);
         return;
       }
-      const { error } = await (supabase as any).from('moui_posts').insert({
+      const { data: newPost, error } = await (supabase as any).from('moui_posts').insert({
         ...payload,
         user_id: user.id,
         status: 'open',
-      });
+      }).select('id').single();
       if (error) {
         showAlert('오류', '게시 실패: ' + error.message);
       } else {
+        // 작성자를 첫 참석자로 자동 추가
+        if (newPost?.id) {
+          await (supabase as any).from('moui_participants').insert({
+            moui_post_id: newPost.id,
+            user_id: user.id,
+          });
+        }
         router.replace('/(tabs)/moui');
         return;
       }
@@ -314,17 +320,6 @@ export default function CreateMouiScreen() {
             <Text style={[styles.backText, { color: C.fg }]}>← 뒤로</Text>
           </Pressable>
           <Text style={[styles.topTitle, { color: C.fg }]}>{isEdit ? '모집글 수정' : '모임 모집'}</Text>
-          <Pressable
-            style={({ pressed }) => [styles.saveBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.6 }, submitting && { opacity: 0.4 }]}
-            onPress={handleSubmit}
-            disabled={submitting}
-          >
-            {submitting ? (
-              <ActivityIndicator size="small" color={C.bg} />
-            ) : (
-              <Text style={[styles.saveBtnText, { color: C.bg }]}>게시</Text>
-            )}
-          </Pressable>
         </View>
 
         <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
@@ -899,14 +894,20 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   topBar: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderBottomWidth: 1,
+    position: 'relative',
+    minHeight: 64,
   },
   backBtn: {
+    position: 'absolute',
+    left: 20,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
     paddingVertical: 4,
     paddingRight: 12,
   },
@@ -918,18 +919,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
     letterSpacing: 1,
-  },
-  saveBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 12,
-    minWidth: 60,
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.5,
   },
   scroll: {
     paddingHorizontal: 24,

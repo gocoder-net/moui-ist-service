@@ -340,3 +340,29 @@ CREATE POLICY "Authenticated users can insert moui_participants"
   ON public.moui_participants FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can delete own moui_participants"
   ON public.moui_participants FOR DELETE USING (auth.uid() = user_id);
+
+-- 모임 채팅 메시지
+CREATE TABLE public.moui_chat_messages (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  moui_post_id uuid NOT NULL REFERENCES public.moui_posts(id) ON DELETE CASCADE,
+  sender_id uuid NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  content text NOT NULL,
+  created_at timestamptz DEFAULT now()
+);
+
+ALTER TABLE public.moui_chat_messages ENABLE ROW LEVEL SECURITY;
+
+-- 참여자만 읽기 (참여자 or 작성자)
+CREATE POLICY "Participants can read moui_chat_messages"
+  ON public.moui_chat_messages FOR SELECT USING (
+    EXISTS (SELECT 1 FROM public.moui_participants mp WHERE mp.moui_post_id = moui_chat_messages.moui_post_id AND mp.user_id = auth.uid())
+    OR EXISTS (SELECT 1 FROM public.moui_posts p WHERE p.id = moui_chat_messages.moui_post_id AND p.user_id = auth.uid())
+  );
+-- 참여자/작성자만 쓰기
+CREATE POLICY "Participants can insert moui_chat_messages"
+  ON public.moui_chat_messages FOR INSERT WITH CHECK (
+    auth.uid() = sender_id AND (
+      EXISTS (SELECT 1 FROM public.moui_participants mp WHERE mp.moui_post_id = moui_chat_messages.moui_post_id AND mp.user_id = auth.uid())
+      OR EXISTS (SELECT 1 FROM public.moui_posts p WHERE p.id = moui_chat_messages.moui_post_id AND p.user_id = auth.uid())
+    )
+  );
