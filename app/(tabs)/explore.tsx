@@ -198,7 +198,8 @@ export default function ExploreScreen() {
 
     const { data: artworks } = await supabase
       .from('artworks')
-      .select('user_id, image_url');
+      .select('user_id, image_url, created_at')
+      .order('created_at', { ascending: false });
 
     const artworkMap = new Map<string, { count: number; cover: string | null }>();
     artworks?.forEach((aw) => {
@@ -206,6 +207,7 @@ export default function ExploreScreen() {
       if (existing) {
         existing.count++;
       } else {
+        // 최신순 정렬이므로 첫 번째가 가장 최근 작품
         artworkMap.set(aw.user_id, { count: 1, cover: aw.image_url });
       }
     });
@@ -320,7 +322,7 @@ export default function ExploreScreen() {
               resizeMode="cover"
             />
           )}
-          <View style={[styles.artistCoverOverlay, { backgroundColor: C.bg === '#000000' ? 'rgba(0,0,0,0.80)' : 'rgba(245,246,248,0.80)' }]} />
+          <View style={[styles.artistCoverOverlay, { backgroundColor: C.bg === '#000000' ? 'rgba(0,0,0,0.55)' : 'rgba(245,246,248,0.60)' }]} />
 
           {/* "나" badge */}
           {me && (

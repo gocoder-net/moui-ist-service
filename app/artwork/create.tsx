@@ -40,6 +40,8 @@ export default function CreateArtworkScreen() {
   const [heightCm, setHeightCm] = useState('');
   const [edition, setEdition] = useState('');
   const [description, setDescription] = useState('');
+  const [tagChips, setTagChips] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
 
@@ -55,6 +57,15 @@ export default function CreateArtworkScreen() {
         setHeightCm(data.height_cm ? String(data.height_cm) : '');
         setEdition(data.edition ?? '');
         setDescription(data.description ?? '');
+        // 기존 태그 중 자동생성이 아닌 커스텀 태그만 로드
+        if (data.tags && data.tags.length > 0) {
+          const autoTags = new Set<string>();
+          if (data.year) autoTags.add(String(data.year));
+          if (data.medium) data.medium.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.add(t); });
+          if (data.width_cm && data.height_cm) autoTags.add(`${data.width_cm}x${data.height_cm}cm`);
+          const custom = data.tags.filter((t: string) => !autoTags.has(t));
+          setTagChips(custom);
+        }
         setImageUri(data.image_url);
         setOriginalImageUrl(data.image_url);
       }
@@ -124,6 +135,20 @@ export default function CreateArtworkScreen() {
 
       const combinedMedium = `${medium.trim()}, ${technique.trim()}`;
 
+      // 자동 태그 생성: 제작연도 + 재료/기법 + 크기
+      const autoTags: string[] = [];
+      if (year.trim()) autoTags.push(year.trim());
+      if (medium.trim()) medium.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.push(t); });
+      if (technique.trim()) technique.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.push(t); });
+      if (widthCm.trim() && heightCm.trim()) autoTags.push(`${widthCm.trim()}x${heightCm.trim()}cm`);
+      // 커스텀 태그 추가 (칩 + 입력중인 텍스트)
+      tagChips.forEach(t => { if (t) autoTags.push(t); });
+      if (tagInput.trim()) {
+        tagInput.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.push(t); });
+      }
+      // 중복 제거
+      const tags = [...new Set(autoTags)];
+
       const artworkData = {
         title: title.trim(),
         image_url: imageUrl!,
@@ -133,6 +158,7 @@ export default function CreateArtworkScreen() {
         height_cm: heightCm ? parseFloat(heightCm) : null,
         edition: edition.trim() || null,
         description: description.trim() || null,
+        tags,
       };
 
       if (isEditing) {
@@ -319,6 +345,46 @@ export default function CreateArtworkScreen() {
           />
         </Animated.View>
 
+        {/* 태그 */}
+        <Animated.View entering={FadeInDown.delay(550).duration(400).springify()}>
+          <Text style={[styles.label, { color: C.fg }]}>추가 태그 <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
+          <TextInput
+            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
+            value={tagInput}
+            onChangeText={(text) => {
+              if (text.includes(',') || text.includes('،')) {
+                const parts = text.split(/[,،]/);
+                const newTags = parts.slice(0, -1).map(s => s.trim()).filter(Boolean);
+                if (newTags.length > 0) {
+                  setTagChips(prev => [...new Set([...prev, ...newTags])]);
+                }
+                setTagInput(parts[parts.length - 1]);
+              } else {
+                setTagInput(text);
+              }
+            }}
+            placeholder={tagChips.length > 0 ? '태그 추가...' : '예: 네오팝, 스트릿아트 (쉼표로 구분)'}
+            placeholderTextColor={C.mutedLight}
+          />
+          {tagChips.length > 0 && (
+            <View style={styles.tagChipsWrap}>
+              {tagChips.map((tag, i) => (
+                <Pressable
+                  key={i}
+                  style={({ pressed }) => [styles.tagChip, { backgroundColor: C.goldDim, borderColor: C.gold }, pressed && { opacity: 0.6 }]}
+                  onPress={() => setTagChips(prev => prev.filter((_, idx) => idx !== i))}
+                >
+                  <Text style={[styles.tagChipText, { color: C.gold }]}>#{tag}</Text>
+                  <Text style={[styles.tagChipX, { color: C.gold }]}>×</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <Text style={[styles.tagHint, { color: C.mutedLight }]}>
+            제작연도, 재료, 기법, 크기는 자동 태그 · 탭하면 삭제
+          </Text>
+        </Animated.View>
+
         <View style={{ height: 40 }} />
       </ScrollView>
       </View>
@@ -409,6 +475,36 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 140,
     paddingTop: 14,
+  },
+  tagChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 4,
+  },
+  tagChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  tagChipX: {
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 2,
+  },
+  tagHint: {
+    fontSize: 11,
+    marginTop: 8,
+    fontStyle: 'italic',
   },
   imagePicker: {
     borderWidth: 1,

@@ -470,6 +470,24 @@ function ArtworkViewer({
               </Text>
             </Pressable>
           )}
+          {/* Tags */}
+          {artwork && (() => {
+            const tags = artwork.tags && artwork.tags.length > 0
+              ? artwork.tags
+              : artwork.medium
+                ? artwork.medium.split(/[,،]/).map(s => s.trim()).filter(Boolean)
+                : [];
+            return tags.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.viewerTagsWrap} contentContainerStyle={styles.viewerTagsContent}>
+                {tags.map((tag, i) => (
+                  <View key={i} style={styles.viewerTag}>
+                    <Text style={styles.viewerTagText}>#{tag}</Text>
+                  </View>
+                ))}
+              </ScrollView>
+            ) : null;
+          })()}
+
           <View style={styles.viewerInfoRow}>
             <View style={styles.viewerInfoLeft}>
               <Text style={styles.viewerTitle}>{artwork?.title}</Text>
@@ -862,14 +880,6 @@ export default function ArtistPortfolioScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: C.bg }]}>
-      {/* Back button */}
-      <Pressable
-        style={[styles.backBtn, { top: insets.top + 8, borderColor: C.border }]}
-        onPress={() => router.back()}
-      >
-        <Text style={[styles.backText, { color: C.fg }]}>←</Text>
-      </Pressable>
-
       <Animated.ScrollView
         onScroll={scrollHandler}
         scrollEventThrottle={16}
@@ -1055,7 +1065,7 @@ export default function ArtistPortfolioScreen() {
             {/* Collection filter circles */}
             {collections.length > 0 && (
               <View style={[styles.colFilterWrap, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-                {Platform.OS === 'web' && collections.length > 3 && (
+                {Platform.OS === 'web' && collections.length > 5 && (
                   <View style={styles.colFilterNavRow}>
                     <Pressable
                       style={({ pressed }) => [styles.colFilterNavBtn, { borderColor: C.border }, pressed && { opacity: 0.6 }]}
@@ -1792,6 +1802,25 @@ const styles = StyleSheet.create({
     right: 0,
     paddingHorizontal: 24,
     paddingTop: 60,
+  },
+  viewerTagsWrap: {
+    marginBottom: 12,
+    maxHeight: 32,
+  },
+  viewerTagsContent: {
+    gap: 6,
+  },
+  viewerTag: {
+    backgroundColor: 'rgba(200,169,110,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  viewerTagText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#C8A96E',
+    letterSpacing: 0.3,
   },
   viewerArtistRow: {
     flexDirection: 'row',
