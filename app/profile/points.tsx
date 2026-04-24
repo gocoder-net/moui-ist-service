@@ -94,7 +94,6 @@ export default function PointsHistoryScreen() {
           {(profile?.points ?? 0).toLocaleString()}
           <Text style={[styles.balanceUnit, { color: C.muted }]}> MOUI</Text>
         </Text>
-        <Text style={[styles.balanceSub, { color: C.mutedLight }]}>= {((profile?.points ?? 0) * 100).toLocaleString()}원</Text>
       </Animated.View>
 
       {/* 내역 리스트 */}
@@ -175,10 +174,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
-  balanceSub: {
-    fontSize: 13,
-  },
-
   list: {
     paddingHorizontal: 16,
   },

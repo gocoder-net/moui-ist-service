@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
   StyleSheet, View, Text, Pressable, FlatList, ActivityIndicator,
-  TextInput, Platform, Alert,
+  Platform, Alert, Linking,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import { parseRegion } from '@/constants/regions';
+import { MOUI_CATEGORIES, TARGET_OPTIONS } from '@/constants/moui';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 type MouiPost = {
@@ -18,6 +19,11 @@ type MouiPost = {
   title: string;
   description: string;
   fields: string | null;
+  category: string | null;
+  region: string | null;
+  target_types: string | null;
+  map_url: string | null;
+  meeting_date: string | null;
   status: 'open' | 'closed';
   created_at: string;
   profiles?: {
@@ -47,6 +53,20 @@ function formatRegionLabel(region: string | null | undefined) {
   return `${compactProvince} ${parsed.district}`;
 }
 
+function formatMeetingDate(dateStr: string) {
+  const d = new Date(dateStr);
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+  const hour = d.getHours();
+  const minute = d.getMinutes();
+  const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
+  const weekday = weekdays[d.getDay()];
+  if (hour === 0 && minute === 0) {
+    return `${month}/${day}(${weekday})`;
+  }
+  return `${month}/${day}(${weekday}) ${hour}:${String(minute).padStart(2, '0')}`;
+}
+
 export default function MouiScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
@@ -56,46 +76,22 @@ export default function MouiScreen() {
 
   const [posts, setPosts] = useState<MouiPost[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [formTitle, setFormTitle] = useState('');
-  const [formDesc, setFormDesc] = useState('');
-  const [formFields, setFormFields] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const fetchPosts = async () => {
-    const { data } = await (supabase as any)
+    let query = (supabase as any)
       .from('moui_posts')
       .select('*, profiles(name, username, avatar_url, field, user_type)')
       .order('created_at', { ascending: false });
+    if (selectedCategory) {
+      query = query.eq('category', selectedCategory);
+    }
+    const { data } = await query;
     if (data) setPosts(data);
     setLoading(false);
   };
 
-  useFocusEffect(useCallback(() => { fetchPosts(); }, []));
-
-  const handleSubmit = async () => {
-    if (!user) return;
-    if (!formTitle.trim()) { showAlert('알림', '제목을 입력해주세요.'); return; }
-    if (!formDesc.trim()) { showAlert('알림', '내용을 입력해주세요.'); return; }
-    setSubmitting(true);
-    const { error } = await (supabase as any).from('moui_posts').insert({
-      user_id: user.id,
-      title: formTitle.trim(),
-      description: formDesc.trim(),
-      fields: formFields.trim() || null,
-      status: 'open',
-    });
-    if (error) {
-      showAlert('오류', '게시 실패: ' + error.message);
-    } else {
-      setFormTitle('');
-      setFormDesc('');
-      setFormFields('');
-      setShowForm(false);
-      fetchPosts();
-    }
-    setSubmitting(false);
-  };
+  useFocusEffect(useCallback(() => { fetchPosts(); }, [selectedCategory]));
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -115,6 +111,8 @@ export default function MouiScreen() {
     const author = item.profiles;
     const isOwner = item.user_id === user?.id;
     const isClosed = item.status === 'closed';
+
+    const targetKeys = item.target_types?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
 
     return (
       <Animated.View entering={FadeInDown.delay(index * 60).duration(300)}>
@@ -137,6 +135,16 @@ export default function MouiScreen() {
             <Text style={[styles.postTime, { color: C.mutedLight }]}>{formatDate(item.created_at)}</Text>
           </View>
 
+          {/* 카테고리 칩 */}
+          {item.category && (() => {
+            const cat = MOUI_CATEGORIES.find(c => c.key === item.category);
+            return cat ? (
+              <View style={[styles.categorChipSmall, { backgroundColor: C.gold + '18' }]}>
+                <Text style={styles.categorChipSmallText}>{cat.icon} {cat.label}</Text>
+              </View>
+            ) : null;
+          })()}
+
           {/* 본문 */}
           <Text style={[styles.postTitle, { color: C.fg }]}>{item.title}</Text>
           <Text style={[styles.postDesc, { color: C.muted }]} numberOfLines={4}>{item.description}</Text>
@@ -149,6 +157,38 @@ export default function MouiScreen() {
                   <Text style={[styles.postTagText, { color: C.gold }]}>{f.trim()}</Text>
                 </View>
               ))}
+            </View>
+          )}
+
+          {/* 모집 대상 */}
+          {targetKeys.length > 0 && (
+            <View style={styles.postTagRow}>
+              {targetKeys.map(key => {
+                const t = TARGET_OPTIONS.find(o => o.key === key);
+                return t ? (
+                  <View key={key} style={[styles.postTag, { backgroundColor: C.card, borderColor: C.border }]}>
+                    <Text style={[styles.postTagText, { color: C.muted }]}>{t.icon} {t.label}</Text>
+                  </View>
+                ) : null;
+              })}
+            </View>
+          )}
+
+          {/* 모임 일시 & 지도 링크 */}
+          {(item.meeting_date || item.map_url) && (
+            <View style={styles.metaRow}>
+              {item.meeting_date && (
+                <Text style={[styles.metaText, { color: C.muted }]}>
+                  📅 {formatMeetingDate(item.meeting_date)}
+                </Text>
+              )}
+              {item.map_url && (
+                <Pressable onPress={() => { Linking.openURL(item.map_url!); }}>
+                  <Text style={[styles.metaText, { color: C.gold }]}>
+                    📍 지도 보기
+                  </Text>
+                </Pressable>
+              )}
             </View>
           )}
 
@@ -207,55 +247,45 @@ export default function MouiScreen() {
         <Pressable
           onPress={() => {
             if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
-            setShowForm(!showForm);
+            router.push('/moui/create');
           }}
           style={({ pressed }) => [styles.headerBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.7 }]}
         >
-          <Text style={[styles.headerBtnText, { color: C.bg }]}>{showForm ? '취소' : '+ 모집'}</Text>
+          <Text style={[styles.headerBtnText, { color: C.bg }]}>+ 모집</Text>
         </Pressable>
       </Animated.View>
 
-      {/* 작성 폼 */}
-      {showForm && (
-        <Animated.View entering={FadeInDown.duration(300).springify()} style={[styles.formCard, { backgroundColor: C.card }]}>
-          <Text style={[styles.formLabel, { color: C.muted }]}>제목</Text>
-          <TextInput
-            style={[styles.formInput, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]}
-            value={formTitle}
-            onChangeText={setFormTitle}
-            placeholder="어떤 협업을 찾고 계신가요?"
-            placeholderTextColor={C.mutedLight}
-          />
-
-          <Text style={[styles.formLabel, { color: C.muted }]}>상세 내용</Text>
-          <TextInput
-            style={[styles.formInput, styles.formTextArea, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]}
-            value={formDesc}
-            onChangeText={setFormDesc}
-            placeholder="프로젝트 설명, 원하는 역할, 일정 등을 적어주세요"
-            placeholderTextColor={C.mutedLight}
-            multiline
-            textAlignVertical="top"
-          />
-
-          <Text style={[styles.formLabel, { color: C.muted }]}>찾는 분야 (선택)</Text>
-          <TextInput
-            style={[styles.formInput, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]}
-            value={formFields}
-            onChangeText={setFormFields}
-            placeholder="예: 그림, 소리"
-            placeholderTextColor={C.mutedLight}
-          />
-
-          <Pressable
-            onPress={handleSubmit}
-            disabled={submitting}
-            style={({ pressed }) => [styles.formSubmitBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.7 }, submitting && { opacity: 0.5 }]}
-          >
-            <Text style={[styles.formSubmitText, { color: C.bg }]}>{submitting ? '게시 중...' : '게시하기'}</Text>
-          </Pressable>
-        </Animated.View>
-      )}
+      {/* 카테고리 필터 */}
+      <View style={styles.filterBar}>
+        <Pressable
+          onPress={() => setSelectedCategory(null)}
+          style={[
+            styles.filterChip,
+            { backgroundColor: selectedCategory === null ? C.gold : C.card },
+          ]}
+        >
+          <Text style={[styles.filterChipText, { color: selectedCategory === null ? C.bg : C.muted }]}>
+            전체
+          </Text>
+        </Pressable>
+        {MOUI_CATEGORIES.map(cat => {
+          const active = selectedCategory === cat.key;
+          return (
+            <Pressable
+              key={cat.key}
+              onPress={() => setSelectedCategory(active ? null : cat.key)}
+              style={[
+                styles.filterChip,
+                { backgroundColor: active ? C.gold : C.card },
+              ]}
+            >
+              <Text style={[styles.filterChipText, { color: active ? C.bg : C.muted }]}>
+                {cat.icon} {cat.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       {/* 게시물 리스트 */}
       {loading ? (
@@ -330,38 +360,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  /* 폼 */
-  formCard: {
-    margin: 16,
-    borderRadius: 16,
-    padding: 20,
+  /* 필터 바 */
+  filterBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
   },
-  formLabel: {
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  filterChipText: {
     fontSize: 12,
     fontWeight: '700',
-    marginBottom: 6,
-    marginTop: 12,
-  },
-  formInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-  },
-  formTextArea: {
-    minHeight: 100,
-    paddingTop: 12,
-  },
-  formSubmitBtn: {
-    marginTop: 16,
-    paddingVertical: 14,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  formSubmitText: {
-    fontSize: 15,
-    fontWeight: '800',
   },
 
   /* 리스트 */
@@ -419,6 +433,17 @@ const styles = StyleSheet.create({
   postTime: {
     fontSize: 11,
   },
+  categorChipSmall: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  categorChipSmallText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
   postTitle: {
     fontSize: 16,
     fontWeight: '800',
@@ -433,7 +458,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   postTag: {
     paddingHorizontal: 10,
@@ -444,6 +469,16 @@ const styles = StyleSheet.create({
   postTagText: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginBottom: 10,
+  },
+  metaText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   postFooter: {
     flexDirection: 'row',

@@ -422,9 +422,6 @@ export default function ProfileScreen() {
               <Text style={[s.pointsDetailText, { color: C.muted }]}>내역</Text>
             </Pressable>
           </View>
-          <View style={[s.pointsInfo, { borderTopColor: C.border }]}>
-            <Text style={[s.pointsInfoText, { color: C.mutedLight }]}>1 MOUI = 100원</Text>
-          </View>
         </Animated.View>
 
         {/* 내 위치 */}

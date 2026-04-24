@@ -88,6 +88,7 @@ function RootNavigator() {
           <Stack.Screen name="artist/[id]" options={{ headerShown: false }} />
           <Stack.Screen name="3dexhibition/[username]/[num]" options={{ headerShown: false }} />
           <Stack.Screen name="artwork/create" options={{ headerShown: false }} />
+          <Stack.Screen name="moui/create" options={{ headerShown: false }} />
           <Stack.Screen name="profile/detail" options={{ headerShown: false }} />
           <Stack.Screen name="profile/points" options={{ headerShown: false }} />
           <Stack.Screen name="profile/settings" options={{ headerShown: false }} />
