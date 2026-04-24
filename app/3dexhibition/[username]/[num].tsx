@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 import { ExhibitionViewerContent } from '@/app/exhibition/[id]';
 
-const C = { bg: '#191f28', gold: '#C8A96E', muted: '#8b95a1' };
+const C = { bg: '#000000', gold: '#C8A96E', muted: '#a8a8a8' };
 
 export default function ExhibitionByUsername() {
   const { username, num } = useLocalSearchParams<{ username: string; num: string }>();

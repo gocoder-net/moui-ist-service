@@ -50,7 +50,7 @@ function CustomTabBar({ state, descriptors, navigation }: any) {
     return (
       <View style={styles.wrapper}>
         <View style={[styles.blurFallback, {
-          backgroundColor: mode === 'dark' ? 'rgba(25, 31, 40, 0.85)' : 'rgba(245, 246, 248, 0.85)',
+          backgroundColor: mode === 'dark' ? 'rgba(0, 0, 0, 0.85)' : 'rgba(245, 246, 248, 0.85)',
         }]}>{content}</View>
       </View>
     );

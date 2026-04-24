@@ -5,12 +5,12 @@ export const Brand = {
   gold: '#C8A96E',
   goldLight: '#E0C992',
   goldDim: 'rgba(200,169,110,0.12)',
-  black: '#191f28',
-  white: '#f2f4f6',
-  cream: '#212a35',
-  gray: '#8b95a1',
-  grayLight: '#4e5968',
-  border: '#333d4b',
+  black: '#000000',
+  white: '#f5f5f5',
+  cream: '#121212',
+  gray: '#a8a8a8',
+  grayLight: '#363636',
+  border: '#262626',
 };
 
 export type ThemeColors = {
@@ -27,15 +27,15 @@ export type ThemeColors = {
 };
 
 export const DarkColors: ThemeColors = {
-  bg: '#191f28',
-  fg: '#f2f4f6',
+  bg: '#000000',
+  fg: '#f5f5f5',
   gold: '#C8A96E',
   goldLight: '#E0C992',
   goldDim: 'rgba(200,169,110,0.12)',
-  muted: '#8b95a1',
-  mutedLight: '#4e5968',
-  border: '#333d4b',
-  card: '#212a35',
+  muted: '#a8a8a8',
+  mutedLight: '#363636',
+  border: '#262626',
+  card: '#121212',
   danger: '#D94040',
 };
 

@@ -18,8 +18,8 @@ import { WALL_LABELS } from '../room-geometry';
 import type { GallerySceneProps, Placement3D, Wall, RoomDimensions } from './types';
 
 const C = {
-  bg: '#191f28', fg: '#f2f4f6', gold: '#C8A96E',
-  muted: '#8b95a1', mutedDark: '#4e5968', border: '#333d4b',
+  bg: '#000000', fg: '#f5f5f5', gold: '#C8A96E',
+  muted: '#a8a8a8', mutedDark: '#363636', border: '#262626',
 };
 
 const DARK_WALLS = ['#333333', '#1B2A4A', '#4A1B2A', '#1B3A2A'];

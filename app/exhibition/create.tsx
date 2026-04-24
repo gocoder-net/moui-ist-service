@@ -22,8 +22,8 @@ import Room3DView from '@/components/exhibition/Room3DView';
 import WallFaceEditor from '@/components/exhibition/WallFaceEditor';
 
 const C = {
-  bg: '#191f28', fg: '#f2f4f6', gold: '#C8A96E', goldLight: '#E0C992',
-  muted: '#8b95a1', mutedLight: '#4e5968', border: '#333d4b', white: '#f2f4f6', inputBg: '#212a35',
+  bg: '#000000', fg: '#f5f5f5', gold: '#C8A96E', goldLight: '#E0C992',
+  muted: '#a8a8a8', mutedLight: '#363636', border: '#262626', white: '#f5f5f5', inputBg: '#121212',
 };
 
 const WALL_COLORS = [
@@ -1140,7 +1140,7 @@ const pickerStyles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: '#212a35',
+    backgroundColor: '#121212',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '75%',
@@ -1156,11 +1156,11 @@ const pickerStyles = StyleSheet.create({
   headerTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#f2f4f6',
+    color: '#f5f5f5',
   },
   headerClose: {
     fontSize: 18,
-    color: '#8b95a1',
+    color: '#a8a8a8',
     padding: 4,
   },
   grid: {
@@ -1172,7 +1172,7 @@ const pickerStyles = StyleSheet.create({
     maxWidth: '33%',
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#191f28',
+    backgroundColor: '#000000',
   },
   artImage: {
     width: '100%',
@@ -1181,7 +1181,7 @@ const pickerStyles = StyleSheet.create({
   artTitle: {
     fontSize: 11,
     fontWeight: '600',
-    color: '#f2f4f6',
+    color: '#f5f5f5',
     padding: 6,
   },
   empty: {
@@ -1191,7 +1191,7 @@ const pickerStyles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 14,
-    color: '#8b95a1',
+    color: '#a8a8a8',
   },
   emptyBtn: {
     paddingHorizontal: 20,
@@ -1211,13 +1211,13 @@ const pickerStyles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#333d4b',
+    borderColor: '#262626',
     alignItems: 'center',
   },
   deviceBtnText: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#8b95a1',
+    color: '#a8a8a8',
   },
 });
 
@@ -1255,11 +1255,11 @@ const styles = StyleSheet.create({
   input: { borderWidth: 1.5, borderColor: C.border, borderRadius: 14, backgroundColor: C.inputBg, paddingHorizontal: 16, paddingVertical: 13, fontSize: 15, color: C.fg },
 
   nextBtn: { backgroundColor: C.gold, paddingVertical: 16, borderRadius: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 24 },
-  nextBtnText: { color: '#191f28', fontSize: 15, fontWeight: '700', letterSpacing: 1 },
-  nextBtnArrow: { color: '#191f28', fontSize: 16 },
+  nextBtnText: { color: '#000000', fontSize: 15, fontWeight: '700', letterSpacing: 1 },
+  nextBtnArrow: { color: '#000000', fontSize: 16 },
 
   roomCard: { borderWidth: 1.5, borderColor: C.border, borderRadius: 16, padding: 18, marginBottom: 12 },
-  roomCardSel: { borderColor: C.gold, backgroundColor: '#212a35' },
+  roomCardSel: { borderColor: C.gold, backgroundColor: '#121212' },
   roomCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   roomCardTitle: { fontSize: 16, fontWeight: '800', color: C.fg },
   roomCardDesc: { fontSize: 12, color: C.muted, marginTop: 4 },
@@ -1275,7 +1275,7 @@ const styles = StyleSheet.create({
 
   segmentRow: { flexDirection: 'row', gap: 0, marginTop: 16, borderWidth: 1.5, borderColor: C.border, borderRadius: 12, overflow: 'hidden' },
   segmentBtn: { flex: 1, paddingVertical: 10, alignItems: 'center', backgroundColor: C.inputBg },
-  segmentBtnActive: { backgroundColor: '#333d4b' },
+  segmentBtnActive: { backgroundColor: '#262626' },
   segmentText: { fontSize: 12, fontWeight: '700', color: C.muted, letterSpacing: 1 },
   segmentTextActive: { color: C.white },
 
@@ -1288,7 +1288,7 @@ const styles = StyleSheet.create({
   hexInput: { flex: 1, borderWidth: 1.5, borderColor: C.border, borderRadius: 10, backgroundColor: C.inputBg, paddingHorizontal: 12, paddingVertical: 8, fontSize: 14, color: C.fg, fontWeight: '600', letterSpacing: 2 },
   hexPreview: { width: 32, height: 32, borderRadius: 16, borderWidth: 1.5, borderColor: C.border },
   hexApplyBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: C.gold },
-  hexApplyText: { fontSize: 12, fontWeight: '700', color: '#191f28' },
+  hexApplyText: { fontSize: 12, fontWeight: '700', color: '#000000' },
 
   unifyBtn: { marginTop: 16, paddingVertical: 12, borderRadius: 12, borderWidth: 1.5, borderColor: C.gold, alignItems: 'center', backgroundColor: 'rgba(200,169,110,0.06)' },
   unifyBtnText: { fontSize: 13, fontWeight: '700', color: C.gold, letterSpacing: 1 },
@@ -1324,8 +1324,8 @@ const styles = StyleSheet.create({
   angleLabel: { position: 'absolute', bottom: -14, fontSize: 8, color: C.muted },
 
   createBtn: { backgroundColor: C.gold, paddingVertical: 18, borderRadius: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, shadowColor: C.gold, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 },
-  createBtnText: { color: '#191f28', fontSize: 16, fontWeight: '700', letterSpacing: 2 },
-  createBtnArrow: { color: '#191f28', fontSize: 18 },
+  createBtnText: { color: '#000000', fontSize: 16, fontWeight: '700', letterSpacing: 2 },
+  createBtnArrow: { color: '#000000', fontSize: 18 },
 
   wallSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, paddingHorizontal: 4, marginBottom: 4 },
   wallSectionTitle: { fontSize: 13, fontWeight: '700', color: C.fg, letterSpacing: 1 },
@@ -1350,7 +1350,7 @@ const styles = StyleSheet.create({
   // Wall surface mode toggle (color/image)
   surfaceToggleRow: { flexDirection: 'row', gap: 0, marginTop: 8, marginBottom: 8, borderWidth: 1.5, borderColor: C.border, borderRadius: 10, overflow: 'hidden' },
   surfaceToggleBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', backgroundColor: C.inputBg },
-  surfaceToggleBtnActive: { backgroundColor: '#333d4b' },
+  surfaceToggleBtnActive: { backgroundColor: '#262626' },
   surfaceToggleText: { fontSize: 11, fontWeight: '700', color: C.muted, letterSpacing: 1 },
   surfaceToggleTextActive: { color: C.white },
 

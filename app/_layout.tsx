@@ -118,7 +118,7 @@ function RootNavigator() {
 const splash = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#191f28',
+    backgroundColor: '#000000',
     justifyContent: 'center',
     alignItems: 'center',
   },

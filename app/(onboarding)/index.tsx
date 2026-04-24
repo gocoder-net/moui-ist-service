@@ -33,16 +33,16 @@ import Animated, {
 } from 'react-native-reanimated';
 
 const C = {
-  bg: '#191f28',
-  fg: '#f2f4f6',
+  bg: '#000000',
+  fg: '#f5f5f5',
   gold: '#C8A96E',
   goldLight: '#E0C992',
   goldDim: 'rgba(200,169,110,0.12)',
-  muted: '#8b95a1',
-  mutedLight: '#4e5968',
-  border: '#333d4b',
-  white: '#f2f4f6',
-  inputBg: '#212a35',
+  muted: '#a8a8a8',
+  mutedLight: '#363636',
+  border: '#262626',
+  white: '#f5f5f5',
+  inputBg: '#121212',
 };
 
 type UserType = 'creator' | 'aspiring' | 'audience';
@@ -259,7 +259,7 @@ function SelectionCard({
 
   const cardAnim = useAnimatedStyle(() => ({
     borderColor: interpolateColor(borderProgress.value, [0, 1], [C.border, C.gold]),
-    backgroundColor: interpolateColor(borderProgress.value, [0, 1], [C.bg, '#212a35']),
+    backgroundColor: interpolateColor(borderProgress.value, [0, 1], [C.bg, '#1a1a1a']),
     transform: [{ scale: cardScale.value }],
   }));
 
@@ -550,7 +550,7 @@ export default function OnboardingScreen() {
                   </View>
                 )}
                 <View style={styles.avatarEditBadge}>
-                  <Text style={{ fontSize: 10, color: '#191f28' }}>+</Text>
+                  <Text style={{ fontSize: 10, color: '#000000' }}>+</Text>
                 </View>
               </Pressable>
               <Text style={styles.avatarLabel}>프로필 사진</Text>
@@ -670,7 +670,7 @@ export default function OnboardingScreen() {
             ]}
           >
             {loading ? (
-              <ActivityIndicator color="#191f28" size="small" />
+              <ActivityIndicator color="#000000" size="small" />
             ) : null}
             <Text style={styles.btnMainText}>
               {loading ? '설정 중...' : step === 1 ? '다음' : '시작하기'}
@@ -810,13 +810,13 @@ const styles = StyleSheet.create({
     opacity: 0.35,
   },
   btnMainText: {
-    color: '#191f28',
+    color: '#000000',
     fontSize: 16,
     fontWeight: '700',
     letterSpacing: 2,
   },
   btnArrow: {
-    color: '#191f28',
+    color: '#000000',
     fontSize: 18,
     fontWeight: '300',
   },

@@ -49,7 +49,7 @@ type Artwork = Database['public']['Tables']['artworks']['Row'];
 type Exhibition = Database['public']['Tables']['exhibitions']['Row'];
 
 const MAX_CONTENT_W = 680;
-const MAX_HERO_H = 280;
+const MAX_HERO_H = 220;
 
 const Fonts = {
   serif: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
@@ -81,7 +81,7 @@ function BottomTabBar() {
     return (
       <View style={tabStyles.wrapper}>
         <View style={[tabStyles.blurFallback, {
-          backgroundColor: mode === 'dark' ? 'rgba(25, 31, 40, 0.85)' : 'rgba(245, 246, 248, 0.85)',
+          backgroundColor: mode === 'dark' ? 'rgba(0, 0, 0, 0.85)' : 'rgba(245, 246, 248, 0.85)',
         }]}>{content}</View>
       </View>
     );
@@ -217,7 +217,7 @@ function ArtworkCard({
               />
             </Animated.View>
             <LinearGradient
-              colors={['transparent', 'rgba(25,31,40,0.0)', 'rgba(25,31,40,0.7)', 'rgba(25,31,40,0.92)']}
+              colors={['transparent', 'rgba(0,0,0,0.0)', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.92)']}
               locations={[0, 0.35, 0.7, 1]}
               style={styles.artGradient}
             />
@@ -460,7 +460,7 @@ export default function ArtistPortfolioScreen() {
   const { colors: C } = useThemeMode();
   const { width: screenW, height: screenH } = useWindowDimensions();
 
-  const heroH = Math.min(screenH * 0.4, MAX_HERO_H);
+  const heroH = Math.min(screenH * 0.32, MAX_HERO_H);
   const contentW = Math.min(screenW, MAX_CONTENT_W);
 
   const [resolvedId, setResolvedId] = useState<string | null>(UUID_REGEX.test(rawId) ? rawId : null);
@@ -609,13 +609,6 @@ export default function ArtistPortfolioScreen() {
     Alert.alert('완료', '채팅 요청을 보냈습니다!');
   };
 
-  /* ── Parallax styles ── */
-  const heroBgStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: interpolate(scrollY.value, [0, heroH], [0, heroH * 0.3], Extrapolation.CLAMP) },
-    ],
-  }));
-
   const heroContentStyle = useAnimatedStyle(() => ({
     opacity: interpolate(scrollY.value, [0, heroH * 0.5], [1, 0], Extrapolation.CLAMP),
     transform: [
@@ -635,8 +628,6 @@ export default function ArtistPortfolioScreen() {
     return {};
   })();
   const snsEntries = Object.entries(snsLinks).filter(([, v]) => v);
-
-  const heroImage = artworks[0]?.image_url;
 
   if (loading) {
     return (
@@ -690,7 +681,7 @@ export default function ArtistPortfolioScreen() {
 
   const isOwner = user?.id === resolvedId;
   const artistName = profile.name ?? profile.username;
-  const avatarInitial = artistName.trim().charAt(0).toUpperCase() || 'A';
+  const avatarEmoji = USER_TYPE_EMOJI[profile.user_type] ?? '👀';
   const isCreator = profile.user_type === 'creator';
   const isVerifiedCreator = !!(profile as any)?.verified;
   const fieldItems = (profile.field ?? '')
@@ -737,41 +728,20 @@ export default function ArtistPortfolioScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* ═══ HERO SECTION ═══ */}
-        <View style={[styles.heroWrap, { height: heroH }]}>
-          {heroImage && (
-            <Animated.View style={[StyleSheet.absoluteFill, heroBgStyle]}>
-              <Image
-                source={{ uri: heroImage }}
-                style={[StyleSheet.absoluteFill, { width: screenW, height: heroH + heroH * 0.3 }]}
-                blurRadius={50}
-                resizeMode="cover"
-              />
-            </Animated.View>
-          )}
-          <LinearGradient
-            colors={['rgba(25,31,40,0.3)', 'rgba(25,31,40,0.65)', 'rgba(25,31,40,0.95)']}
-            locations={[0, 0.5, 1]}
-            style={StyleSheet.absoluteFillObject}
-          />
-
+        <View style={[styles.heroWrap, { height: heroH, backgroundColor: C.bg }]}>
           <Animated.View style={[styles.heroContent, heroContentStyle]}>
-            <LinearGradient
-              colors={['rgba(16,22,30,0.84)', 'rgba(28,39,52,0.72)', 'rgba(16,22,30,0.58)']}
-              locations={[0, 0.55, 1]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={[styles.heroPanel, { borderColor: 'rgba(200,169,110,0.22)' }]}
+            <View
+              style={[styles.heroPanel, { borderColor: C.border, backgroundColor: C.card }]}
             >
-              <View style={styles.heroPanelShine} />
               <View style={styles.heroRow}>
                 {/* ── Left: Avatar + Name + Badges ── */}
                 <View style={styles.heroLeft}>
-                  <View style={[styles.heroAvatarWrap, { borderColor: 'rgba(200,169,110,0.45)', backgroundColor: 'rgba(12,18,26,0.75)' }]}>
+                  <View style={[styles.heroAvatarWrap, { borderColor: C.gold, backgroundColor: C.card }]}>
                     {profile.avatar_url ? (
                       <Image source={{ uri: profile.avatar_url }} style={styles.heroAvatar} resizeMode="cover" />
                     ) : (
-                      <View style={[styles.heroAvatarFallback, { backgroundColor: 'rgba(200,169,110,0.16)' }]}>
-                        <Text style={[styles.heroAvatarInitial, { color: C.gold }]}>{avatarInitial}</Text>
+                      <View style={[styles.heroAvatarFallback, { backgroundColor: 'rgba(200,169,110,0.12)' }]}>
+                        <Text style={styles.heroAvatarEmoji}>{avatarEmoji}</Text>
                       </View>
                     )}
                   </View>
@@ -798,7 +768,7 @@ export default function ArtistPortfolioScreen() {
                   )}
                 </View>
 
-                {/* ── Right: Fields + Stats ── */}
+                {/* ── Right: Fields + Buttons ── */}
                 <View style={styles.heroRight}>
                   <View style={styles.heroFieldRow}>
                     {fieldItems.length > 0 ? (
@@ -817,55 +787,56 @@ export default function ArtistPortfolioScreen() {
                       </View>
                     )}
                   </View>
-                  <View style={styles.statsRow}>
-                    <Pressable style={styles.statItem} onPress={() => setActiveTab('works')}>
-                      <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: activeTab === 'works' ? C.gold : C.fg }]} />
-                      <Text style={[styles.statLabel, { color: activeTab === 'works' ? C.gold : C.muted }]}>작품</Text>
-                      {activeTab === 'works' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
-                    </Pressable>
-                    <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
-                    <Pressable style={styles.statItem} onPress={() => setActiveTab('exhibitions')}>
-                      <AnimatedCounter to={exhibitions.length} style={[styles.statNumber, { color: activeTab === 'exhibitions' ? C.gold : C.fg }]} />
-                      <Text style={[styles.statLabel, { color: activeTab === 'exhibitions' ? C.gold : C.muted }]}>전시관</Text>
-                      {activeTab === 'exhibitions' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
-                    </Pressable>
-                    <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
-                    <View style={styles.statItem}>
-                      <AnimatedCounter to={followerCount} style={[styles.statNumber, { color: C.fg }]} />
-                      <Text style={[styles.statLabel, { color: C.muted }]}>팔로워</Text>
+                  {user?.id && user.id !== resolvedId && (
+                    <View style={styles.actionRow}>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.followBtn,
+                          { borderColor: C.gold },
+                          isFollowing && { backgroundColor: C.gold },
+                          pressed && { opacity: 0.8 },
+                        ]}
+                        onPress={toggleFollow}
+                      >
+                        <Text style={[styles.followBtnText, { color: C.gold }, isFollowing && { color: C.bg }]}>
+                          {isFollowing ? '팔로잉' : '팔로우'}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        style={({ pressed }) => [
+                          styles.followBtn,
+                          { borderColor: C.gold, backgroundColor: C.gold },
+                          pressed && { opacity: 0.8 },
+                        ]}
+                        onPress={() => setChatModalVisible(true)}
+                      >
+                        <Text style={[styles.followBtnText, { color: C.bg }]}>채팅걸기</Text>
+                      </Pressable>
                     </View>
-                  </View>
+                  )}
                 </View>
               </View>
 
-              {user?.id && user.id !== resolvedId && (
-                <View style={styles.actionRow}>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.followBtn,
-                      { borderColor: C.gold },
-                      isFollowing && { backgroundColor: C.gold },
-                      pressed && { opacity: 0.8 },
-                    ]}
-                    onPress={toggleFollow}
-                  >
-                    <Text style={[styles.followBtnText, { color: C.gold }, isFollowing && { color: C.bg }]}>
-                      {isFollowing ? '팔로잉' : '팔로우'}
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    style={({ pressed }) => [
-                      styles.followBtn,
-                      { borderColor: C.gold, backgroundColor: C.gold },
-                      pressed && { opacity: 0.8 },
-                    ]}
-                    onPress={() => setChatModalVisible(true)}
-                  >
-                    <Text style={[styles.followBtnText, { color: C.bg }]}>채팅걸기</Text>
-                  </Pressable>
+              {/* ── Stats row (bottom) ── */}
+              <View style={styles.statsRow}>
+                <Pressable style={styles.statItem} onPress={() => setActiveTab('works')}>
+                  <AnimatedCounter to={artworks.length} style={[styles.statNumber, { color: activeTab === 'works' ? C.gold : C.fg }]} />
+                  <Text style={[styles.statLabel, { color: activeTab === 'works' ? C.gold : C.muted }]}>작품</Text>
+                  {activeTab === 'works' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
+                </Pressable>
+                <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
+                <Pressable style={styles.statItem} onPress={() => setActiveTab('exhibitions')}>
+                  <AnimatedCounter to={exhibitions.length} style={[styles.statNumber, { color: activeTab === 'exhibitions' ? C.gold : C.fg }]} />
+                  <Text style={[styles.statLabel, { color: activeTab === 'exhibitions' ? C.gold : C.muted }]}>전시관</Text>
+                  {activeTab === 'exhibitions' && <View style={[styles.statActiveDot, { backgroundColor: C.gold }]} />}
+                </Pressable>
+                <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
+                <View style={styles.statItem}>
+                  <AnimatedCounter to={followerCount} style={[styles.statNumber, { color: C.fg }]} />
+                  <Text style={[styles.statLabel, { color: C.muted }]}>팔로워</Text>
                 </View>
-              )}
-            </LinearGradient>
+              </View>
+            </View>
           </Animated.View>
         </View>
 
@@ -1079,7 +1050,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(25,31,40,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
@@ -1091,59 +1062,48 @@ const styles = StyleSheet.create({
 
   /* Hero */
   heroWrap: {
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     alignItems: 'center',
     overflow: 'hidden',
+    paddingBottom: 16,
   },
   heroContent: {
     width: '100%',
     alignItems: 'center',
     paddingHorizontal: 16,
+    paddingTop: 8,
   },
   heroPanel: {
     width: '100%',
     maxWidth: 480,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    overflow: 'hidden',
-  },
-  heroPanelShine: {
-    position: 'absolute',
-    top: 0,
-    left: '22%',
-    right: '22%',
-    height: 1,
-    backgroundColor: 'rgba(255,255,255,0.18)',
   },
   heroRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
   },
   heroLeft: {
     alignItems: 'center',
-    gap: 6,
-    minWidth: 80,
+    gap: 5,
+    minWidth: 70,
   },
   heroRight: {
     flex: 1,
     alignItems: 'flex-start',
-    gap: 10,
+    gap: 8,
   },
   heroAvatarWrap: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    borderWidth: 2,
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 1.5,
     justifyContent: 'center',
     alignItems: 'center',
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOpacity: 0.28,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
   },
   heroAvatar: {
     width: '100%',
@@ -1155,15 +1115,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  heroAvatarInitial: {
+  heroAvatarEmoji: {
     fontSize: 22,
-    fontWeight: '800',
-    letterSpacing: 1,
   },
   heroName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
-    letterSpacing: 2,
+    letterSpacing: 1.5,
     textAlign: 'center',
   },
   heroBadgeRow: {
@@ -1200,40 +1158,45 @@ const styles = StyleSheet.create({
   heroFieldChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 999,
     borderWidth: 1,
     backgroundColor: 'rgba(200,169,110,0.1)',
   },
   heroFieldEmoji: {
-    fontSize: 12,
+    fontSize: 11,
   },
   heroFieldChipText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
 
   /* Stats */
   statsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.08)',
   },
   statItem: {
     alignItems: 'center',
     gap: 2,
   },
   statNumber: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
-    letterSpacing: 1,
+    letterSpacing: 0.5,
   },
   statLabel: {
-    fontSize: 10,
-    letterSpacing: 1,
+    fontSize: 9,
+    letterSpacing: 0.5,
   },
   statDot: {
     width: 3,
@@ -1251,21 +1214,21 @@ const styles = StyleSheet.create({
   actionRow: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 10,
-    marginTop: 10,
+    gap: 6,
+    marginTop: 4,
   },
 
   /* Follow */
   followBtn: {
-    paddingHorizontal: 24,
-    paddingVertical: 8,
-    borderRadius: 20,
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+    borderRadius: 12,
     borderWidth: 1,
   },
   followBtnText: {
-    fontSize: 12,
+    fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 1,
+    letterSpacing: 0.3,
   },
 
   /* Chat Modal */
@@ -1381,7 +1344,7 @@ const styles = StyleSheet.create({
   artTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#f2f4f6',
+    color: '#f5f5f5',
     letterSpacing: 0.5,
     textShadowColor: 'rgba(0,0,0,0.5)',
     textShadowOffset: { width: 0, height: 1 },
@@ -1563,7 +1526,7 @@ const styles = StyleSheet.create({
   viewerNavText: {
     fontSize: 34,
     lineHeight: 36,
-    color: '#f2f4f6',
+    color: '#f5f5f5',
     fontWeight: '300',
   },
   viewerBottom: {

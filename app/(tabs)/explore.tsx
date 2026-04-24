@@ -273,7 +273,7 @@ export default function ExploreScreen() {
               resizeMode="cover"
             />
           )}
-          <View style={[styles.artistCoverOverlay, { backgroundColor: C.bg === '#191f28' ? 'rgba(25,31,40,0.80)' : 'rgba(245,246,248,0.80)' }]} />
+          <View style={[styles.artistCoverOverlay, { backgroundColor: C.bg === '#000000' ? 'rgba(0,0,0,0.80)' : 'rgba(245,246,248,0.80)' }]} />
 
           {/* "나" badge */}
           {me && (
@@ -544,7 +544,7 @@ const styles = StyleSheet.create({
   meBadgeText: {
     fontSize: 9,
     fontWeight: '900',
-    color: '#191f28',
+    color: '#000000',
     letterSpacing: 0.3,
   },
   artistCardContent: {

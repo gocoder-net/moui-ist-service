@@ -32,7 +32,7 @@ export default function SettingsScreen() {
           <Switch
             value={mode === 'light'}
             onValueChange={toggleTheme}
-            trackColor={{ false: '#333d4b', true: C.gold }}
+            trackColor={{ false: '#262626', true: C.gold }}
             thumbColor="#ffffff"
           />
         </View>
