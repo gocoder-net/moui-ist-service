@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
 import {
-  StyleSheet, View, Text, Pressable, TextInput, FlatList,
+  StyleSheet, View, Text, Pressable, TextInput, FlatList, Modal,
   KeyboardAvoidingView, Platform, ActivityIndicator, Linking,
   type NativeSyntheticEvent, type TextInputKeyPressEventData,
 } from 'react-native';
@@ -103,6 +103,7 @@ export default function MouiChatScreen() {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showInfo, setShowInfo] = useState(false);
+  const [descPopupVisible, setDescPopupVisible] = useState(false);
   const [showTags, setShowTags] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
@@ -313,6 +314,7 @@ export default function MouiChatScreen() {
   };
 
   return (
+    <>
     <KeyboardAvoidingView
       style={[styles.root, { backgroundColor: C.bg }]}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -324,14 +326,14 @@ export default function MouiChatScreen() {
           <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
             <IconSymbol name="chevron.left" size={20} color={C.fg} />
           </Pressable>
-          <View style={styles.headerCenter}>
+          <Pressable style={styles.headerCenter} onPress={() => setDescPopupVisible(true)}>
             <Text style={[styles.headerTitle, { color: C.fg }]} numberOfLines={1}>
               {post.title}
             </Text>
             <Text style={[styles.headerSub, { color: C.muted }]}>
               {participants.length}명 참여중{expiryLabel ? ` · ${expiryLabel}` : ''}
             </Text>
-          </View>
+          </Pressable>
           <View style={styles.infoToggle} />
         </View>
 
@@ -569,6 +571,20 @@ export default function MouiChatScreen() {
         )}
       </View>
     </KeyboardAvoidingView>
+
+    {/* Description popup */}
+    <Modal visible={descPopupVisible} transparent animationType="fade" onRequestClose={() => setDescPopupVisible(false)}>
+      <Pressable style={styles.descPopupOverlay} onPress={() => setDescPopupVisible(false)}>
+        <View style={[styles.descPopupBox, { backgroundColor: C.card }]}>
+          <Text style={[styles.descPopupTitle, { color: C.fg }]}>{post?.title}</Text>
+          <Text style={[styles.descPopupContent, { color: C.fg, opacity: 0.8 }]}>{post?.description}</Text>
+          <Pressable onPress={() => setDescPopupVisible(false)} style={({ pressed }) => [styles.descPopupClose, { borderColor: C.border }, pressed && { opacity: 0.6 }]}>
+            <Text style={[styles.descPopupCloseText, { color: C.muted }]}>닫기</Text>
+          </Pressable>
+        </View>
+      </Pressable>
+    </Modal>
+    </>
   );
 }
 
@@ -854,5 +870,54 @@ const styles = StyleSheet.create({
   expiredText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  headerDescRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
+  headerDescText: {
+    fontSize: 11,
+    flex: 1,
+    opacity: 0.6,
+  },
+  headerDescMore: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  descPopupOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  descPopupBox: {
+    borderRadius: 16,
+    padding: 24,
+    maxWidth: 500,
+    width: '100%',
+    maxHeight: '70%',
+  },
+  descPopupTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  descPopupContent: {
+    fontSize: 14,
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  descPopupClose: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  descPopupCloseText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 });
