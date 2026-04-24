@@ -492,6 +492,7 @@ export default function ArtistPortfolioScreen() {
   const hasMoreRef = useRef(false);
   const loadingMoreRef = useRef(false);
   const [followerCount, setFollowerCount] = useState(0);
+  const [mouiCount, setMouiCount] = useState(0);
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -586,11 +587,12 @@ export default function ArtistPortfolioScreen() {
 
   const loadData = async (uid: string) => {
     setLoading(true);
-    const [profileRes, artworksRes, followCountRes, exhibitionsRes] = await Promise.all([
+    const [profileRes, artworksRes, followCountRes, exhibitionsRes, mouiRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', uid).single(),
       supabase.from('artworks').select('*', { count: 'exact' }).eq('user_id', uid).order('created_at', { ascending: false }).range(0, ARTWORK_PAGE_SIZE - 1),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', uid),
       supabase.from('exhibitions').select('*').eq('user_id', uid).eq('is_published', true).order('created_at', { ascending: false }),
+      (supabase as any).from('moui_posts').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('status', 'open'),
     ]);
 
     if (profileRes.data) setProfile(profileRes.data);
@@ -604,6 +606,7 @@ export default function ArtistPortfolioScreen() {
       hasMoreRef.current = more;
     }
     setFollowerCount(followCountRes.count ?? 0);
+    setMouiCount(mouiRes.count ?? 0);
     if (exhibitionsRes.data) setExhibitions(exhibitionsRes.data);
 
     if (user?.id && user.id !== uid) {
@@ -834,6 +837,23 @@ export default function ArtistPortfolioScreen() {
                       </View>
                     )}
                   </View>
+                  {snsEntries.length > 0 && (
+                    <View style={styles.heroSnsRow}>
+                      {snsEntries.map(([key, url]) => {
+                        const detected = detectSnsType(url);
+                        return (
+                          <Pressable
+                            key={key}
+                            style={[styles.heroSnsChip, { borderColor: 'rgba(200,169,110,0.28)' }]}
+                            onPress={() => Linking.openURL(url)}
+                          >
+                            <Text style={{ fontSize: 13 }}>{detected.icon}</Text>
+                            <Text style={[styles.heroSnsLabel, { color: C.gold }]}>{detected.label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
                   {!isOwner && (
                     <View style={styles.actionRow}>
                       <Pressable
@@ -848,7 +868,7 @@ export default function ArtistPortfolioScreen() {
                             if (Platform.OS === 'web') {
                               if (window.confirm('모의스트 가입이 필요합니다.\n가입하시겠습니까?')) router.push('/signup' as any);
                             } else {
-                              Alert.alert('가입 필요', '모의스트 가입이 필요합니다.', [
+                              Alert.alert('가��� 필요', '모의스트 가입이 필요합니다.', [
                                 { text: '취소', style: 'cancel' },
                                 { text: '가입하기', onPress: () => router.push('/signup' as any) },
                               ]);
@@ -873,7 +893,7 @@ export default function ArtistPortfolioScreen() {
                             if (Platform.OS === 'web') {
                               if (window.confirm('모의스트 가입이 필요합니다.\n가입하시겠습니까?')) router.push('/signup' as any);
                             } else {
-                              Alert.alert('가입 필요', '모의스트 가입이 필요합니다.', [
+                              Alert.alert('���입 필요', '모의스트 가입이 필요합니다.', [
                                 { text: '취소', style: 'cancel' },
                                 { text: '가입하기', onPress: () => router.push('/signup' as any) },
                               ]);
@@ -908,6 +928,14 @@ export default function ArtistPortfolioScreen() {
                   <AnimatedCounter to={followerCount} style={[styles.statNumber, { color: C.fg }]} />
                   <Text style={[styles.statLabel, { color: C.muted }]}>팔로워</Text>
                 </View>
+                <View style={[styles.statDot, { backgroundColor: C.mutedLight }]} />
+                <Pressable style={styles.statItem} onPress={() => {
+                  const username = profile?.username;
+                  if (username) router.push(`/(tabs)/moui?user=${username}` as any);
+                }}>
+                  <AnimatedCounter to={mouiCount} style={[styles.statNumber, { color: C.fg }]} />
+                  <Text style={[styles.statLabel, { color: C.muted }]}>진행모임</Text>
+                </Pressable>
               </View>
             </View>
           </Animated.View>
@@ -1005,28 +1033,6 @@ export default function ArtistPortfolioScreen() {
               <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 3D전시관이 없습니다</Text>
             </View>
           )
-        )}
-
-        {/* ═══ SNS / CONTACT SECTION ═══ */}
-        {snsEntries.length > 0 && (
-          <View style={[styles.snsSection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
-            <Text style={[styles.sectionLabel, { color: C.muted }]}>CONTACT</Text>
-            <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
-            {snsEntries.map(([key, url]) => {
-              const detected = detectSnsType(url);
-              return (
-                <Pressable
-                  key={key}
-                  style={[styles.snsRow, { borderBottomColor: C.border }]}
-                  onPress={() => Linking.openURL(url)}
-                >
-                  <Text style={styles.snsIcon}>{detected.icon}</Text>
-                  <Text style={[styles.snsKey, { color: C.fg }]}>{detected.label}</Text>
-                  <Text style={[styles.snsArrow, { color: C.gold }]}>→</Text>
-                </Pressable>
-              );
-            })}
-          </View>
         )}
 
         {/* footer */}
@@ -1207,6 +1213,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     flexWrap: 'wrap',
     gap: 6,
+  },
+  heroSnsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  heroSnsChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  heroSnsLabel: {
+    fontSize: 12,
+    fontWeight: '500',
   },
   heroFieldChip: {
     flexDirection: 'row',

@@ -1,13 +1,13 @@
 import { useState, useCallback, useMemo } from 'react';
 import {
   StyleSheet, View, Text, Pressable, SectionList, ActivityIndicator,
-  Platform, Alert, Linking,
+  Platform, Alert, Linking, TextInput,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
@@ -98,6 +98,7 @@ function formatMeetingDate(dateStr: string) {
 export default function MouiScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const { user: userParam } = useLocalSearchParams<{ user?: string }>();
   const { user, profile } = useAuth();
   const { colors: C } = useThemeMode();
   const activityRegion = formatRegionLabel(profile?.region);
@@ -105,6 +106,7 @@ export default function MouiScreen() {
   const [posts, setPosts] = useState<MouiPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [searchQuery, setSearchQuery] = useState(userParam ?? '');
   const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
   const [selectedField, setSelectedField] = useState<string | null>(null);
   const [selectedTarget, setSelectedTarget] = useState<string | null>(null);
@@ -155,8 +157,21 @@ export default function MouiScreen() {
     fetchPosts();
   };
 
+  const promptSignup = () => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('모의스트 가입이 필요합니다.\n가입하시겠습니까?')) {
+        router.push('/signup' as any);
+      }
+    } else {
+      Alert.alert('가입 필요', '모의스트 가입이 필요합니다.', [
+        { text: '취소', style: 'cancel' },
+        { text: '가입하기', onPress: () => router.push('/signup' as any) },
+      ]);
+    }
+  };
+
   const handleJoin = (postId: string) => {
-    if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
+    if (!user) { promptSignup(); return; }
     const post = posts.find(p => p.id === postId);
     if (post && (post.moui_participants?.length ?? 0) >= MAX_PARTICIPANTS) {
       showAlert('알림', `참여 인원이 최대 ${MAX_PARTICIPANTS}명에 도달했습니다.`);
@@ -233,6 +248,16 @@ export default function MouiScreen() {
   const sections = useMemo(() => {
     let filtered = posts;
 
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const exactUserMatch = filtered.filter(p => p.profiles?.username?.toLowerCase() === q);
+      if (exactUserMatch.length > 0) {
+        filtered = exactUserMatch;
+      } else {
+        filtered = filtered.filter(p => p.title.toLowerCase().includes(q));
+      }
+    }
+
     if (selectedCategories.size > 0) {
       filtered = filtered.filter(p => p.category != null && selectedCategories.has(p.category));
     }
@@ -288,7 +313,7 @@ export default function MouiScreen() {
     if (close.length > 0) result.push({ title: '🚶 가까운 모임', data: close });
     if (far.length > 0) result.push({ title: '🚀 먼 모임', data: far });
     return result;
-  }, [posts, myDistrict, myProvince, selectedCategories, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts, user]);
+  }, [posts, myDistrict, myProvince, selectedCategories, selectedDistance, selectedField, selectedTarget, showMyJoined, showMyPosts, user, searchQuery]);
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr);
@@ -313,7 +338,7 @@ export default function MouiScreen() {
     const participants = item.moui_participants ?? [];
     const isJoined = user ? participants.some(pt => pt.user_id === user.id) : false;
     const isFull = participants.length >= MAX_PARTICIPANTS;
-    const showJoinBtn = !!user && !isOwner && !isClosed && !isJoined && !isFull;
+    const showJoinBtn = !isOwner && !isClosed && !isJoined && !isFull;
 
     const targetKeys = item.target_types?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
 
@@ -417,10 +442,14 @@ export default function MouiScreen() {
             {item.meeting_date && (
               <View style={styles.infoRow}>
                 <Text style={[styles.infoLabel, { color: C.muted }]}>일시</Text>
-                <Text style={[styles.infoValue, { color: C.fg }]}>
-                  {formatMeetingDate(item.meeting_date)}
-                  {item.frequency && (item.frequency === 'regular' ? '  ·  정기' : '  ·  1회성')}
-                </Text>
+                {user ? (
+                  <Text style={[styles.infoValue, { color: C.fg }]}>
+                    {formatMeetingDate(item.meeting_date)}
+                    {item.frequency && (item.frequency === 'regular' ? '  ·  정기' : '  ·  1회성')}
+                  </Text>
+                ) : (
+                  <Text style={[styles.infoValue, { color: C.muted, opacity: 0.6 }]}>로그인 후 확인 가능</Text>
+                )}
               </View>
             )}
             {(item.region || item.address) && (() => {
@@ -429,7 +458,9 @@ export default function MouiScreen() {
               return locationText ? (
                 <View style={styles.infoRow}>
                   <Text style={[styles.infoLabel, { color: C.muted }]}>장소</Text>
-                  {item.map_url ? (
+                  {!user ? (
+                    <Text style={[styles.infoValue, { color: C.muted, opacity: 0.6 }]}>로그인 후 확인 가능</Text>
+                  ) : item.map_url ? (
                     <Pressable onPress={() => { Linking.openURL(item.map_url!); }}>
                       <Text style={[styles.infoValue, { color: C.gold, textDecorationLine: 'underline' }]} numberOfLines={1}>{locationText}</Text>
                     </Pressable>
@@ -444,7 +475,11 @@ export default function MouiScreen() {
               return period ? (
                 <View style={styles.infoRow}>
                   <Text style={[styles.infoLabel, { color: C.muted }]}>모집</Text>
-                  <Text style={[styles.infoValue, { color: C.fg }]}>{period}</Text>
+                  {user ? (
+                    <Text style={[styles.infoValue, { color: C.fg }]}>{period}</Text>
+                  ) : (
+                    <Text style={[styles.infoValue, { color: C.muted, opacity: 0.6 }]}>로그인 후 확인 가능</Text>
+                  )}
                 </View>
               ) : null;
             })()}
@@ -679,7 +714,7 @@ export default function MouiScreen() {
             </Pressable>
             <Pressable
               onPress={() => {
-                if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
+                if (!user) { promptSignup(); return; }
                 router.push('/moui/create');
               }}
               style={({ pressed }) => [
@@ -701,6 +736,23 @@ export default function MouiScreen() {
               </LinearGradient>
             </Pressable>
           </View>
+        </View>
+        <View style={[styles.searchBarWrap, { backgroundColor: C.card, borderColor: searchQuery ? C.gold + '88' : C.border }]}>
+          <Ionicons name="search" size={14} color={searchQuery ? C.gold : C.muted} style={{ marginRight: 6 }} />
+          <TextInput
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            placeholder="모임을 검색하세요"
+            placeholderTextColor={C.muted}
+            style={[styles.searchBarInput, { color: C.fg }]}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery.length > 0 && (
+            <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={16} color={C.muted} />
+            </Pressable>
+          )}
         </View>
       </Animated.View>
 
@@ -878,6 +930,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  searchBarWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 36,
+  },
+  searchBarInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '500',
+    padding: 0,
+    margin: 0,
   },
   headerMetaRow: {
     flexDirection: 'row',
