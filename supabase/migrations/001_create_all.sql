@@ -222,6 +222,7 @@ create policy "Users can insert own attendance" on public.attendance for insert 
 create policy "chat_requests_select" on public.chat_requests for select using (auth.uid() = sender_id or auth.uid() = receiver_id);
 create policy "chat_requests_insert" on public.chat_requests for insert with check (auth.uid() = sender_id);
 create policy "chat_requests_update" on public.chat_requests for update using (auth.uid() = receiver_id);
+create policy "chat_requests_delete" on public.chat_requests for delete using (auth.uid() = sender_id or auth.uid() = receiver_id);
 
 -- Chat Messages
 create policy "chat_messages_select" on public.chat_messages for select using (
@@ -229,6 +230,9 @@ create policy "chat_messages_select" on public.chat_messages for select using (
 );
 create policy "chat_messages_insert" on public.chat_messages for insert with check (
   auth.uid() = sender_id and exists (select 1 from public.chat_requests r where r.id = request_id and r.status = 'accepted' and (r.sender_id = auth.uid() or r.receiver_id = auth.uid()))
+);
+create policy "chat_messages_delete" on public.chat_messages for delete using (
+  exists (select 1 from public.chat_requests r where r.id = request_id and (r.sender_id = auth.uid() or r.receiver_id = auth.uid()))
 );
 
 -- =========================

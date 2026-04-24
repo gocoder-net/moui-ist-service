@@ -5,10 +5,14 @@ import {
   Text,
   Pressable,
   TextInput,
+  Image,
   FlatList,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Alert,
+  type NativeSyntheticEvent,
+  type TextInputKeyPressEventData,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -30,6 +34,7 @@ type Profile = {
   name: string | null;
   username: string;
   avatar_url: string | null;
+  user_type: 'creator' | 'aspiring' | 'audience';
 };
 
 export default function ChatRoomScreen() {
@@ -41,29 +46,30 @@ export default function ChatRoomScreen() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [otherUser, setOtherUser] = useState<Profile | null>(null);
+  const [myProfile, setMyProfile] = useState<Profile | null>(null);
   const [inputText, setInputText] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const flatListRef = useRef<FlatList>(null);
+  const inputRef = useRef<TextInput>(null);
 
   // Load chat data
   useEffect(() => {
     if (!requestId || !user?.id) return;
 
     const load = async () => {
-      // Get request to find other user
       const { data: req } = await supabase
         .from('chat_requests')
-        .select('*, sender:profiles!chat_requests_sender_id_fkey(id, name, username, avatar_url), receiver:profiles!chat_requests_receiver_id_fkey(id, name, username, avatar_url)')
+        .select('*, sender:profiles!chat_requests_sender_id_fkey(id, name, username, avatar_url, user_type), receiver:profiles!chat_requests_receiver_id_fkey(id, name, username, avatar_url, user_type)')
         .eq('id', requestId)
         .single();
 
       if (req) {
-        const other = req.sender_id === user.id ? (req as any).receiver : (req as any).sender;
-        setOtherUser(other);
+        const isSender = req.sender_id === user.id;
+        setOtherUser(isSender ? (req as any).receiver : (req as any).sender);
+        setMyProfile(isSender ? (req as any).sender : (req as any).receiver);
       }
 
-      // Get messages
       const { data: msgs } = await supabase
         .from('chat_messages')
         .select('*')
@@ -94,6 +100,15 @@ export default function ChatRoomScreen() {
         (payload) => {
           const newMsg = payload.new as Message;
           setMessages((prev) => {
+            // Replace optimistic message or skip duplicate
+            const optimisticIdx = prev.findIndex(
+              (m) => m.id.startsWith('temp-') && m.sender_id === newMsg.sender_id && m.content === newMsg.content,
+            );
+            if (optimisticIdx >= 0) {
+              const next = [...prev];
+              next[optimisticIdx] = newMsg;
+              return next;
+            }
             if (prev.some((m) => m.id === newMsg.id)) return prev;
             return [...prev, newMsg];
           });
@@ -106,11 +121,28 @@ export default function ChatRoomScreen() {
     };
   }, [requestId]);
 
+  // Scroll to bottom when messages change
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+    }
+  }, [messages.length]);
+
   const sendMessage = useCallback(async () => {
     if (!inputText.trim() || !user?.id || !requestId || sending) return;
     const text = inputText.trim();
     setInputText('');
     setSending(true);
+
+    // Optimistic: immediately add to local state
+    const tempMsg: Message = {
+      id: `temp-${Date.now()}`,
+      request_id: requestId,
+      sender_id: user.id,
+      content: text,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
 
     const { error } = await supabase.from('chat_messages').insert({
       request_id: requestId,
@@ -120,11 +152,53 @@ export default function ChatRoomScreen() {
 
     setSending(false);
     if (error) {
+      // Remove optimistic message on failure, restore input
+      setMessages((prev) => prev.filter((m) => m.id !== tempMsg.id));
       setInputText(text);
     }
   }, [inputText, user?.id, requestId, sending]);
 
+  // Web: Enter to send, Shift+Enter for newline
+  const handleKeyPress = useCallback(
+    (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
+      if (Platform.OS === 'web' && e.nativeEvent.key === 'Enter' && !(e as any).shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    },
+    [sendMessage],
+  );
+
+  const doEndChat = useCallback(async () => {
+    if (!requestId) return;
+    await supabase.from('chat_messages').delete().eq('request_id', requestId);
+    await supabase.from('chat_requests').delete().eq('id', requestId);
+    router.back();
+  }, [requestId]);
+
+  const endChat = useCallback(() => {
+    if (Platform.OS === 'web') {
+      if (window.confirm('이 채팅을 종료하시겠습니까?\n모든 메시지가 삭제됩니다.')) {
+        doEndChat();
+      }
+    } else {
+      Alert.alert('채팅 종료', '이 채팅을 종료하시겠습니까?\n모든 메시지가 삭제됩니다.', [
+        { text: '취소', style: 'cancel' },
+        { text: '종료', style: 'destructive', onPress: doEndChat },
+      ]);
+    }
+  }, [doEndChat]);
+
   const otherName = otherUser?.name ?? otherUser?.username ?? '...';
+
+  const AvatarBubble = ({ profile }: { profile: Profile | null }) =>
+    profile?.avatar_url ? (
+      <Image source={{ uri: profile.avatar_url }} style={styles.msgAvatar} />
+    ) : (
+      <View style={[styles.msgAvatar, styles.msgAvatarFallback, { backgroundColor: C.goldDim }]}>
+        <Text style={{ fontSize: 14 }}>{profile?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+      </View>
+    );
 
   if (loading) {
     return (
@@ -147,8 +221,25 @@ export default function ChatRoomScreen() {
         <Pressable onPress={() => router.back()} style={styles.backBtn} hitSlop={12}>
           <IconSymbol name="chevron.left" size={20} color={C.fg} />
         </Pressable>
-        <Text style={[styles.headerTitle, { color: C.fg }]} numberOfLines={1}>{otherName}</Text>
-        <View style={styles.backBtn} />
+        <Pressable
+          style={styles.headerCenter}
+          onPress={() => otherUser && router.push(`/artist/${otherUser.username}` as any)}
+        >
+          {otherUser?.avatar_url ? (
+            <Image source={{ uri: otherUser.avatar_url }} style={styles.headerAvatar} />
+          ) : (
+            <View style={[styles.headerAvatar, styles.headerAvatarFallback, { backgroundColor: C.goldDim }]}>
+              <Text style={{ fontSize: 14 }}>{otherUser?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+            </View>
+          )}
+          <Text style={[styles.headerTitle, { color: C.fg }]} numberOfLines={1}>
+            {otherName}
+            <Text style={[styles.headerSub, { color: C.muted }]}>님과의 작당모의</Text>
+          </Text>
+        </Pressable>
+        <Pressable onPress={endChat} style={styles.endBtn} hitSlop={12}>
+          <Text style={[styles.endBtnText, { color: C.danger }]}>채팅 종료</Text>
+        </Pressable>
       </View>
 
       {/* Messages */}
@@ -159,21 +250,40 @@ export default function ChatRoomScreen() {
         contentContainerStyle={styles.messageList}
         onContentSizeChange={() => flatListRef.current?.scrollToEnd({ animated: false })}
         onLayout={() => flatListRef.current?.scrollToEnd({ animated: false })}
-        renderItem={({ item }) => {
+        renderItem={({ item, index }) => {
           const isMe = item.sender_id === user?.id;
+          const prevMsg = index > 0 ? messages[index - 1] : null;
+          const showAvatar = !isMe && prevMsg?.sender_id !== item.sender_id;
+
           return (
-            <View style={[styles.msgRow, isMe && styles.msgRowMe]}>
-              <View style={[
-                styles.msgBubble,
-                isMe
-                  ? { backgroundColor: C.gold }
-                  : { backgroundColor: C.card },
-              ]}>
-                <Text style={[styles.msgText, { color: isMe ? C.bg : C.fg }]}>{item.content}</Text>
+            <View style={[styles.msgRow, isMe ? styles.msgRowMe : styles.msgRowOther]}>
+              {!isMe && (
+                showAvatar ? (
+                  <Pressable onPress={() => otherUser && router.push(`/artist/${otherUser.username}` as any)}>
+                    <AvatarBubble profile={otherUser} />
+                  </Pressable>
+                ) : <View style={styles.msgAvatarSpacer} />
+              )}
+              <View style={[styles.msgBody, isMe && styles.msgBodyMe]}>
+                <View style={[
+                  styles.msgBubble,
+                  isMe
+                    ? { backgroundColor: C.gold, borderBottomRightRadius: 4 }
+                    : { backgroundColor: C.card, borderBottomLeftRadius: 4 },
+                ]}>
+                  <Text style={[styles.msgText, { color: isMe ? C.bg : C.fg }]}>{item.content}</Text>
+                </View>
+                <Text style={[styles.msgTime, { color: C.mutedLight, textAlign: isMe ? 'right' : 'left' }]}>
+                  {new Date(item.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                </Text>
               </View>
-              <Text style={[styles.msgTime, { color: C.mutedLight }]}>
-                {new Date(item.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
-              </Text>
+              {isMe && (
+                prevMsg?.sender_id !== item.sender_id ? (
+                  <Pressable onPress={() => router.push(`/artist/${myProfile?.username}` as any)}>
+                    <AvatarBubble profile={myProfile} />
+                  </Pressable>
+                ) : <View style={styles.msgAvatarSpacer} />
+              )}
             </View>
           );
         }}
@@ -187,6 +297,7 @@ export default function ChatRoomScreen() {
       {/* Input bar */}
       <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8), borderTopColor: C.border, backgroundColor: C.bg }]}>
         <TextInput
+          ref={inputRef}
           style={[styles.input, { color: C.fg, backgroundColor: C.card, borderColor: C.border }]}
           placeholder="메시지를 입력하세요"
           placeholderTextColor={C.muted}
@@ -194,7 +305,7 @@ export default function ChatRoomScreen() {
           onChangeText={setInputText}
           multiline
           maxLength={1000}
-          onSubmitEditing={sendMessage}
+          onKeyPress={handleKeyPress}
           blurOnSubmit={false}
         />
         <Pressable
@@ -234,11 +345,37 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  headerTitle: {
+  endBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  endBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  headerCenter: {
     flex: 1,
-    textAlign: 'center',
-    fontSize: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  headerAvatar: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+  },
+  headerAvatarFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: {
+    fontSize: 15,
     fontWeight: '700',
+  },
+  headerSub: {
+    fontSize: 12,
+    fontWeight: '400',
   },
   messageList: {
     padding: 16,
@@ -247,15 +384,38 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   msgRow: {
-    marginBottom: 10,
+    marginBottom: 8,
+    flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 4,
+    gap: 6,
   },
   msgRowMe: {
+    justifyContent: 'flex-end',
+  },
+  msgRowOther: {
+    justifyContent: 'flex-start',
+  },
+  msgAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginTop: 2,
+  },
+  msgAvatarFallback: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  msgAvatarSpacer: {
+    width: 28,
+  },
+  msgBody: {
+    maxWidth: '70%',
+    gap: 2,
+  },
+  msgBodyMe: {
     alignItems: 'flex-end',
   },
   msgBubble: {
-    maxWidth: '75%',
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 16,

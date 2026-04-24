@@ -15,6 +15,16 @@ import { useThemeMode } from '@/contexts/theme-context';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
+
+type ChatProfile = {
+  id: string;
+  name: string | null;
+  username: string;
+  avatar_url: string | null;
+  user_type: 'creator' | 'aspiring' | 'audience';
+  verified: boolean;
+};
 
 type ChatRequestRow = {
   id: string;
@@ -23,8 +33,8 @@ type ChatRequestRow = {
   message: string;
   status: 'pending' | 'accepted' | 'rejected';
   created_at: string;
-  sender?: { id: string; name: string | null; username: string; avatar_url: string | null };
-  receiver?: { id: string; name: string | null; username: string; avatar_url: string | null };
+  sender?: ChatProfile;
+  receiver?: ChatProfile;
   last_message?: string | null;
 };
 
@@ -46,7 +56,7 @@ export default function ChatScreen() {
     // Received pending requests
     const { data: receivedData } = await supabase
       .from('chat_requests')
-      .select('*, sender:profiles!chat_requests_sender_id_fkey(id, name, username, avatar_url)')
+      .select('*, sender:profiles!chat_requests_sender_id_fkey(id, name, username, avatar_url, user_type, verified)')
       .eq('receiver_id', user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
@@ -54,7 +64,7 @@ export default function ChatScreen() {
     // Active (accepted) chats
     const { data: activeData } = await supabase
       .from('chat_requests')
-      .select('*, sender:profiles!chat_requests_sender_id_fkey(id, name, username, avatar_url), receiver:profiles!chat_requests_receiver_id_fkey(id, name, username, avatar_url)')
+      .select('*, sender:profiles!chat_requests_sender_id_fkey(id, name, username, avatar_url, user_type, verified), receiver:profiles!chat_requests_receiver_id_fkey(id, name, username, avatar_url, user_type, verified)')
       .eq('status', 'accepted')
       .or(`sender_id.eq.${user.id},receiver_id.eq.${user.id}`)
       .order('created_at', { ascending: false });
@@ -62,7 +72,7 @@ export default function ChatScreen() {
     // Sent pending requests
     const { data: sentData } = await supabase
       .from('chat_requests')
-      .select('*, receiver:profiles!chat_requests_receiver_id_fkey(id, name, username, avatar_url)')
+      .select('*, receiver:profiles!chat_requests_receiver_id_fkey(id, name, username, avatar_url, user_type, verified)')
       .eq('sender_id', user.id)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
@@ -127,12 +137,36 @@ export default function ChatScreen() {
     return item.sender;
   };
 
-  const Avatar = ({ url, name }: { url?: string | null; name?: string | null }) => (
-    url ? (
-      <Image source={{ uri: url }} style={styles.avatar} />
+  const Badge = ({ profile }: { profile?: ChatProfile | null }) => {
+    if (!profile) return null;
+    if (profile.user_type === 'creator') {
+      return (
+        <View style={[styles.userBadge, { borderColor: C.gold, backgroundColor: C.goldDim }]}>
+          <Text style={[styles.userBadgeText, { color: C.gold }]}>
+            작가{' '}
+            <Text style={{ color: profile.verified ? '#22c55e' : C.danger }}>
+              {getCreatorVerificationStatusText(profile.verified)}
+            </Text>
+          </Text>
+        </View>
+      );
+    }
+    if (profile.user_type === 'aspiring') {
+      return (
+        <View style={[styles.userBadge, { borderColor: C.gold, backgroundColor: C.goldDim }]}>
+          <Text style={[styles.userBadgeText, { color: C.gold }]}>지망생</Text>
+        </View>
+      );
+    }
+    return null;
+  };
+
+  const Avatar = ({ profile }: { profile?: ChatProfile | null }) => (
+    profile?.avatar_url ? (
+      <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
     ) : (
       <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: C.goldDim }]}>
-        <Text style={{ fontSize: 18 }}>{name ? name[0] : '?'}</Text>
+        <Text style={{ fontSize: 18 }}>{profile?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
       </View>
     )
   );
@@ -183,11 +217,16 @@ export default function ChatScreen() {
               return (
                 <View style={[styles.card, { backgroundColor: C.card }]}>
                   <View style={styles.cardRow}>
-                    <Avatar url={sender?.avatar_url} name={sender?.name ?? sender?.username} />
-                    <View style={styles.cardInfo}>
-                      <Text style={[styles.cardName, { color: C.fg }]}>{sender?.name ?? sender?.username}</Text>
+                    <Pressable onPress={() => sender && router.push(`/artist/${sender.username}` as any)}>
+                      <Avatar profile={sender} />
+                    </Pressable>
+                    <Pressable style={styles.cardInfo} onPress={() => sender && router.push(`/artist/${sender.username}` as any)}>
+                      <View style={styles.nameRow}>
+                        <Text style={[styles.cardName, { color: C.fg }]}>{sender?.name ?? sender?.username}</Text>
+                        <Badge profile={sender} />
+                      </View>
                       <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={2}>{item.message}</Text>
-                    </View>
+                    </Pressable>
                   </View>
                   <View style={styles.cardActions}>
                     <Pressable
@@ -215,9 +254,14 @@ export default function ChatScreen() {
                   onPress={() => router.push(`/chat/${item.id}` as any)}
                 >
                   <View style={styles.cardRow}>
-                    <Avatar url={other?.avatar_url} name={other?.name ?? other?.username} />
+                    <Pressable onPress={() => other && router.push(`/artist/${other.username}` as any)}>
+                      <Avatar profile={other} />
+                    </Pressable>
                     <View style={styles.cardInfo}>
-                      <Text style={[styles.cardName, { color: C.fg }]}>{other?.name ?? other?.username}</Text>
+                      <View style={styles.nameRow}>
+                        <Text style={[styles.cardName, { color: C.fg }]}>{other?.name ?? other?.username}</Text>
+                        <Badge profile={other} />
+                      </View>
                       <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={1}>
                         {item.last_message ?? item.message}
                       </Text>
@@ -232,11 +276,16 @@ export default function ChatScreen() {
             return (
               <View style={[styles.card, { backgroundColor: C.card }]}>
                 <View style={styles.cardRow}>
-                  <Avatar url={receiver?.avatar_url} name={receiver?.name ?? receiver?.username} />
-                  <View style={styles.cardInfo}>
-                    <Text style={[styles.cardName, { color: C.fg }]}>{receiver?.name ?? receiver?.username}</Text>
+                  <Pressable onPress={() => receiver && router.push(`/artist/${receiver.username}` as any)}>
+                    <Avatar profile={receiver} />
+                  </Pressable>
+                  <Pressable style={styles.cardInfo} onPress={() => receiver && router.push(`/artist/${receiver.username}` as any)}>
+                    <View style={styles.nameRow}>
+                      <Text style={[styles.cardName, { color: C.fg }]}>{receiver?.name ?? receiver?.username}</Text>
+                      <Badge profile={receiver} />
+                    </View>
                     <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={2}>{item.message}</Text>
-                  </View>
+                  </Pressable>
                   <View style={[styles.pendingBadge, { backgroundColor: C.goldDim }]}>
                     <Text style={[styles.pendingText, { color: C.gold }]}>대기중</Text>
                   </View>
@@ -318,9 +367,25 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: 4,
   },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   cardName: {
     fontSize: 15,
     fontWeight: '700',
+  },
+  userBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+  },
+  userBadgeText: {
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.2,
   },
   cardMsg: {
     fontSize: 13,

@@ -31,8 +31,10 @@ drop table if exists public.exhibition_artworks cascade;
 drop table if exists public.exhibitions cascade;
 
 -- ========== Chat ==========
+drop policy if exists "chat_messages_delete" on public.chat_messages;
 drop policy if exists "chat_messages_insert" on public.chat_messages;
 drop policy if exists "chat_messages_select" on public.chat_messages;
+drop policy if exists "chat_requests_delete" on public.chat_requests;
 drop policy if exists "chat_requests_update" on public.chat_requests;
 drop policy if exists "chat_requests_insert" on public.chat_requests;
 drop policy if exists "chat_requests_select" on public.chat_requests;

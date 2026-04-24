@@ -20,6 +20,7 @@ const MAPPING = {
   'person.fill': 'person',
   'bubble.left.and.bubble.right.fill': 'groups',
   'chat.fill': 'forum',
+  'chevron.left': 'chevron-left',
   'chevron.left.forwardslash.chevron.right': 'code',
   'chevron.right': 'chevron-right',
 } as IconMapping;

@@ -25,6 +25,7 @@ type MouiPost = {
     username: string;
     avatar_url: string | null;
     field: string | null;
+    user_type: 'creator' | 'aspiring' | 'audience';
   };
 };
 
@@ -64,7 +65,7 @@ export default function MouiScreen() {
   const fetchPosts = async () => {
     const { data } = await (supabase as any)
       .from('moui_posts')
-      .select('*, profiles(name, username, avatar_url, field)')
+      .select('*, profiles(name, username, avatar_url, field, user_type)')
       .order('created_at', { ascending: false });
     if (data) setPosts(data);
     setLoading(false);
@@ -124,7 +125,7 @@ export default function MouiScreen() {
               {author?.avatar_url ? (
                 <Image source={{ uri: author.avatar_url }} style={styles.postAvatarImg} contentFit="cover" />
               ) : (
-                <Text style={styles.postAvatarEmoji}>👤</Text>
+                <Text style={styles.postAvatarEmoji}>{author?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
               )}
             </View>
             <View style={{ flex: 1 }}>

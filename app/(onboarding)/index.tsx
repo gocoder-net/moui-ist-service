@@ -6,10 +6,14 @@ import {
   Pressable,
   ActivityIndicator,
   TextInput,
+  Image,
   KeyboardAvoidingView,
   ScrollView,
   Platform,
+  Alert,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
@@ -294,6 +298,8 @@ export default function OnboardingScreen() {
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [fieldInput, setFieldInput] = useState('');
   const [fieldMessage, setFieldMessage] = useState('');
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [loading, setLoading] = useState(false);
   const realNameRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
@@ -373,21 +379,67 @@ export default function OnboardingScreen() {
     }
   };
 
+  const pickAvatar = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setAvatarUri(result.assets[0].uri);
+  };
+
   const handleComplete = async () => {
     if (!displayName.trim() || !realName.trim() || normalizedPhoneNumber.length < 9 || !selected || !user) return;
     if (needsFieldSelection && selectedFields.length === 0) return;
     setLoading(true);
-    await supabase
-      .from('profiles')
-      .update({
-        user_type: selected,
-        name: displayName.trim(),
-        real_name: realName.trim(),
-        phone_number: normalizedPhoneNumber,
-        field: needsFieldSelection ? selectedFields.join(', ') : null,
-      })
-      .eq('id', user.id);
 
+    let avatarUrl: string | null = null;
+
+    // Upload avatar if selected
+    if (avatarUri) {
+      try {
+        const manipulated = await manipulateAsync(
+          avatarUri,
+          [{ resize: { width: 200 } }],
+          { compress: 0.3, format: SaveFormat.JPEG },
+        );
+        const fileName = `avatars/${user.id}/${Date.now()}.jpg`;
+        const response = await fetch(manipulated.uri);
+        const blob = await response.blob();
+        const { error: uploadErr } = await supabase.storage
+          .from('artworks')
+          .upload(fileName, blob, { contentType: 'image/jpeg' });
+        if (!uploadErr) {
+          avatarUrl = supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
+        }
+      } catch {}
+    }
+
+    // Give 1000 MOUI for setting profile picture
+    let bonusPoints: number | undefined;
+    if (avatarUrl) {
+      const { data: curProfile } = await supabase.from('profiles').select('points').eq('id', user.id).single();
+      bonusPoints = (curProfile?.points ?? 50) + 1000;
+      await (supabase as any).from('point_history').insert({
+        user_id: user.id,
+        amount: 1000,
+        balance: bonusPoints,
+        type: 'avatar_bonus',
+        description: '프로필 사진 등록 보상',
+      });
+    }
+
+    await supabase.from('profiles').update({
+      user_type: selected,
+      name: displayName.trim(),
+      real_name: realName.trim(),
+      phone_number: normalizedPhoneNumber,
+      field: needsFieldSelection ? selectedFields.join(', ') : null,
+      ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
+      ...(bonusPoints !== undefined ? { points: bonusPoints } : {}),
+    } as any).eq('id', user.id);
     await refreshProfile();
     setLoading(false);
     router.replace('/(tabs)');
@@ -487,6 +539,26 @@ export default function OnboardingScreen() {
           </Animated.View>
 
           <Animated.View entering={FadeInDown.delay(150).duration(400).springify()} style={styles.nameForm}>
+            {/* 프로필 사진 */}
+            <View style={styles.avatarSection}>
+              <Pressable onPress={pickAvatar} style={styles.avatarPicker}>
+                {avatarUri ? (
+                  <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                ) : (
+                  <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
+                    <Text style={{ fontSize: 32 }}>📷</Text>
+                  </View>
+                )}
+                <View style={styles.avatarEditBadge}>
+                  <Text style={{ fontSize: 10, color: '#191f28' }}>+</Text>
+                </View>
+              </Pressable>
+              <Text style={styles.avatarLabel}>프로필 사진</Text>
+              <Text style={[styles.inputHint, { color: C.gold, fontWeight: '700' }]}>
+                등록하면 1,000 MOUI 지급!
+              </Text>
+            </View>
+
             <View style={styles.inputGroup}>
               <Text style={styles.inputLabel}>활동명 <Text style={{ color: C.gold }}>*</Text></Text>
               <TextInput
@@ -792,6 +864,45 @@ const styles = StyleSheet.create({
   },
   stepLineActive: {
     backgroundColor: C.gold,
+  },
+
+  // Avatar
+  avatarSection: {
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  avatarPicker: {
+    position: 'relative',
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  avatarPlaceholder: {
+    backgroundColor: C.inputBg,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: C.gold,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: C.fg,
   },
 
   // Name form (Step 2)
