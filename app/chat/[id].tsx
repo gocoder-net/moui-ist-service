@@ -20,12 +20,14 @@ import { useThemeMode } from '@/contexts/theme-context';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import * as ImagePicker from 'expo-image-picker';
 
 type Message = {
   id: string;
   request_id: string;
   sender_id: string;
   content: string;
+  image_url: string | null;
   created_at: string;
 };
 
@@ -178,6 +180,7 @@ export default function ChatRoomScreen() {
       request_id: requestId,
       sender_id: user.id,
       content: text,
+      image_url: null,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, tempMsg]);
@@ -196,6 +199,55 @@ export default function ChatRoomScreen() {
     }
   }, [inputText, user?.id, requestId, sending]);
 
+  const pickAndSendImage = useCallback(async () => {
+    if (!user?.id || !requestId || sending) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    setSending(true);
+    const uri = result.assets[0].uri;
+    const fileName = `${user.id}/${requestId}_${Date.now()}.jpg`;
+
+    // Optimistic
+    const tempMsg: Message = {
+      id: `temp-img-${Date.now()}`,
+      request_id: requestId,
+      sender_id: user.id,
+      content: '',
+      image_url: uri,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const { error: uploadError } = await supabase.storage
+        .from('chat-images')
+        .upload(fileName, blob, { contentType: 'image/jpeg' });
+
+      if (uploadError) throw uploadError;
+
+      const imageUrl = supabase.storage.from('chat-images').getPublicUrl(fileName).data.publicUrl;
+
+      const { error } = await supabase.from('chat_messages').insert({
+        request_id: requestId,
+        sender_id: user.id,
+        content: '',
+        image_url: imageUrl,
+      });
+
+      if (error) throw error;
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== tempMsg.id));
+      Alert.alert('오류', '이미지 전송에 실패했습니다.');
+    }
+    setSending(false);
+  }, [user?.id, requestId, sending]);
+
   // Web: Enter to send, Shift+Enter for newline
   const handleKeyPress = useCallback(
     (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
@@ -209,6 +261,20 @@ export default function ChatRoomScreen() {
 
   const doEndChat = useCallback(async () => {
     if (!requestId) return;
+    // Delete uploaded images from storage
+    const { data: imgMsgs } = await supabase
+      .from('chat_messages')
+      .select('image_url')
+      .eq('request_id', requestId)
+      .not('image_url', 'is', null);
+    if (imgMsgs && imgMsgs.length > 0) {
+      const paths = imgMsgs
+        .map((m: any) => m.image_url?.split('/chat-images/')[1])
+        .filter(Boolean);
+      if (paths.length > 0) {
+        await supabase.storage.from('chat-images').remove(paths);
+      }
+    }
     await supabase.from('chat_messages').delete().eq('request_id', requestId);
     await supabase.from('chat_requests').delete().eq('id', requestId);
     router.back();
@@ -395,14 +461,29 @@ export default function ChatRoomScreen() {
                     {myProfile?.name ?? myProfile?.username ?? ''}
                   </Text>
                 )}
-                <View style={[
-                  styles.msgBubble,
-                  isMe
-                    ? { backgroundColor: C.gold, borderBottomRightRadius: 4 }
-                    : { backgroundColor: C.card, borderBottomLeftRadius: 4 },
-                ]}>
-                  <Text style={[styles.msgText, { color: isMe ? C.bg : C.fg }]}>{item.content}</Text>
-                </View>
+                {item.image_url ? (
+                  <Pressable onPress={() => {/* could open full-screen */}}>
+                    <Image
+                      source={{ uri: item.image_url }}
+                      style={[
+                        styles.msgImage,
+                        isMe
+                          ? { borderBottomRightRadius: 4 }
+                          : { borderBottomLeftRadius: 4 },
+                      ]}
+                      resizeMode="cover"
+                    />
+                  </Pressable>
+                ) : (
+                  <View style={[
+                    styles.msgBubble,
+                    isMe
+                      ? { backgroundColor: C.gold, borderBottomRightRadius: 4 }
+                      : { backgroundColor: C.card, borderBottomLeftRadius: 4 },
+                  ]}>
+                    <Text style={[styles.msgText, { color: isMe ? C.bg : C.fg }]}>{item.content}</Text>
+                  </View>
+                )}
                 <View style={[styles.msgTimeRow, { justifyContent: isMe ? 'flex-end' : 'flex-start' }]}>
                   {isMe && otherLastReadAt && item.created_at <= otherLastReadAt && (
                     <Text style={[styles.readReceipt, { color: C.gold }]}>읽음</Text>
@@ -438,6 +519,18 @@ export default function ChatRoomScreen() {
         </View>
       ) : (
         <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8), borderTopColor: C.border, backgroundColor: C.bg }]}>
+          <Pressable
+            style={({ pressed }) => [
+              styles.imageBtn,
+              { backgroundColor: C.card, borderColor: C.border },
+              pressed && { opacity: 0.6 },
+            ]}
+            onPress={pickAndSendImage}
+            disabled={sending}
+            hitSlop={8}
+          >
+            <IconSymbol name="photo.fill" size={20} color={C.muted} />
+          </Pressable>
           <TextInput
             ref={inputRef}
             style={[styles.input, { color: C.fg, backgroundColor: C.card, borderColor: C.border }]}
@@ -669,5 +762,19 @@ const styles = StyleSheet.create({
   expiredText: {
     fontSize: 13,
     fontWeight: '600',
+  },
+  imageBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 1,
+  },
+  msgImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 16,
   },
 });

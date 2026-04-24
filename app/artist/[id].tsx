@@ -834,7 +834,7 @@ export default function ArtistPortfolioScreen() {
                       </View>
                     )}
                   </View>
-                  {user?.id && user.id !== resolvedId && (
+                  {!isOwner && (
                     <View style={styles.actionRow}>
                       <Pressable
                         style={({ pressed }) => [
@@ -843,7 +843,20 @@ export default function ArtistPortfolioScreen() {
                           isFollowing && { backgroundColor: C.gold },
                           pressed && { opacity: 0.8 },
                         ]}
-                        onPress={toggleFollow}
+                        onPress={() => {
+                          if (!user?.id) {
+                            if (Platform.OS === 'web') {
+                              if (window.confirm('모의스트 가입이 필요합니다.\n가입하시겠습니까?')) router.push('/signup' as any);
+                            } else {
+                              Alert.alert('가입 필요', '모의스트 가입이 필요합니다.', [
+                                { text: '취소', style: 'cancel' },
+                                { text: '가입하기', onPress: () => router.push('/signup' as any) },
+                              ]);
+                            }
+                            return;
+                          }
+                          toggleFollow();
+                        }}
                       >
                         <Text style={[styles.followBtnText, { color: C.gold }, isFollowing && { color: C.bg }]}>
                           {isFollowing ? '팔로잉' : '팔로우'}
@@ -855,7 +868,20 @@ export default function ArtistPortfolioScreen() {
                           { borderColor: C.gold, backgroundColor: C.gold },
                           pressed && { opacity: 0.8 },
                         ]}
-                        onPress={() => setChatModalVisible(true)}
+                        onPress={() => {
+                          if (!user?.id) {
+                            if (Platform.OS === 'web') {
+                              if (window.confirm('모의스트 가입이 필요합니다.\n가입하시겠습니까?')) router.push('/signup' as any);
+                            } else {
+                              Alert.alert('가입 필요', '모의스트 가입이 필요합니다.', [
+                                { text: '취소', style: 'cancel' },
+                                { text: '가입하기', onPress: () => router.push('/signup' as any) },
+                              ]);
+                            }
+                            return;
+                          }
+                          setChatModalVisible(true);
+                        }}
                       >
                         <Text style={[styles.followBtnText, { color: C.bg }]}>채팅걸기</Text>
                       </Pressable>

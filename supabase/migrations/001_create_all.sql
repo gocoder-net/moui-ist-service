@@ -467,6 +467,23 @@ BEGIN
 END; $$;
 
 -- =========================
+-- 채팅 이미지 전송
+-- =========================
+
+ALTER TABLE public.chat_messages
+  ADD COLUMN image_url text;
+
+ALTER TABLE public.moui_chat_messages
+  ADD COLUMN image_url text;
+
+-- 채팅 이미지 스토리지
+INSERT INTO storage.buckets (id, name, public) VALUES ('chat-images', 'chat-images', true) ON CONFLICT (id) DO NOTHING;
+
+CREATE POLICY "chat_images_select" ON storage.objects FOR SELECT USING (bucket_id = 'chat-images');
+CREATE POLICY "chat_images_insert" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'chat-images' AND auth.role() = 'authenticated');
+CREATE POLICY "chat_images_delete" ON storage.objects FOR DELETE USING (bucket_id = 'chat-images' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+-- =========================
 -- 채팅 읽음 추적
 -- =========================
 

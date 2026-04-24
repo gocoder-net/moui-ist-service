@@ -33,7 +33,10 @@ type MouiChatItem = {
   title: string;
   category: string | null;
   last_message: string | null;
+  last_message_at: string | null;
   participant_count: number;
+  meeting_date: string | null;
+  expires_at: string | null;
 };
 
 type ChatRequestRow = {
@@ -112,6 +115,20 @@ export default function ChatScreen() {
       (c: any) => c.expires_at && c.expires_at < now,
     );
     for (const chat of expired) {
+      // Delete uploaded images from storage
+      const { data: imgMsgs } = await supabase
+        .from('chat_messages')
+        .select('image_url')
+        .eq('request_id', chat.id)
+        .not('image_url', 'is', null);
+      if (imgMsgs && imgMsgs.length > 0) {
+        const paths = imgMsgs
+          .map((m: any) => m.image_url?.split('/chat-images/')[1])
+          .filter(Boolean);
+        if (paths.length > 0) {
+          await supabase.storage.from('chat-images').remove(paths);
+        }
+      }
       await supabase.from('chat_messages').delete().eq('request_id', chat.id);
       await supabase.from('chat_requests').delete().eq('id', chat.id);
     }
@@ -153,14 +170,41 @@ export default function ChatScreen() {
     for (const postId of mouiPostIds) {
       const { data: postData } = await (supabase as any)
         .from('moui_posts')
-        .select('id, title, category, moui_participants(user_id)')
+        .select('id, title, category, meeting_date, moui_participants(user_id)')
         .eq('id', postId)
         .single();
       if (!postData) continue;
 
+      // Expires 7 days after meeting_date
+      const mouiExpiresAt = postData.meeting_date
+        ? new Date(new Date(postData.meeting_date).getTime() + 7 * 86400000).toISOString()
+        : null;
+
+      // Auto-delete expired moui chats
+      if (mouiExpiresAt && mouiExpiresAt < now) {
+        // Delete images from storage
+        const { data: imgMsgs } = await (supabase as any)
+          .from('moui_chat_messages')
+          .select('image_url')
+          .eq('moui_post_id', postId)
+          .not('image_url', 'is', null);
+        if (imgMsgs && imgMsgs.length > 0) {
+          const paths = imgMsgs
+            .map((m: any) => m.image_url?.split('/chat-images/')[1])
+            .filter(Boolean);
+          if (paths.length > 0) {
+            await supabase.storage.from('chat-images').remove(paths);
+          }
+        }
+        await (supabase as any).from('moui_chat_messages').delete().eq('moui_post_id', postId);
+        await (supabase as any).from('moui_participants').delete().eq('moui_post_id', postId);
+        await (supabase as any).from('moui_posts').delete().eq('id', postId);
+        continue;
+      }
+
       const { data: lastMsg } = await (supabase as any)
         .from('moui_chat_messages')
-        .select('content')
+        .select('content, created_at')
         .eq('moui_post_id', postId)
         .order('created_at', { ascending: false })
         .limit(1);
@@ -169,8 +213,11 @@ export default function ChatScreen() {
         id: postData.id,
         title: postData.title,
         category: postData.category,
-        last_message: lastMsg?.[0]?.content ?? null,
+        last_message: lastMsg?.[0]?.content || null,
+        last_message_at: lastMsg?.[0]?.created_at || null,
         participant_count: postData.moui_participants?.length ?? 0,
+        meeting_date: postData.meeting_date,
+        expires_at: mouiExpiresAt,
       });
     }
 
@@ -313,6 +360,10 @@ export default function ChatScreen() {
 
             if (sec.type === 'moui') {
               const mouiItem = item as MouiChatItem;
+              const mouiTimeAgo = mouiItem.last_message_at ? getRelativeTime(mouiItem.last_message_at) : null;
+              const mouiExpiryLabel = mouiItem.expires_at
+                ? `${new Date(mouiItem.expires_at).getMonth() + 1}/${new Date(mouiItem.expires_at).getDate()} 만료`
+                : null;
               return (
                 <Pressable
                   style={({ pressed }) => [styles.card, { backgroundColor: C.card }, pressed && { opacity: 0.8 }]}
@@ -328,7 +379,14 @@ export default function ChatScreen() {
                         <View style={[styles.pendingBadge, { backgroundColor: C.goldDim }]}>
                           <Text style={[styles.pendingText, { color: C.gold }]}>{mouiItem.participant_count}명</Text>
                         </View>
+                        <View style={{ flex: 1 }} />
+                        {mouiTimeAgo && (
+                          <Text style={[styles.timeAgoText, { color: C.muted }]}>{mouiTimeAgo}</Text>
+                        )}
                       </View>
+                      {mouiExpiryLabel && (
+                        <Text style={[styles.expiryText, { color: C.muted }]}>{mouiExpiryLabel}</Text>
+                      )}
                       <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={1}>
                         {mouiItem.last_message ?? '아직 메시지가 없습니다'}
                       </Text>

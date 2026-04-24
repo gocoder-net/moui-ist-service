@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { parseRegion } from '@/constants/regions';
 import { TARGET_OPTIONS, FIELD_OPTIONS } from '@/constants/moui';
+import * as ImagePicker from 'expo-image-picker';
 
 type MouiParticipant = {
   user_id: string;
@@ -57,6 +58,7 @@ type ChatMessage = {
   moui_post_id: string;
   sender_id: string;
   content: string;
+  image_url: string | null;
   created_at: string;
 };
 
@@ -103,6 +105,15 @@ export default function MouiChatScreen() {
   const [showInfo, setShowInfo] = useState(true);
   const [showTags, setShowTags] = useState(false);
   const flatListRef = useRef<FlatList>(null);
+
+  // Expiry: meeting_date + 7 days
+  const expiresAt = post?.meeting_date
+    ? new Date(new Date(post.meeting_date).getTime() + 7 * 86400000)
+    : null;
+  const isExpired = expiresAt ? expiresAt < new Date() : false;
+  const expiryLabel = expiresAt
+    ? `${expiresAt.getMonth() + 1}/${expiresAt.getDate()} 만료`
+    : null;
 
   // Load post data and messages
   useEffect(() => {
@@ -191,6 +202,7 @@ export default function MouiChatScreen() {
       moui_post_id: postId,
       sender_id: user.id,
       content: text,
+      image_url: null,
       created_at: new Date().toISOString(),
     };
     setMessages((prev) => [...prev, tempMsg]);
@@ -207,6 +219,50 @@ export default function MouiChatScreen() {
       setInputText(text);
     }
   }, [inputText, user?.id, postId, sending]);
+
+  const pickAndSendImage = useCallback(async () => {
+    if (!user?.id || !postId || sending) return;
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.7,
+    });
+    if (result.canceled || !result.assets[0]) return;
+
+    setSending(true);
+    const uri = result.assets[0].uri;
+    const fileName = `${user.id}/${postId}_${Date.now()}.jpg`;
+
+    const tempMsg: ChatMessage = {
+      id: `temp-img-${Date.now()}`,
+      moui_post_id: postId,
+      sender_id: user.id,
+      content: '',
+      image_url: uri,
+      created_at: new Date().toISOString(),
+    };
+    setMessages((prev) => [...prev, tempMsg]);
+
+    try {
+      const response = await fetch(uri);
+      const blob = await response.blob();
+      const { error: uploadError } = await supabase.storage
+        .from('chat-images')
+        .upload(fileName, blob, { contentType: 'image/jpeg' });
+      if (uploadError) throw uploadError;
+
+      const imageUrl = supabase.storage.from('chat-images').getPublicUrl(fileName).data.publicUrl;
+      const { error } = await (supabase as any).from('moui_chat_messages').insert({
+        moui_post_id: postId,
+        sender_id: user.id,
+        content: '',
+        image_url: imageUrl,
+      });
+      if (error) throw error;
+    } catch {
+      setMessages((prev) => prev.filter((m) => m.id !== tempMsg.id));
+    }
+    setSending(false);
+  }, [user?.id, postId, sending]);
 
   const handleKeyPress = useCallback(
     (e: NativeSyntheticEvent<TextInputKeyPressEventData>) => {
@@ -273,7 +329,7 @@ export default function MouiChatScreen() {
               {post.title}
             </Text>
             <Text style={[styles.headerSub, { color: C.muted }]}>
-              {participants.length}명 참여중
+              {participants.length}명 참여중{expiryLabel ? ` · ${expiryLabel}` : ''}
             </Text>
           </View>
           <Pressable onPress={() => setShowInfo(v => !v)} style={styles.infoToggle} hitSlop={12}>
@@ -433,14 +489,25 @@ export default function MouiChatScreen() {
                       {profile?.name ?? profile?.username ?? ''}
                     </Text>
                   )}
-                  <View style={[
-                    styles.msgBubble,
-                    isMe
-                      ? { backgroundColor: C.gold, borderBottomRightRadius: 4 }
-                      : { backgroundColor: C.card, borderBottomLeftRadius: 4 },
-                  ]}>
-                    <Text style={[styles.msgText, { color: isMe ? C.bg : C.fg }]}>{item.content}</Text>
-                  </View>
+                  {item.image_url ? (
+                    <Image
+                      source={{ uri: item.image_url }}
+                      style={[
+                        styles.msgImage,
+                        isMe ? { borderBottomRightRadius: 4 } : { borderBottomLeftRadius: 4 },
+                      ]}
+                      contentFit="cover"
+                    />
+                  ) : (
+                    <View style={[
+                      styles.msgBubble,
+                      isMe
+                        ? { backgroundColor: C.gold, borderBottomRightRadius: 4 }
+                        : { backgroundColor: C.card, borderBottomLeftRadius: 4 },
+                    ]}>
+                      <Text style={[styles.msgText, { color: isMe ? C.bg : C.fg }]}>{item.content}</Text>
+                    </View>
+                  )}
                   <Text style={[styles.msgTime, { color: C.mutedLight, textAlign: isMe ? 'right' : 'left' }]}>
                     {new Date(item.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
                   </Text>
@@ -459,29 +526,49 @@ export default function MouiChatScreen() {
         />
 
         {/* Input bar */}
-        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8), borderTopColor: C.border, backgroundColor: C.bg }]}>
-          <TextInput
-            style={[styles.input, { color: C.fg, backgroundColor: C.card, borderColor: C.border }]}
-            placeholder="메시지를 입력하세요"
-            placeholderTextColor={C.muted}
-            value={inputText}
-            onChangeText={setInputText}
-            multiline
-            maxLength={1000}
-            onKeyPress={handleKeyPress}
-            blurOnSubmit={false}
-          />
-          <Pressable
-            style={({ pressed }) => [
-              styles.sendBtn,
-              { backgroundColor: C.gold, opacity: (!inputText.trim() || sending) ? 0.4 : pressed ? 0.8 : 1 },
-            ]}
-            onPress={sendMessage}
-            disabled={!inputText.trim() || sending}
-          >
-            <IconSymbol name="paperplane.fill" size={18} color={C.bg} />
-          </Pressable>
-        </View>
+        {isExpired ? (
+          <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8), borderTopColor: C.border, backgroundColor: C.bg }]}>
+            <View style={[styles.expiredBar, { backgroundColor: C.card }]}>
+              <Text style={[styles.expiredText, { color: C.muted }]}>채팅이 만료되었습니다</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8), borderTopColor: C.border, backgroundColor: C.bg }]}>
+            <Pressable
+              style={({ pressed }) => [
+                styles.imageBtn,
+                { backgroundColor: C.card, borderColor: C.border },
+                pressed && { opacity: 0.6 },
+              ]}
+              onPress={pickAndSendImage}
+              disabled={sending}
+              hitSlop={8}
+            >
+              <IconSymbol name="photo.fill" size={20} color={C.muted} />
+            </Pressable>
+            <TextInput
+              style={[styles.input, { color: C.fg, backgroundColor: C.card, borderColor: C.border }]}
+              placeholder="메시지를 입력하세요"
+              placeholderTextColor={C.muted}
+              value={inputText}
+              onChangeText={setInputText}
+              multiline
+              maxLength={1000}
+              onKeyPress={handleKeyPress}
+              blurOnSubmit={false}
+            />
+            <Pressable
+              style={({ pressed }) => [
+                styles.sendBtn,
+                { backgroundColor: C.gold, opacity: (!inputText.trim() || sending) ? 0.4 : pressed ? 0.8 : 1 },
+              ]}
+              onPress={sendMessage}
+              disabled={!inputText.trim() || sending}
+            >
+              <IconSymbol name="paperplane.fill" size={18} color={C.bg} />
+            </Pressable>
+          </View>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -726,5 +813,29 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 1,
+  },
+  imageBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 1,
+  },
+  msgImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 16,
+  },
+  expiredBar: {
+    flex: 1,
+    borderRadius: 20,
+    paddingVertical: 14,
+    alignItems: 'center',
+  },
+  expiredText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
