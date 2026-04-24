@@ -56,6 +56,56 @@ const Fonts = {
   serif: Platform.select({ ios: 'Georgia', android: 'serif', default: 'Georgia' }),
 };
 
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '방금';
+  if (mins < 60) return `${mins}분 전`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}일 전`;
+  return `${Math.floor(days / 30)}달 전`;
+}
+
+/* ── Like Diamond Button (with animation) ── */
+function LikeDiamondButton({ liked, count, onPress, size = 18 }: { liked: boolean; count: number; onPress: () => void; size?: number }) {
+  const scale = useSharedValue(1);
+  const rotation = useSharedValue(0);
+
+  const handlePress = () => {
+    if (!liked) {
+      scale.value = withSequence(
+        withTiming(1.4, { duration: 150 }),
+        withTiming(1, { duration: 200 }),
+      );
+      rotation.value = withSequence(
+        withTiming(360, { duration: 600, easing: Easing.out(Easing.ease) }),
+        withTiming(360, { duration: 0 }),
+      );
+      setTimeout(() => { rotation.value = 0; }, 700);
+    }
+    onPress();
+  };
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }, { rotate: `${rotation.value}deg` }],
+  }));
+
+  return (
+    <Pressable onPress={handlePress} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+      <Animated.View style={[{
+        width: size,
+        height: size,
+        borderWidth: 2,
+        borderColor: '#C8A96E',
+        transform: [{ rotate: '45deg' }],
+      }, liked && { backgroundColor: '#C8A96E', borderRadius: size * 0.16 }, animStyle]} />
+      {count > 0 && <Text style={{ color: '#C8A96E', fontSize: size * 0.7, fontWeight: '700' }}>{count}</Text>}
+    </Pressable>
+  );
+}
+
 /* ── Spinning Diamond ── */
 function SpinningDiamond({ size = 14, color = '#C8A96E', active = true }: { size?: number; color?: string; active?: boolean }) {
   const rot = useSharedValue(0);
@@ -322,12 +372,10 @@ function ArtworkViewer({
   // Likes & Comments
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
-  const [comments, setComments] = useState<{ id: string; content: string; user_id: string; username: string; avatar_url: string | null; created_at: string }[]>([]);
+  const [comments, setComments] = useState<{ id: string; content: string; user_id: string; username: string; name: string; avatar_url: string | null; created_at: string; user_type: string; verified: boolean }[]>([]);
   const [commentText, setCommentText] = useState('');
   const [showComments, setShowComments] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
-  const likeScale = useSharedValue(1);
-  const likeRotation = useSharedValue(0);
 
   const loadLikesComments = useCallback(async (artworkId: string) => {
     const [{ count: lc }, { count: cc }] = await Promise.all([
@@ -345,7 +393,7 @@ function ArtworkViewer({
   const loadCommentsList = useCallback(async (artworkId: string) => {
     const { data } = await supabase
       .from('artwork_comments')
-      .select('id, content, user_id, created_at, profiles!artwork_comments_user_id_fkey(username, avatar_url)')
+      .select('id, content, user_id, created_at, profiles!artwork_comments_user_id_fkey(username, name, avatar_url, user_type, verified)')
       .eq('artwork_id', artworkId)
       .order('created_at', { ascending: true });
     if (data) {
@@ -354,8 +402,11 @@ function ArtworkViewer({
         content: c.content,
         user_id: c.user_id,
         username: c.profiles?.username ?? '',
+        name: c.profiles?.name ?? c.profiles?.username ?? '',
         avatar_url: c.profiles?.avatar_url ?? null,
         created_at: c.created_at,
+        user_type: c.profiles?.user_type ?? 'audience',
+        verified: !!c.profiles?.verified,
       })));
     }
   }, []);
@@ -371,16 +422,6 @@ function ArtworkViewer({
       await supabase.from('artwork_likes').insert({ artwork_id: aw.id, user_id: user.id });
       setLiked(true);
       setLikeCount(c => c + 1);
-      // 애니메이션
-      likeScale.value = withSequence(
-        withTiming(1.4, { duration: 150 }),
-        withTiming(1, { duration: 200 }),
-      );
-      likeRotation.value = withSequence(
-        withTiming(360, { duration: 600, easing: Easing.out(Easing.ease) }),
-        withTiming(360, { duration: 0 }),
-      );
-      setTimeout(() => { likeRotation.value = 0; }, 700);
     }
   };
 
@@ -392,10 +433,6 @@ function ArtworkViewer({
     setCommentCount(c => c + 1);
     loadCommentsList(aw.id);
   };
-
-  const likeAnimStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: likeScale.value }, { rotate: `${likeRotation.value}deg` }],
-  }));
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
@@ -613,10 +650,7 @@ function ArtworkViewer({
           <View style={styles.viewerBottomRow}>
             <View style={styles.viewerSocialRow}>
               {/* Like button */}
-              <Pressable onPress={toggleLike} style={styles.viewerLikeBtn}>
-                <Animated.View style={[styles.viewerDiamond, liked && styles.viewerDiamondFilled, likeAnimStyle]} />
-                {likeCount > 0 && <Text style={styles.viewerLikeCount}>{likeCount}</Text>}
-              </Pressable>
+              <LikeDiamondButton liked={liked} count={likeCount} onPress={toggleLike} size={22} />
               {/* Comment button */}
               <Pressable onPress={() => { setShowComments(!showComments); if (!showComments && artwork) loadCommentsList(artwork.id); }} style={styles.viewerCommentBtn}>
                 <Text style={styles.viewerCommentIcon}>💬</Text>
@@ -649,9 +683,17 @@ function ArtworkViewer({
                         )}
                       </Pressable>
                       <View style={{ flex: 1 }}>
-                        <Pressable onPress={() => { onClose(); router.push(`/artist/${c.username}`); }}>
-                          <Text style={styles.viewerCommentUser}>{c.username}</Text>
-                        </Pressable>
+                        <View style={styles.viewerCommentHeader}>
+                          <Pressable onPress={() => { onClose(); router.push(`/artist/${c.username}`); }}>
+                            <Text style={styles.viewerCommentUser}>{c.name}</Text>
+                          </Pressable>
+                          <View style={[styles.viewerCommentBadge, { backgroundColor: 'rgba(200,169,110,0.25)' }]}>
+                            <Text style={styles.viewerCommentBadgeText}>
+                              {c.user_type === 'creator' ? (c.verified ? '작가 인증' : '작가') : c.user_type === 'aspiring' ? '지망생' : '일반'}
+                            </Text>
+                          </View>
+                          <Text style={styles.viewerCommentTime}>{timeAgo(c.created_at)}</Text>
+                        </View>
                         <Text style={styles.viewerCommentText}>{c.content}</Text>
                       </View>
                     </View>
@@ -667,6 +709,8 @@ function ArtworkViewer({
                     placeholder="댓글 달기..."
                     placeholderTextColor="rgba(255,255,255,0.3)"
                     maxLength={200}
+                    onSubmitEditing={submitComment}
+                    returnKeyType="send"
                   />
                   <Pressable onPress={submitComment} style={({ pressed }) => [styles.viewerCommentSend, pressed && { opacity: 0.6 }]}>
                     <Text style={styles.viewerCommentSendText}>게시</Text>
@@ -726,8 +770,15 @@ export default function ArtistPortfolioScreen() {
   const [colLikes, setColLikes] = useState<Record<string, { liked: boolean; count: number }>>({});
   const [colCommentCounts, setColCommentCounts] = useState<Record<string, number>>({});
   const [colCommentsOpen, setColCommentsOpen] = useState<string | null>(null);
-  const [colCommentsList, setColCommentsList] = useState<{ id: string; content: string; username: string; avatar_url: string | null }[]>([]);
+  const [colCommentsList, setColCommentsList] = useState<{ id: string; content: string; username: string; name: string; avatar_url: string | null; created_at: string; user_type: string; verified: boolean }[]>([]);
   const [colCommentText, setColCommentText] = useState('');
+
+  // Exhibition likes & comments
+  const [exLikes, setExLikes] = useState<Record<string, { liked: boolean; count: number }>>({});
+  const [exCommentCounts, setExCommentCounts] = useState<Record<string, number>>({});
+  const [exCommentsOpen, setExCommentsOpen] = useState<string | null>(null);
+  const [exCommentsList, setExCommentsList] = useState<{ id: string; content: string; username: string; name: string; avatar_url: string | null; created_at: string; user_type: string; verified: boolean }[]>([]);
+  const [exCommentText, setExCommentText] = useState('');
   const colFilterScrollRef = useRef<ScrollView>(null);
   const colFilterScrollX = useRef(0);
 
@@ -846,7 +897,27 @@ export default function ArtistPortfolioScreen() {
     }
     setFollowerCount(followCountRes.count ?? 0);
     setMouiCount(mouiRes.count ?? 0);
-    if (exhibitionsRes.data) setExhibitions(exhibitionsRes.data);
+    if (exhibitionsRes.data) {
+      setExhibitions(exhibitionsRes.data);
+      // Load exhibition likes & comment counts
+      const exLikesMap: Record<string, { liked: boolean; count: number }> = {};
+      const exCcMap: Record<string, number> = {};
+      await Promise.all(exhibitionsRes.data.map(async (ex: any) => {
+        const [{ count: lc }, { count: cc }] = await Promise.all([
+          supabase.from('exhibition_likes').select('id', { count: 'exact', head: true }).eq('exhibition_id', ex.id),
+          supabase.from('exhibition_comments').select('id', { count: 'exact', head: true }).eq('exhibition_id', ex.id),
+        ]);
+        let myLiked = false;
+        if (user?.id) {
+          const { count: ml } = await supabase.from('exhibition_likes').select('id', { count: 'exact', head: true }).eq('exhibition_id', ex.id).eq('user_id', user.id);
+          myLiked = (ml ?? 0) > 0;
+        }
+        exLikesMap[ex.id] = { liked: myLiked, count: lc ?? 0 };
+        exCcMap[ex.id] = cc ?? 0;
+      }));
+      setExLikes(exLikesMap);
+      setExCommentCounts(exCcMap);
+    }
 
     // Fetch collections with their artworks
     const { data: colData } = await supabase
@@ -1046,11 +1117,11 @@ export default function ArtistPortfolioScreen() {
     if (colCommentsOpen === colId) { setColCommentsOpen(null); return; }
     const { data } = await supabase
       .from('collection_comments')
-      .select('id, content, user_id, profiles!collection_comments_user_id_fkey(username, avatar_url)')
+      .select('id, content, user_id, created_at, profiles!collection_comments_user_id_fkey(username, name, avatar_url, user_type, verified)')
       .eq('collection_id', colId)
       .order('created_at', { ascending: true });
     setColCommentsList(data?.map((c: any) => ({
-      id: c.id, content: c.content, username: c.profiles?.username ?? '', avatar_url: c.profiles?.avatar_url ?? null,
+      id: c.id, content: c.content, username: c.profiles?.username ?? '', name: c.profiles?.name ?? c.profiles?.username ?? '', avatar_url: c.profiles?.avatar_url ?? null, created_at: c.created_at, user_type: c.profiles?.user_type ?? 'audience', verified: !!c.profiles?.verified,
     })) ?? []);
     setColCommentsOpen(colId);
     setColCommentText('');
@@ -1062,6 +1133,40 @@ export default function ArtistPortfolioScreen() {
     setColCommentText('');
     setColCommentCounts(prev => ({ ...prev, [colCommentsOpen]: (prev[colCommentsOpen] ?? 0) + 1 }));
     openColComments(colCommentsOpen);
+  };
+
+  const toggleExLike = async (exId: string) => {
+    if (!user?.id) return;
+    const current = exLikes[exId];
+    if (current?.liked) {
+      await supabase.from('exhibition_likes').delete().match({ exhibition_id: exId, user_id: user.id });
+      setExLikes(prev => ({ ...prev, [exId]: { liked: false, count: Math.max(0, (prev[exId]?.count ?? 1) - 1) } }));
+    } else {
+      await supabase.from('exhibition_likes').insert({ exhibition_id: exId, user_id: user.id });
+      setExLikes(prev => ({ ...prev, [exId]: { liked: true, count: (prev[exId]?.count ?? 0) + 1 } }));
+    }
+  };
+
+  const openExComments = async (exId: string) => {
+    if (exCommentsOpen === exId) { setExCommentsOpen(null); return; }
+    const { data } = await supabase
+      .from('exhibition_comments')
+      .select('id, content, user_id, created_at, profiles!exhibition_comments_user_id_fkey(username, name, avatar_url, user_type, verified)')
+      .eq('exhibition_id', exId)
+      .order('created_at', { ascending: true });
+    setExCommentsList(data?.map((c: any) => ({
+      id: c.id, content: c.content, username: c.profiles?.username ?? '', name: c.profiles?.name ?? c.profiles?.username ?? '', avatar_url: c.profiles?.avatar_url ?? null, created_at: c.created_at, user_type: c.profiles?.user_type ?? 'audience', verified: !!c.profiles?.verified,
+    })) ?? []);
+    setExCommentsOpen(exId);
+    setExCommentText('');
+  };
+
+  const submitExComment = async () => {
+    if (!user?.id || !exCommentsOpen || !exCommentText.trim()) return;
+    await supabase.from('exhibition_comments').insert({ exhibition_id: exCommentsOpen, user_id: user.id, content: exCommentText.trim() });
+    setExCommentText('');
+    setExCommentCounts(prev => ({ ...prev, [exCommentsOpen]: (prev[exCommentsOpen] ?? 0) + 1 }));
+    openExComments(exCommentsOpen);
   };
 
   const heroContentStyle = useAnimatedStyle(() => ({
@@ -1520,12 +1625,12 @@ export default function ArtistPortfolioScreen() {
 
                   {/* Like + Comment for archive */}
                   <View style={styles.colSocialRow}>
-                    <Pressable onPress={() => toggleColLike(col.id)} style={styles.colSocialBtn}>
-                      <View style={[styles.colSocialDiamond, colLikes[col.id]?.liked && styles.colSocialDiamondFilled]} />
-                      {(colLikes[col.id]?.count ?? 0) > 0 && (
-                        <Text style={[styles.colSocialCount, { color: C.gold }]}>{colLikes[col.id].count}</Text>
-                      )}
-                    </Pressable>
+                    <LikeDiamondButton
+                      liked={colLikes[col.id]?.liked ?? false}
+                      count={colLikes[col.id]?.count ?? 0}
+                      onPress={() => toggleColLike(col.id)}
+                      size={18}
+                    />
                     <Pressable onPress={() => openColComments(col.id)} style={styles.colSocialBtn}>
                       <Text style={{ fontSize: 16 }}>💬</Text>
                       {(colCommentCounts[col.id] ?? 0) > 0 && (
@@ -1549,7 +1654,13 @@ export default function ArtistPortfolioScreen() {
                                 <Text style={{ fontSize: 8, fontWeight: '700', color: C.fg }}>{c.username.charAt(0)}</Text>
                               </View>
                             )}
-                            <Text style={[styles.colCommentUser, { color: C.muted }]}>{c.username}</Text>
+                            <Text style={[styles.colCommentUser, { color: C.muted }]}>{c.name}</Text>
+                            <View style={[styles.colCommentBadge, { backgroundColor: C.goldDim }]}>
+                              <Text style={[styles.colCommentBadgeText, { color: C.gold }]}>
+                                {c.user_type === 'creator' ? (c.verified ? '작가 인증' : '작가') : c.user_type === 'aspiring' ? '지망생' : '일반'}
+                              </Text>
+                            </View>
+                            <Text style={[styles.colCommentTime, { color: C.mutedLight }]}>{timeAgo(c.created_at)}</Text>
                             <Text style={[styles.colCommentContent, { color: C.fg }]} numberOfLines={2}>{c.content}</Text>
                           </Pressable>
                         ))
@@ -1563,6 +1674,8 @@ export default function ArtistPortfolioScreen() {
                             placeholder="댓글 달기..."
                             placeholderTextColor={C.mutedLight}
                             maxLength={200}
+                            onSubmitEditing={submitColComment}
+                            returnKeyType="send"
                           />
                           <Pressable onPress={submitColComment} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
                             <Text style={[styles.colCommentSendText, { color: C.gold }]}>게시</Text>
@@ -1587,46 +1700,103 @@ export default function ArtistPortfolioScreen() {
               <Text style={[styles.sectionLabel, { color: C.muted }]}>EXHIBITIONS</Text>
               <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
 
-              <View style={styles.exGrid}>
-                {exhibitions.map((ex, idx) => {
-                  // exhibitions is created_at desc; number = total - idx (1-based, asc order)
+              {exhibitions.map((ex, idx) => {
                   const exNum = exhibitions.length - idx;
                   return (
-                  <Pressable
-                    key={ex.id}
-                    style={({ pressed }) => [styles.exGridCard, { backgroundColor: C.card }, pressed && { opacity: 0.8 }]}
-                    onPress={() => router.push(`/3dexhibition/${profile.username}/${exNum}`)}
-                  >
-                    {ex.poster_image_url ? (
-                      <Image
-                        source={{ uri: ex.poster_image_url }}
-                        style={styles.exGridPoster}
-                        resizeMode="cover"
-                      />
-                    ) : (
-                      <View style={[styles.exGridPosterEmpty, { backgroundColor: C.bg }]}>
-                        <Text style={{ fontSize: 32 }}>
-                          {ex.room_type === 'small' ? '🏠' : ex.room_type === 'large' ? '🏰' : '🏛️'}
-                        </Text>
-                      </View>
-                    )}
-                    <View style={styles.exGridInfo}>
-                      <Text style={[styles.exGridTitle, { color: C.fg }]} numberOfLines={1}>{ex.title}</Text>
-                      {ex.description ? (
-                        <Text style={[styles.exGridDesc, { color: C.muted }]} numberOfLines={2}>{ex.description}</Text>
-                      ) : null}
-                      <View style={styles.exGridBadgeRow}>
-                        <View style={[styles.exGridBadge, { backgroundColor: 'rgba(200,169,110,0.12)' }]}>
+                  <View key={ex.id} style={[styles.exCard, { backgroundColor: C.card }]}>
+                    <Pressable
+                      style={({ pressed }) => [styles.exCardInner, pressed && { opacity: 0.8 }]}
+                      onPress={() => router.push(`/3dexhibition/${profile.username}/${exNum}`)}
+                    >
+                      {ex.poster_image_url ? (
+                        <Image
+                          source={{ uri: ex.poster_image_url }}
+                          style={styles.exCardPoster}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View style={[styles.exCardPosterEmpty, { backgroundColor: C.bg }]}>
+                          <Text style={{ fontSize: 28 }}>
+                            {ex.room_type === 'small' ? '🏠' : ex.room_type === 'large' ? '🏰' : '🏛️'}
+                          </Text>
+                        </View>
+                      )}
+                      <View style={styles.exCardInfo}>
+                        <Text style={[styles.exGridTitle, { color: C.fg }]} numberOfLines={1}>{ex.title}</Text>
+                        {ex.description ? (
+                          <Text style={[styles.exGridDesc, { color: C.muted }]} numberOfLines={1}>{ex.description}</Text>
+                        ) : null}
+                        <View style={[styles.exGridBadge, { backgroundColor: 'rgba(200,169,110,0.12)', alignSelf: 'flex-start', marginTop: 4 }]}>
                           <Text style={[styles.exGridBadgeText, { color: C.gold }]}>
                             {ex.room_type === 'small' ? '소형' : ex.room_type === 'medium' ? '중형' : ex.room_type === 'large' ? '대형' : ex.room_type}
                           </Text>
                         </View>
                       </View>
+                    </Pressable>
+
+                    {/* Like + Comment */}
+                    <View style={styles.colSocialRow}>
+                      <LikeDiamondButton
+                        liked={exLikes[ex.id]?.liked ?? false}
+                        count={exLikes[ex.id]?.count ?? 0}
+                        onPress={() => toggleExLike(ex.id)}
+                        size={18}
+                      />
+                      <Pressable onPress={() => openExComments(ex.id)} style={styles.colSocialBtn}>
+                        <Text style={{ fontSize: 16 }}>💬</Text>
+                        {(exCommentCounts[ex.id] ?? 0) > 0 && (
+                          <Text style={[styles.colSocialCount, { color: C.muted }]}>{exCommentCounts[ex.id]}</Text>
+                        )}
+                      </Pressable>
                     </View>
-                  </Pressable>
+
+                    {exCommentsOpen === ex.id && (
+                      <View style={styles.colCommentsWrap}>
+                        {exCommentsList.length === 0 ? (
+                          <Text style={[styles.colCommentsEmpty, { color: C.muted }]}>아직 댓글이 없습니다</Text>
+                        ) : (
+                          exCommentsList.map((c) => (
+                            <Pressable key={c.id} style={styles.colCommentRow} onPress={() => router.push(`/artist/${c.username}`)}>
+                              {c.avatar_url ? (
+                                <Image source={{ uri: c.avatar_url }} style={styles.colCommentAvatar} resizeMode="cover" />
+                              ) : (
+                                <View style={[styles.colCommentAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
+                                  <Text style={{ fontSize: 8, fontWeight: '700', color: C.fg }}>{c.username.charAt(0)}</Text>
+                                </View>
+                              )}
+                              <Text style={[styles.colCommentUser, { color: C.muted }]}>{c.name}</Text>
+                              <View style={[styles.colCommentBadge, { backgroundColor: C.goldDim }]}>
+                                <Text style={[styles.colCommentBadgeText, { color: C.gold }]}>
+                                  {c.user_type === 'creator' ? (c.verified ? '작가 인증' : '작가') : c.user_type === 'aspiring' ? '지망생' : '일반'}
+                                </Text>
+                              </View>
+                              <Text style={[styles.colCommentTime, { color: C.mutedLight }]}>{timeAgo(c.created_at)}</Text>
+                              <Text style={[styles.colCommentContent, { color: C.fg }]} numberOfLines={2}>{c.content}</Text>
+                            </Pressable>
+                          ))
+                        )}
+                        {user?.id && (
+                          <View style={[styles.colCommentInputRow, { borderTopColor: C.border }]}>
+                            <TextInput
+                              style={[styles.colCommentInput, { color: C.fg, backgroundColor: C.bg, borderColor: C.border }]}
+                              value={exCommentText}
+                              onChangeText={setExCommentText}
+                              placeholder="댓글 달기..."
+                              placeholderTextColor={C.mutedLight}
+                              maxLength={200}
+                              onSubmitEditing={submitExComment}
+                              returnKeyType="send"
+                            />
+                            <Pressable onPress={submitExComment} style={({ pressed }) => [pressed && { opacity: 0.6 }]}>
+                              <Text style={[styles.colCommentSendText, { color: C.gold }]}>게시</Text>
+                            </Pressable>
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </View>
                   );
                 })}
-              </View>
             </View>
           ) : (
             <View style={styles.emptySection}>
@@ -2445,10 +2615,31 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
   },
+  viewerCommentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   viewerCommentUser: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 12,
     fontWeight: '700',
+  },
+  viewerCommentBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 6,
+  },
+  viewerCommentBadgeText: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: '#C8A96E',
+    letterSpacing: 0.2,
+  },
+  viewerCommentTime: {
+    color: 'rgba(255,255,255,0.3)',
+    fontSize: 10,
+    fontWeight: '500',
   },
   viewerCommentText: {
     color: '#fff',
@@ -2610,6 +2801,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.3,
   },
+  /* Exhibition card (single column) */
+  exCard: {
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 16,
+  },
+  exCardInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  exCardPoster: {
+    width: 90,
+    height: 90,
+  },
+  exCardPosterEmpty: {
+    width: 90,
+    height: 90,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  exCardInfo: {
+    flex: 1,
+    padding: 12,
+    gap: 2,
+  },
   colSocialRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -2663,6 +2879,20 @@ const styles = StyleSheet.create({
   colCommentUser: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  colCommentBadge: {
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 5,
+  },
+  colCommentBadgeText: {
+    fontSize: 8,
+    fontWeight: '700',
+    letterSpacing: 0.2,
+  },
+  colCommentTime: {
+    fontSize: 9,
+    fontWeight: '500',
   },
   colCommentContent: {
     fontSize: 12,
