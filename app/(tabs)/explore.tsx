@@ -658,7 +658,7 @@ export default function ExploreScreen() {
           <Text style={styles.searchIcon}>🔍</Text>
           <TextInput
             style={[styles.searchInput, { color: C.fg }]}
-            placeholder="이름, 분야 검색..."
+            placeholder="작품을 검색해보세요."
             placeholderTextColor={C.mutedLight}
             value={search}
             onChangeText={setSearch}
