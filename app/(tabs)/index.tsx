@@ -126,9 +126,9 @@ function PlayfulDiamond({ size = 14, color = '#C8A96E' }: { size?: number; color
 
 /* ── 퀵 액션 카드 (보상 표시 포함) ── */
 function QuickCard({
-  icon, title, desc, delay: d, onPress, done, C,
+  icon, title, desc, delay: d, onPress, done, C, reward = 1000,
 }: {
-  icon: string; title: string; desc: string; delay: number; onPress?: () => void; done?: boolean; C: any;
+  icon: string; title: string; desc: string; delay: number; onPress?: () => void; done?: boolean; C: any; reward?: number;
 }) {
   return (
     <Animated.View entering={FadeInDown.delay(d).duration(400).springify()}>
@@ -143,7 +143,7 @@ function QuickCard({
         </View>
         <View style={done ? styles.rewardBadgeDone : styles.rewardBadge}>
           <Text style={done ? [styles.rewardTextDone, { color: C.mutedLight }] : [styles.rewardText, { color: C.gold }]}>
-            {done ? '1,000모의 획득!' : '+1,000모의'}
+            {done ? `${reward.toLocaleString()}모의 획득!` : `+${reward.toLocaleString()}모의`}
           </Text>
         </View>
       </Pressable>
@@ -175,6 +175,7 @@ export default function HomeScreen() {
   const [hasExhibition, setHasExhibition] = useState(false);
   const [hasArtwork, setHasArtwork] = useState(false);
   const [hasRegion, setHasRegion] = useState(false);
+  const [hasThemeSet, setHasThemeSet] = useState(false);
   const [regionRewardClaimed, setRegionRewardClaimed] = useState(true);
   const [welcomeClaimed, setWelcomeClaimed] = useState(true); // 기본 true로 깜빡임 방지
   const [claimingWelcome, setClaimingWelcome] = useState(false);
@@ -192,15 +193,17 @@ export default function HomeScreen() {
 
   const checkProgress = useCallback(async () => {
     if (!user) return;
-    const [exRes, artRes, welcomeRes, regionRewardRes, profileRes] = await Promise.all([
+    const [exRes, artRes, welcomeRes, regionRewardRes, themeRewardRes, profileRes] = await Promise.all([
       supabase.from('exhibitions').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       supabase.from('artworks').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
       (supabase as any).from('point_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('type', 'welcome'),
       (supabase as any).from('point_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('type', 'region_setup'),
+      (supabase as any).from('point_history').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('type', 'theme_setup'),
       supabase.from('profiles').select('region').eq('id', user.id).single(),
     ]);
     setHasExhibition((exRes.count ?? 0) > 0);
     setHasArtwork((artRes.count ?? 0) > 0);
+    setHasThemeSet((themeRewardRes.count ?? 0) > 0);
     setWelcomeClaimed((welcomeRes.count ?? 0) > 0);
     const regionSet = !!profileRes.data?.region;
     setHasRegion(regionSet);
@@ -358,7 +361,9 @@ export default function HomeScreen() {
           <Text style={[styles.heroSub, { color: C.muted }]}>{heroSubtitle}</Text>
         </Animated.View>
 
-        {/* 퀵 액션 */}
+        {/* 퀵 액션 - 모두 완료하면 숨김 */}
+        {!(hasArtwork && hasExhibition && hasRegion && hasThemeSet) && (
+        <>
         <View style={styles.sectionHeader}>
           <Animated.Text entering={FadeIn.delay(200).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
             시작하기
@@ -381,7 +386,29 @@ export default function HomeScreen() {
             delay={460} done={hasRegion} C={C}
             onPress={() => router.push('/profile/detail?focus=region')}
           />
+          <QuickCard
+            icon="🎨" title="화면 모드 선택" desc="다크/라이트 모드를 선택하세요"
+            delay={540} done={hasThemeSet} C={C}
+            reward={500}
+            onPress={async () => {
+              if (!hasThemeSet && user) {
+                const REWARD = 500;
+                const { data: prof } = await supabase.from('profiles').select('points').eq('id', user.id).single();
+                const pts = prof?.points ?? 0;
+                await supabase.from('profiles').update({ points: pts + REWARD }).eq('id', user.id);
+                await (supabase as any).from('point_history').insert({
+                  user_id: user.id, amount: REWARD, balance: pts + REWARD,
+                  type: 'theme_setup', description: '화면 모드 설정 보너스',
+                });
+                await refreshProfile();
+                setHasThemeSet(true);
+              }
+              router.push('/profile/settings');
+            }}
+          />
         </View>
+        </>
+        )}
 
         {/* 출석 이벤트 */}
         {user && (
