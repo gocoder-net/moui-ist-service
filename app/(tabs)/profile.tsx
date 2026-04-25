@@ -247,6 +247,9 @@ export default function ProfileScreen() {
     }
   }, [user, userType, verified]);
 
+  /* 알림 */
+  const [unreadCount, setUnreadCount] = useState(0);
+
   /* 모임 */
   const [myMouiCount, setMyMouiCount] = useState(0);
   const [joinedMouiCount, setJoinedMouiCount] = useState(0);
@@ -330,6 +333,12 @@ export default function ProfileScreen() {
     setCollections(withCounts);
   }, [user]);
 
+  const fetchUnreadCount = useCallback(async () => {
+    if (!user) return;
+    const { count } = await (supabase as any).from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false);
+    setUnreadCount(count ?? 0);
+  }, [user]);
+
   useFocusEffect(
     useCallback(() => {
       fetchExhibitions();
@@ -337,7 +346,8 @@ export default function ProfileScreen() {
       fetchCollections();
       fetchVerificationStatus();
       fetchMouiCounts();
-    }, [fetchExhibitions, fetchRecentArtworks, fetchCollections, fetchVerificationStatus, fetchMouiCounts]),
+      fetchUnreadCount();
+    }, [fetchExhibitions, fetchRecentArtworks, fetchCollections, fetchVerificationStatus, fetchMouiCounts, fetchUnreadCount]),
   );
 
   const handleDelete = useCallback((id: string) => {
@@ -449,12 +459,25 @@ export default function ProfileScreen() {
         {/* 헤더 */}
         <Animated.View entering={FadeIn.delay(100).duration(300)} style={s.header}>
           <Text style={[s.headerTitle, { color: C.fg }]}>내 정보</Text>
-          <Pressable
-            onPress={() => router.push('/profile/settings')}
-            style={({ pressed }) => [s.settingsBtn, pressed && { opacity: 0.6 }]}
-          >
-            <Text style={[s.settingsIcon, { color: C.muted }]}>⚙</Text>
-          </Pressable>
+          <View style={s.headerRight}>
+            <Pressable
+              onPress={() => router.push('/notifications')}
+              style={({ pressed }) => [s.bellBtn, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={{ fontSize: 16 }}>🔔</Text>
+              {unreadCount > 0 && (
+                <View style={s.bellBadge}>
+                  <Text style={s.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
+            </Pressable>
+            <Pressable
+              onPress={() => router.push('/profile/settings')}
+              style={({ pressed }) => [s.settingsBtn, pressed && { opacity: 0.6 }]}
+            >
+              <Text style={[s.settingsIcon, { color: C.muted }]}>⚙</Text>
+            </Pressable>
+          </View>
         </Animated.View>
 
         {/* 프로필 카드 */}
@@ -858,6 +881,32 @@ const s = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 18,
+    fontWeight: '800',
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bellBtn: {
+    position: 'relative',
+    padding: 4,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    backgroundColor: '#D94040',
+    borderRadius: 7,
+    minWidth: 14,
+    height: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 2,
+  },
+  bellBadgeText: {
+    color: '#fff',
+    fontSize: 8,
     fontWeight: '800',
   },
   settingsBtn: {

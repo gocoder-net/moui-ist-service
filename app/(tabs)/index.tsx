@@ -160,6 +160,17 @@ function getToday(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return '방금';
+  if (mins < 60) return `${mins}분 전`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}시간 전`;
+  const days = Math.floor(hours / 24);
+  return `${days}일 전`;
+}
+
 function getYesterday(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
@@ -193,6 +204,7 @@ export default function HomeScreen() {
   const [nearbyMouis, setNearbyMouis] = useState<NearbyMoui[]>([]);
   const [recommendedMouis, setRecommendedMouis] = useState<NearbyMoui[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [recentNotifs, setRecentNotifs] = useState<{ id: string; title: string; type: string; created_at: string; from_avatar: string | null }[]>([]);
 
   // 출석
   const [attendanceDay, setAttendanceDay] = useState(0); // 현재까지 출석한 일수 (0~7)
@@ -244,9 +256,21 @@ export default function HomeScreen() {
   const loadHomeFeed = useCallback(async () => {
     if (!user) return;
 
-    // Unread notifications count
+    // Unread notifications count + recent 3
     const { count: uc } = await (supabase as any).from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false);
     setUnreadCount(uc ?? 0);
+    const { data: notifData } = await (supabase as any)
+      .from('notifications')
+      .select('id, title, type, created_at, profiles!notifications_from_user_id_fkey(avatar_url)')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(3);
+    if (notifData) {
+      setRecentNotifs(notifData.map((n: any) => ({
+        id: n.id, title: n.title, type: n.type, created_at: n.created_at,
+        from_avatar: n.profiles?.avatar_url ?? null,
+      })));
+    }
 
     // 1. 연결한 사람들의 최신 활동
     const { data: myFollowings } = await supabase
@@ -449,20 +473,6 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 히어로 배너 */}
         <Animated.View entering={FadeInDown.delay(100).duration(600).springify()} style={styles.heroBanner}>
-          {/* 알림 벨 */}
-          {user && (
-            <Pressable
-              style={({ pressed }) => [styles.bellBtn, pressed && { opacity: 0.6 }]}
-              onPress={() => router.push('/notifications')}
-            >
-              <Text style={{ fontSize: 14 }}>🔔</Text>
-              {unreadCount > 0 && (
-                <View style={styles.bellBadge}>
-                  <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
-                </View>
-              )}
-            </Pressable>
-          )}
           <View style={styles.heroAccent}>
             <PlayfulDiamond size={16} color={C.gold} />
           </View>
@@ -519,6 +529,32 @@ export default function HomeScreen() {
           />
         </View>
         </>
+        )}
+
+        {/* 최근 알림 */}
+        {recentNotifs.length > 0 && (
+          <>
+            <Pressable onPress={() => router.push('/notifications')} style={({ pressed }) => [pressed && { opacity: 0.7 }]}>
+              <View style={styles.sectionHeader}>
+                <Text style={[styles.sectionTitle, { color: C.fg }]}>최근 알림</Text>
+              </View>
+            </Pressable>
+            <Animated.View entering={FadeInDown.delay(480).duration(400).springify()} style={[styles.notifPreviewCard, { backgroundColor: C.card, borderColor: C.border }]}>
+              {recentNotifs.map((n, idx) => (
+                <Pressable key={n.id} onPress={() => router.push('/notifications')} style={[styles.notifPreviewRow, idx < recentNotifs.length - 1 && { borderBottomWidth: 0.5, borderBottomColor: C.border }]}>
+                  {n.from_avatar ? (
+                    <Image source={{ uri: n.from_avatar }} style={styles.notifPreviewAvatar} resizeMode="cover" />
+                  ) : (
+                    <View style={[styles.notifPreviewAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
+                      <Text style={{ fontSize: 10 }}>{n.type === 'like' ? '◆' : n.type === 'comment' ? '💬' : '🔔'}</Text>
+                    </View>
+                  )}
+                  <Text style={[styles.notifPreviewText, { color: C.fg }]} numberOfLines={1}>{n.title}</Text>
+                  <Text style={[styles.notifPreviewTime, { color: C.mutedLight }]}>{timeAgo(n.created_at)}</Text>
+                </Pressable>
+              ))}
+            </Animated.View>
+          </>
         )}
 
         {/* 연결한 사람들의 최신 활동 */}
@@ -965,6 +1001,35 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+
+  /* Recent Notifications */
+  notifPreviewCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  notifPreviewRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  notifPreviewAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  notifPreviewText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  notifPreviewTime: {
+    fontSize: 10,
   },
 
   /* Home Feed */

@@ -72,11 +72,26 @@ export default function NotificationsScreen() {
 
   useFocusEffect(useCallback(() => { loadNotifications(); }, [loadNotifications]));
 
-  const handlePress = (n: Notification) => {
-    if (n.type === 'like' || n.type === 'comment') {
-      if (n.from_user?.username) router.push(`/artist/${n.from_user.username}` as any);
+  const goToUser = (n: Notification) => {
+    if (n.from_user?.username) router.push(`/artist/${n.from_user.username}` as any);
+  };
+
+  const goToTarget = async (n: Notification) => {
+    if ((n.type === 'like' || n.type === 'comment') && n.target_id) {
+      // target_id is artwork id - find the owner
+      const { data: aw } = await supabase.from('artworks').select('user_id, profiles!artworks_user_id_fkey(username)').eq('id', n.target_id).single();
+      if (aw) {
+        const username = (aw as any).profiles?.username;
+        if (username) {
+          // Find artwork index
+          const { data: allAw } = await supabase.from('artworks').select('id').eq('user_id', aw.user_id).order('created_at', { ascending: false });
+          const idx = allAw?.findIndex(a => a.id === n.target_id) ?? -1;
+          router.push(`/artist/${username}?artworkId=${idx >= 0 ? idx + 1 : 1}` as any);
+          return;
+        }
+      }
     } else if (n.type === 'follow') {
-      if (n.from_user?.username) router.push(`/artist/${n.from_user.username}` as any);
+      goToUser(n);
     } else if (n.type === 'chat_request' || n.type === 'chat_accepted') {
       router.push('/(tabs)/chat' as any);
     } else if (n.type === 'moui_join' && n.target_id) {
@@ -107,28 +122,23 @@ export default function NotificationsScreen() {
             contentContainerStyle={styles.list}
             renderItem={({ item, index }) => (
               <Animated.View entering={FadeInDown.delay(50 + index * 30).duration(300).springify()}>
-                <Pressable
-                  style={({ pressed }) => [
-                    styles.notifItem,
-                    { backgroundColor: item.is_read ? C.bg : C.card, borderBottomColor: C.border },
-                    pressed && { opacity: 0.7 },
-                  ]}
-                  onPress={() => handlePress(item)}
-                >
-                  {item.from_user?.avatar_url ? (
-                    <Image source={{ uri: item.from_user.avatar_url }} style={styles.notifAvatar} resizeMode="cover" />
-                  ) : (
-                    <View style={[styles.notifAvatar, { backgroundColor: C.card, justifyContent: 'center', alignItems: 'center' }]}>
-                      <Text style={{ fontSize: 16 }}>{TYPE_EMOJI[item.type] ?? '🔔'}</Text>
-                    </View>
-                  )}
-                  <View style={{ flex: 1 }}>
+                <View style={[styles.notifItem, { backgroundColor: item.is_read ? C.bg : C.card, borderBottomColor: C.border }]}>
+                  <Pressable onPress={() => goToUser(item)}>
+                    {item.from_user?.avatar_url ? (
+                      <Image source={{ uri: item.from_user.avatar_url }} style={styles.notifAvatar} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.notifAvatar, { backgroundColor: C.card, justifyContent: 'center', alignItems: 'center' }]}>
+                        <Text style={{ fontSize: 16 }}>{TYPE_EMOJI[item.type] ?? '🔔'}</Text>
+                      </View>
+                    )}
+                  </Pressable>
+                  <Pressable style={({ pressed }) => [{ flex: 1 }, pressed && { opacity: 0.7 }]} onPress={() => goToTarget(item)}>
                     <Text style={[styles.notifTitle, { color: C.fg }]}>{item.title}</Text>
                     {item.body && <Text style={[styles.notifBody, { color: C.muted }]} numberOfLines={2}>{item.body}</Text>}
                     <Text style={[styles.notifTime, { color: C.mutedLight }]}>{timeAgo(item.created_at)}</Text>
-                  </View>
+                  </Pressable>
                   <Text style={{ fontSize: 14 }}>{TYPE_EMOJI[item.type] ?? '🔔'}</Text>
-                </Pressable>
+                </View>
               </Animated.View>
             )}
           />
