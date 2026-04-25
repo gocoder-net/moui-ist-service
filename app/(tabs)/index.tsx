@@ -455,7 +455,7 @@ export default function HomeScreen() {
               style={({ pressed }) => [styles.bellBtn, pressed && { opacity: 0.6 }]}
               onPress={() => router.push('/notifications')}
             >
-              <Text style={{ fontSize: 20 }}>🔔</Text>
+              <Text style={{ fontSize: 14 }}>🔔</Text>
               {unreadCount > 0 && (
                 <View style={styles.bellBadge}>
                   <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>

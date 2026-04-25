@@ -1239,7 +1239,22 @@ export default function ArtistPortfolioScreen() {
     .map((item) => item.trim())
     .filter(Boolean);
 
-  const openViewer = (artworkIndex: number) => {
+  const openViewer = async (artworkIndex: number) => {
+    // 전체 작품 로드해서 뷰어에 넘기기
+    if (resolvedId) {
+      const { data: allAw } = await supabase
+        .from('artworks')
+        .select('*')
+        .eq('user_id', resolvedId)
+        .order('created_at', { ascending: false });
+      if (allAw && allAw.length > 0) {
+        setViewerArtworks(allAw);
+        setViewerIndex(artworkIndex);
+        setViewerVisible(true);
+        updateUrlArtwork(artworkIndex);
+        return;
+      }
+    }
     setViewerIndex(artworkIndex);
     setViewerVisible(true);
     updateUrlArtwork(artworkIndex);
