@@ -7,6 +7,7 @@ import {
   ScrollView,
   Platform,
   Alert,
+  Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -180,6 +181,17 @@ export default function HomeScreen() {
   const [welcomeClaimed, setWelcomeClaimed] = useState(true); // 기본 true로 깜빡임 방지
   const [claimingWelcome, setClaimingWelcome] = useState(false);
 
+  // 홈 피드
+  type FeedActivity = { id: string; type: 'artwork' | 'exhibition' | 'collection'; image_url: string; title: string; artist_name: string; artist_avatar: string | null; artist_username: string; created_at: string };
+  type PopularArtwork = { id: string; title: string; image_url: string; artist_name: string; artist_username: string; like_count: number };
+  type NewArtist = { id: string; name: string | null; username: string; avatar_url: string | null; field: string | null; artwork_count: number };
+  type NearbyMoui = { id: string; title: string; category: string | null; region: string | null; participant_count: number; max_participants: number | null; created_at: string };
+
+  const [feedActivities, setFeedActivities] = useState<FeedActivity[]>([]);
+  const [popularArtworks, setPopularArtworks] = useState<PopularArtwork[]>([]);
+  const [newArtists, setNewArtists] = useState<NewArtist[]>([]);
+  const [nearbyMouis, setNearbyMouis] = useState<NearbyMoui[]>([]);
+
   // 출석
   const [attendanceDay, setAttendanceDay] = useState(0); // 현재까지 출석한 일수 (0~7)
   const [checkedToday, setCheckedToday] = useState(false);
@@ -226,6 +238,78 @@ export default function HomeScreen() {
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('보상 지급', msg);
     }
   }, [user]);
+
+  const loadHomeFeed = useCallback(async () => {
+    if (!user) return;
+
+    // 1. 연결한 사람들의 최신 활동
+    const { data: myFollowings } = await supabase
+      .from('follows').select('following_id').eq('follower_id', user.id);
+    const followingIds = myFollowings?.map(f => f.following_id) ?? [];
+    if (followingIds.length > 0) {
+      const { data: profiles } = await supabase.from('profiles').select('id, name, username, avatar_url').in('id', followingIds);
+      const pMap = new Map(profiles?.map(p => [p.id, p]) ?? []);
+      const activities: FeedActivity[] = [];
+      // 최신 작품
+      const { data: aw } = await supabase.from('artworks').select('id, title, image_url, user_id, created_at')
+        .in('user_id', followingIds).order('created_at', { ascending: false }).limit(5);
+      aw?.forEach(a => { const p = pMap.get(a.user_id); if (p) activities.push({ id: `aw_${a.id}`, type: 'artwork', image_url: a.image_url, title: a.title, artist_name: p.name ?? p.username, artist_avatar: p.avatar_url, artist_username: p.username, created_at: a.created_at }); });
+      // 최신 전시관
+      const { data: ex } = await supabase.from('exhibitions').select('id, title, poster_image_url, user_id, created_at')
+        .in('user_id', followingIds).eq('is_published', true).order('created_at', { ascending: false }).limit(3);
+      ex?.forEach(e => { if (!e.poster_image_url) return; const p = pMap.get(e.user_id); if (p) activities.push({ id: `ex_${e.id}`, type: 'exhibition', image_url: e.poster_image_url, title: e.title, artist_name: p.name ?? p.username, artist_avatar: p.avatar_url, artist_username: p.username, created_at: e.created_at }); });
+      activities.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setFeedActivities(activities.slice(0, 6));
+    }
+
+    // 2. 인기 작품 (좋아요 많은 순)
+    const { data: likeData } = await supabase.from('artwork_likes').select('artwork_id');
+    const likeCounts = new Map<string, number>();
+    likeData?.forEach(l => likeCounts.set(l.artwork_id, (likeCounts.get(l.artwork_id) ?? 0) + 1));
+    if (likeCounts.size > 0) {
+      const topIds = [...likeCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8).map(e => e[0]);
+      const { data: topAw } = await supabase.from('artworks').select('id, title, image_url, user_id').in('id', topIds);
+      if (topAw) {
+        const userIds = [...new Set(topAw.map(a => a.user_id))];
+        const { data: profs } = await supabase.from('profiles').select('id, name, username').in('id', userIds);
+        const pMap = new Map(profs?.map(p => [p.id, p]) ?? []);
+        setPopularArtworks(topIds.map(id => {
+          const a = topAw.find(x => x.id === id);
+          if (!a) return null;
+          const p = pMap.get(a.user_id);
+          return { id: a.id, title: a.title, image_url: a.image_url, artist_name: p?.name ?? p?.username ?? '', artist_username: p?.username ?? '', like_count: likeCounts.get(id) ?? 0 };
+        }).filter(Boolean) as PopularArtwork[]);
+      }
+    }
+
+    // 3. 새로운 작가
+    const { data: newProfs } = await supabase.from('profiles').select('id, name, username, avatar_url, field, created_at')
+      .in('user_type', ['creator', 'aspiring']).order('created_at', { ascending: false }).limit(10);
+    if (newProfs) {
+      const artistIds = newProfs.map(p => p.id);
+      const { data: awCounts } = await supabase.from('artworks').select('user_id').in('user_id', artistIds);
+      const countMap = new Map<string, number>();
+      awCounts?.forEach(a => countMap.set(a.user_id, (countMap.get(a.user_id) ?? 0) + 1));
+      setNewArtists(newProfs.filter(p => (countMap.get(p.id) ?? 0) > 0).map(p => ({
+        id: p.id, name: p.name, username: p.username, avatar_url: p.avatar_url, field: p.field, artwork_count: countMap.get(p.id) ?? 0,
+      })));
+    }
+
+    // 4. 근처 모임
+    const myRegion = profile?.region;
+    if (myRegion) {
+      const { data: mouis } = await (supabase as any).from('moui_posts').select('id, title, category, region, max_participants, created_at')
+        .eq('status', 'open').order('created_at', { ascending: false }).limit(10);
+      if (mouis) {
+        const nearby = mouis.filter((m: any) => m.region && myRegion && m.region.split(' ').slice(0, 2).join(' ') === myRegion.split(' ').slice(0, 2).join(' ')).slice(0, 3);
+        const withCounts = await Promise.all(nearby.map(async (m: any) => {
+          const { count } = await (supabase as any).from('moui_participants').select('moui_post_id', { count: 'exact', head: true }).eq('moui_post_id', m.id);
+          return { ...m, participant_count: count ?? 0 };
+        }));
+        setNearbyMouis(withCounts);
+      }
+    }
+  }, [user, profile]);
 
   const handleClaimWelcome = async () => {
     if (!user || claimingWelcome || welcomeClaimed) return;
@@ -284,7 +368,8 @@ export default function HomeScreen() {
   useFocusEffect(useCallback(() => {
     checkProgress();
     fetchAttendance();
-  }, [checkProgress, fetchAttendance]));
+    loadHomeFeed();
+  }, [checkProgress, fetchAttendance, loadHomeFeed]));
 
   const handleCheckIn = async () => {
     if (!user || checkedToday || checkingIn) return;
@@ -466,22 +551,128 @@ export default function HomeScreen() {
           </>
         )}
 
-        {/* 안내 카드 */}
-        <View style={styles.sectionHeader}>
-          <Animated.Text entering={FadeIn.delay(520).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
-            Coming Soon
-          </Animated.Text>
-        </View>
+        {/* 연결한 사람들의 최신 활동 */}
+        {feedActivities.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Animated.Text entering={FadeIn.delay(520).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
+                연결 활동
+              </Animated.Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.feedScroll}>
+              {feedActivities.map((item, idx) => (
+                <Animated.View key={item.id} entering={FadeInDown.delay(540 + idx * 50).duration(400).springify()}>
+                  <Pressable
+                    style={({ pressed }) => [styles.feedCard, { backgroundColor: C.card, borderColor: C.border }, pressed && { opacity: 0.8 }]}
+                    onPress={() => router.push(`/artist/${item.artist_username}`)}
+                  >
+                    <Image source={{ uri: item.image_url }} style={styles.feedCardImage} resizeMode="cover" />
+                    <View style={styles.feedCardInfo}>
+                      <View style={styles.feedCardArtistRow}>
+                        {item.artist_avatar ? (
+                          <Image source={{ uri: item.artist_avatar }} style={styles.feedCardAvatar} resizeMode="cover" />
+                        ) : (
+                          <View style={[styles.feedCardAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
+                            <Text style={{ fontSize: 8, fontWeight: '700', color: C.fg }}>{item.artist_name.charAt(0)}</Text>
+                          </View>
+                        )}
+                        <Text style={[styles.feedCardArtistName, { color: C.muted }]} numberOfLines={1}>{item.artist_name}</Text>
+                      </View>
+                      <Text style={[styles.feedCardTitle, { color: C.fg }]} numberOfLines={1}>{item.title}</Text>
+                    </View>
+                  </Pressable>
+                </Animated.View>
+              ))}
+            </ScrollView>
+          </>
+        )}
 
-        <Animated.View entering={FadeInDown.delay(600).duration(400).springify()} style={[styles.infoCard, { borderColor: C.gold, backgroundColor: C.card }]}>
-          <View style={styles.infoIconWrap}>
-            <PlayfulDiamond size={12} color={C.gold} />
-          </View>
-          <Text style={[styles.infoTitle, { color: C.fg }]}>곧 더 많은 기능이 찾아옵니다</Text>
-          <Text style={[styles.infoDesc, { color: C.muted }]}>
-            피드, 팔로우, 알림 등{'\n'}다양한 기능이 준비 중입니다
-          </Text>
-        </Animated.View>
+        {/* 인기 작품 */}
+        {popularArtworks.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Animated.Text entering={FadeIn.delay(600).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
+                인기 작품
+              </Animated.Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.feedScroll}>
+              {popularArtworks.map((item, idx) => (
+                <Animated.View key={item.id} entering={FadeInDown.delay(620 + idx * 50).duration(400).springify()}>
+                  <Pressable
+                    style={({ pressed }) => [styles.feedCard, { backgroundColor: C.card, borderColor: C.border }, pressed && { opacity: 0.8 }]}
+                    onPress={() => router.push(`/artist/${item.artist_username}`)}
+                  >
+                    <Image source={{ uri: item.image_url }} style={styles.feedCardImage} resizeMode="cover" />
+                    <View style={styles.feedCardLikeBadge}>
+                      <Text style={styles.feedCardLikeText}>◆ {item.like_count}</Text>
+                    </View>
+                    <View style={styles.feedCardInfo}>
+                      <Text style={[styles.feedCardTitle, { color: C.fg }]} numberOfLines={1}>{item.title}</Text>
+                      <Text style={[styles.feedCardArtistName, { color: C.muted }]} numberOfLines={1}>{item.artist_name}</Text>
+                    </View>
+                  </Pressable>
+                </Animated.View>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {/* 새로운 작가 */}
+        {newArtists.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Animated.Text entering={FadeIn.delay(680).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
+                새로운 작가
+              </Animated.Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.feedScroll}>
+              {newArtists.map((item, idx) => (
+                <Animated.View key={item.id} entering={FadeInDown.delay(700 + idx * 50).duration(400).springify()}>
+                  <Pressable
+                    style={({ pressed }) => [styles.artistFeedCard, { backgroundColor: C.card, borderColor: C.border }, pressed && { opacity: 0.8 }]}
+                    onPress={() => router.push(`/artist/${item.username}`)}
+                  >
+                    {item.avatar_url ? (
+                      <Image source={{ uri: item.avatar_url }} style={styles.artistFeedAvatar} resizeMode="cover" />
+                    ) : (
+                      <View style={[styles.artistFeedAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
+                        <Text style={{ fontSize: 18, color: C.fg }}>🎨</Text>
+                      </View>
+                    )}
+                    <Text style={[styles.artistFeedName, { color: C.fg }]} numberOfLines={1}>{item.name ?? item.username}</Text>
+                    {item.field && <Text style={[styles.artistFeedField, { color: C.muted }]} numberOfLines={1}>{item.field}</Text>}
+                    <Text style={[styles.artistFeedCount, { color: C.gold }]}>{item.artwork_count} 작품</Text>
+                  </Pressable>
+                </Animated.View>
+              ))}
+            </ScrollView>
+          </>
+        )}
+
+        {/* 근처 모임 */}
+        {nearbyMouis.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Animated.Text entering={FadeIn.delay(760).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
+                근처 모임
+              </Animated.Text>
+            </View>
+            {nearbyMouis.map((item, idx) => (
+              <Animated.View key={item.id} entering={FadeInDown.delay(780 + idx * 60).duration(400).springify()}>
+                <Pressable
+                  style={({ pressed }) => [styles.mouiFeedCard, { backgroundColor: C.card, borderColor: C.border }, pressed && { opacity: 0.8 }]}
+                  onPress={() => router.push(`/moui/${item.id}` as any)}
+                >
+                  <Text style={[styles.mouiFeedTitle, { color: C.fg }]} numberOfLines={1}>{item.title}</Text>
+                  <View style={styles.mouiFeedMeta}>
+                    <Text style={[styles.mouiFeedMetaText, { color: C.muted }]}>{item.participant_count}명 참여</Text>
+                    {item.region && <Text style={[styles.mouiFeedMetaText, { color: C.muted }]}>· {item.region}</Text>}
+                  </View>
+                </Pressable>
+              </Animated.View>
+            ))}
+          </>
+        )}
 
         <View style={{ height: 24 }} />
       </ScrollView>
@@ -698,6 +889,107 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+
+  /* Home Feed */
+  feedScroll: {
+    paddingHorizontal: 16,
+    gap: 10,
+    paddingBottom: 4,
+  },
+  feedCard: {
+    width: 140,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  feedCardImage: {
+    width: '100%',
+    height: 140,
+  },
+  feedCardInfo: {
+    padding: 8,
+    gap: 3,
+  },
+  feedCardArtistRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  feedCardAvatar: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    overflow: 'hidden',
+  },
+  feedCardArtistName: {
+    fontSize: 9,
+    fontWeight: '600',
+    flex: 1,
+  },
+  feedCardTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  feedCardLikeBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  feedCardLikeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#C8A96E',
+  },
+  artistFeedCard: {
+    width: 100,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    alignItems: 'center',
+    padding: 12,
+    gap: 4,
+  },
+  artistFeedAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    overflow: 'hidden',
+  },
+  artistFeedName: {
+    fontSize: 11,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  artistFeedField: {
+    fontSize: 9,
+    textAlign: 'center',
+  },
+  artistFeedCount: {
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  mouiFeedCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 14,
+    marginBottom: 8,
+    gap: 4,
+  },
+  mouiFeedTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  mouiFeedMeta: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  mouiFeedMetaText: {
+    fontSize: 11,
   },
 
   infoCard: {
