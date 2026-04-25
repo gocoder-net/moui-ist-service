@@ -8,6 +8,7 @@ import {
   Image,
   FlatList,
   ScrollView,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -438,7 +439,21 @@ export default function ExploreScreen() {
             me && { borderWidth: 1.5 },
             pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] },
           ]}
-          onPress={() => router.push(`/artist/${item.username}`)}
+          onPress={() => {
+            if (!user?.id) {
+              if (Platform.OS === 'web') {
+                if (window.confirm('회원가입 후 작가 프로필을 볼 수 있습니다.\n가입하시겠습니까?')) router.push('/signup' as any);
+              } else {
+                const { Alert } = require('react-native');
+                Alert.alert('회원가입 필요', '회원가입 후 작가 프로필을 볼 수 있습니다.', [
+                  { text: '취소', style: 'cancel' },
+                  { text: '가입하기', onPress: () => router.push('/signup' as any) },
+                ]);
+              }
+              return;
+            }
+            router.push(`/artist/${item.username}`);
+          }}
         >
           {/* Cover background */}
           {item.coverImage && (
@@ -621,7 +636,7 @@ export default function ExploreScreen() {
             showsVerticalScrollIndicator={false}
             onScroll={({ nativeEvent }) => {
               const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-              if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 300) {
+              if (user?.id && contentOffset.y + layoutMeasurement.height >= contentSize.height - 300) {
                 setFeedVisible(prev => Math.min(prev + 10, feedItems.length));
               }
             }}
@@ -630,7 +645,7 @@ export default function ExploreScreen() {
             <View style={styles.masonryWrap}>
               {/* Left column */}
               <View style={styles.masonryCol}>
-                {feedItems.slice(0, feedVisible).filter((_, i) => i % 2 === 0).map((item, idx) => (
+                {feedItems.slice(0, user?.id ? feedVisible : 10).filter((_, i) => i % 2 === 0).map((item, idx) => (
                   <Animated.View key={item.id} entering={FadeInDown.delay(60 + idx * 40).duration(400).springify()}>
                     <Pressable
                       style={({ pressed }) => [
@@ -681,7 +696,7 @@ export default function ExploreScreen() {
               </View>
               {/* Right column */}
               <View style={styles.masonryCol}>
-                {feedItems.slice(0, feedVisible).filter((_, i) => i % 2 === 1).map((item, idx) => (
+                {feedItems.slice(0, user?.id ? feedVisible : 10).filter((_, i) => i % 2 === 1).map((item, idx) => (
                   <Animated.View key={item.id} entering={FadeInDown.delay(80 + idx * 40).duration(400).springify()}>
                     <Pressable
                       style={({ pressed }) => [
@@ -731,6 +746,21 @@ export default function ExploreScreen() {
                 ))}
               </View>
             </View>
+            {/* 비회원 회원가입 유도 */}
+            {!user?.id && feedItems.length > 10 && (
+              <View style={styles.signupCta}>
+                <View style={[styles.signupCtaBox, { backgroundColor: C.card, borderColor: C.gold }]}>
+                  <Text style={[styles.signupCtaTitle, { color: C.fg }]}>더 많은 작품이 기다리고 있어요</Text>
+                  <Text style={[styles.signupCtaDesc, { color: C.muted }]}>회원가입하고 모든 작품을 감상하세요</Text>
+                  <Pressable
+                    style={({ pressed }) => [styles.signupCtaBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.8 }]}
+                    onPress={() => router.push('/signup' as any)}
+                  >
+                    <Text style={[styles.signupCtaBtnText, { color: C.bg }]}>회원가입</Text>
+                  </Pressable>
+                </View>
+              </View>
+            )}
           </ScrollView>
         )
       ) : filtered.length === 0 ? (
@@ -1038,6 +1068,36 @@ const styles = StyleSheet.create({
   masonryTitle: {
     fontSize: 11,
     fontWeight: '700',
+  },
+  signupCta: {
+    paddingVertical: 24,
+    alignItems: 'center',
+  },
+  signupCtaBox: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 24,
+    alignItems: 'center',
+    width: '100%',
+    gap: 8,
+  },
+  signupCtaTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  signupCtaDesc: {
+    fontSize: 13,
+  },
+  signupCtaBtn: {
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginTop: 8,
+  },
+  signupCtaBtnText: {
+    fontSize: 14,
+    fontWeight: '800',
   },
   myTabRow: {
     flexDirection: 'row',

@@ -28,7 +28,7 @@ function RootNavigator() {
     const inAuthGroup = segments[0] === '(auth)';
     const inOnboarding = segments[0] === '(onboarding)';
     const inPublic = segments[0] === 'exhibition' || segments[0] === 'artist' || segments[0] === '3dexhibition'
-      || (segments[0] === '(tabs)' && segments[1] === 'moui');
+      || (segments[0] === '(tabs)' && (segments[1] === 'moui' || segments[1] === 'explore'));
 
     if (!session) {
       if (!inAuthGroup && !inPublic) {
