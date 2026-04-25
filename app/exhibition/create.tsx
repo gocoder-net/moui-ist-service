@@ -872,7 +872,7 @@ export default function CreateExhibitionScreen() {
                     <Text style={styles.createBtnText}>
                       {loading
                         ? (isEditMode ? '수정 중...' : '생성 중...')
-                        : (isEditMode ? '수정 완료' : '전시관 공개하기')}
+                        : (isEditMode ? '수정 완료' : '전시관 공개하기 (-10)')}
                     </Text>
                     {!loading && <Text style={styles.createBtnArrow}>→</Text>}
                   </View>

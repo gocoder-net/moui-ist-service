@@ -495,62 +495,6 @@ export default function HomeScreen() {
         </>
         )}
 
-        {/* 출석 이벤트 */}
-        {user && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Animated.Text entering={FadeIn.delay(360).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
-                출석 이벤트
-              </Animated.Text>
-            </View>
-
-            <Animated.View entering={FadeInDown.delay(400).duration(400).springify()} style={[styles.attendCard, { backgroundColor: C.card, borderColor: C.gold }]}>
-              <View style={styles.attendHeader}>
-                <Text style={[styles.attendSub, styles.attendSubLead, { color: C.muted }]}>7일 연속 출석하고 보상 받기!</Text>
-              </View>
-              <View style={styles.attendDays}>
-                {ATTENDANCE_REWARDS.map((reward, i) => {
-                  const dayNum = i + 1;
-                  const checked = dayNum <= attendanceDay;
-                  const isCurrent = dayNum === attendanceDay + 1 && !checkedToday;
-                  return (
-                    <View key={dayNum} style={styles.attendDayCol}>
-                      <View style={[
-                        styles.attendDayCircle,
-                        { borderColor: checked ? C.gold : C.border },
-                        checked && { backgroundColor: C.gold },
-                        isCurrent && { borderColor: C.gold, borderWidth: 2 },
-                      ]}>
-                        <Text style={[
-                          styles.attendDayNum,
-                          { color: checked ? C.bg : isCurrent ? C.gold : C.mutedLight },
-                        ]}>{checked ? '✓' : dayNum}</Text>
-                      </View>
-                      <Text style={[styles.attendReward, { color: dayNum === 7 ? C.gold : C.mutedLight }]}>
-                        {reward}
-                        <Text style={styles.attendRewardUnit}> MOUI</Text>
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-              {!checkedToday ? (
-                <Pressable
-                  onPress={handleCheckIn}
-                  disabled={checkingIn}
-                  style={({ pressed }) => [styles.attendBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.7 }, checkingIn && { opacity: 0.5 }]}
-                >
-                  <Text style={[styles.attendBtnText, { color: C.bg }]}>{checkingIn ? '출석 중...' : '출석하기'}</Text>
-                </Pressable>
-              ) : (
-                <View style={[styles.attendBtn, { backgroundColor: C.border }]}>
-                  <Text style={[styles.attendBtnText, { color: C.muted }]}>오늘 출석 완료!</Text>
-                </View>
-              )}
-            </Animated.View>
-          </>
-        )}
-
         {/* 연결한 사람들의 최신 활동 */}
         {feedActivities.length > 0 && (
           <>
@@ -671,6 +615,62 @@ export default function HomeScreen() {
                 </Pressable>
               </Animated.View>
             ))}
+          </>
+        )}
+
+        {/* 출석 이벤트 (하단) */}
+        {user && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Animated.Text entering={FadeIn.delay(840).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
+                출석 이벤트
+              </Animated.Text>
+            </View>
+
+            <Animated.View entering={FadeInDown.delay(880).duration(400).springify()} style={[styles.attendCard, { backgroundColor: C.card, borderColor: C.gold }]}>
+              <View style={styles.attendHeader}>
+                <Text style={[styles.attendSub, styles.attendSubLead, { color: C.muted }]}>7일 연속 출석하고 보상 받기!</Text>
+              </View>
+              <View style={styles.attendDays}>
+                {ATTENDANCE_REWARDS.map((reward, i) => {
+                  const dayNum = i + 1;
+                  const checked = dayNum <= attendanceDay;
+                  const isCurrent = dayNum === attendanceDay + 1 && !checkedToday;
+                  return (
+                    <View key={dayNum} style={styles.attendDayCol}>
+                      <View style={[
+                        styles.attendDayCircle,
+                        { borderColor: checked ? C.gold : C.border },
+                        checked && { backgroundColor: C.gold },
+                        isCurrent && { borderColor: C.gold, borderWidth: 2 },
+                      ]}>
+                        <Text style={[
+                          styles.attendDayNum,
+                          { color: checked ? C.bg : isCurrent ? C.gold : C.mutedLight },
+                        ]}>{checked ? '✓' : dayNum}</Text>
+                      </View>
+                      <Text style={[styles.attendReward, { color: dayNum === 7 ? C.gold : C.mutedLight }]}>
+                        {reward}
+                        <Text style={styles.attendRewardUnit}> MOUI</Text>
+                      </Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {!checkedToday ? (
+                <Pressable
+                  onPress={handleCheckIn}
+                  disabled={checkingIn}
+                  style={({ pressed }) => [styles.attendBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.7 }, checkingIn && { opacity: 0.5 }]}
+                >
+                  <Text style={[styles.attendBtnText, { color: C.bg }]}>{checkingIn ? '출석 중...' : '출석하기'}</Text>
+                </Pressable>
+              ) : (
+                <View style={[styles.attendBtn, { backgroundColor: C.border }]}>
+                  <Text style={[styles.attendBtnText, { color: C.muted }]}>오늘 출석 완료!</Text>
+                </View>
+              )}
+            </Animated.View>
           </>
         )}
 

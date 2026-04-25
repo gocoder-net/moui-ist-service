@@ -6,6 +6,7 @@ import {
   Pressable,
   Image,
   Alert,
+  Platform,
   SectionList,
   ActivityIndicator,
 } from 'react-native';
@@ -296,11 +297,15 @@ export default function ChatScreen() {
     return null;
   };
 
+  const FIELD_EMOJI: Record<string, string> = { 글: '✍️', 그림: '🎨', 영상: '🎬', 소리: '🎵', 사진: '📷' };
   const ProfileMeta = ({ profile }: { profile?: ChatProfile | null }) => {
     if (!profile) return null;
     const parts: string[] = [];
-    if (profile.field) parts.push(profile.field);
-    if (profile.region) parts.push(`📍 ${profile.region}`);
+    if (profile.field) {
+      const fields = profile.field.split(',').map(f => f.trim()).filter(Boolean);
+      const withEmoji = fields.map(f => `${FIELD_EMOJI[f] ?? '🎯'} ${f}`).join(', ');
+      parts.push(withEmoji);
+    }
     if (parts.length === 0) return null;
     return <Text style={[styles.cardMeta, { color: C.mutedLight }]} numberOfLines={1}>{parts.join(' · ')}</Text>;
   };
@@ -502,8 +507,29 @@ export default function ChatScreen() {
                     <ProfileMeta profile={receiver} />
                     <Text style={[styles.cardMsg, { color: C.muted }]} numberOfLines={2}>{item.message}</Text>
                   </Pressable>
-                  <View style={[styles.pendingBadge, { backgroundColor: 'rgba(232,168,64,0.12)' }]}>
-                    <Text style={[styles.pendingText, { color: '#e8a840' }]}>수락 대기중</Text>
+                  <View style={styles.pendingActions}>
+                    <View style={[styles.pendingBadge, { backgroundColor: 'rgba(232,168,64,0.12)' }]}>
+                      <Text style={[styles.pendingText, { color: '#e8a840' }]}>수락 대기중</Text>
+                    </View>
+                    <Pressable
+                      style={({ pressed }) => [styles.cancelBtn, { borderColor: C.danger }, pressed && { opacity: 0.6 }]}
+                      onPress={() => {
+                        const doCancel = async () => {
+                          await supabase.from('chat_requests').delete().eq('id', item.id);
+                          loadData();
+                        };
+                        if (Platform.OS === 'web') {
+                          if (window.confirm('채팅 요청을 취소하시겠습니까?')) doCancel();
+                        } else {
+                          Alert.alert('요청 취소', '채팅 요청을 취소하시겠습니까?', [
+                            { text: '아니오', style: 'cancel' },
+                            { text: '취소하기', style: 'destructive', onPress: doCancel },
+                          ]);
+                        }
+                      }}
+                    >
+                      <Text style={[styles.cancelBtnText, { color: C.danger }]}>취소</Text>
+                    </Pressable>
                   </View>
                 </View>
               </View>
@@ -649,6 +675,20 @@ const styles = StyleSheet.create({
   },
   pendingText: {
     fontSize: 11,
+    fontWeight: '700',
+  },
+  pendingActions: {
+    alignItems: 'flex-end',
+    gap: 6,
+  },
+  cancelBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  cancelBtnText: {
+    fontSize: 10,
     fontWeight: '700',
   },
   expiryText: {

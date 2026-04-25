@@ -217,7 +217,7 @@ export default function CreateArtworkScreen() {
           {loading ? (
             <ActivityIndicator size="small" color={C.bg} />
           ) : (
-            <Text style={[styles.saveBtnText, { color: C.bg }]}>{isEditing ? '수정' : '저장'}</Text>
+            <Text style={[styles.saveBtnText, { color: C.bg }]}>{isEditing ? '수정' : '저장 (-10)'}</Text>
           )}
         </Pressable>
       </View>
