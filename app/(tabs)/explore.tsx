@@ -793,6 +793,28 @@ export default function ExploreScreen() {
         />
       )}
       </View>
+
+      {/* 내 작품 올리기 플로팅 버튼 */}
+      <Pressable
+        style={({ pressed }) => [styles.fab, { backgroundColor: C.gold }, pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] }]}
+        onPress={() => {
+          if (!user?.id) {
+            if (Platform.OS === 'web') {
+              if (window.confirm('회원가입 후 작품을 올릴 수 있습니다.\n가입하시겠습니까?')) router.push('/signup' as any);
+            } else {
+              const { Alert } = require('react-native');
+              Alert.alert('회원가입 필요', '회원가입 후 작품을 올릴 수 있습니다.', [
+                { text: '취소', style: 'cancel' },
+                { text: '가입하기', onPress: () => router.push('/signup' as any) },
+              ]);
+            }
+            return;
+          }
+          router.push('/artwork/create');
+        }}
+      >
+        <Text style={styles.fabText}>+ 작품 올리기</Text>
+      </Pressable>
     </View>
   );
 }
@@ -1098,6 +1120,26 @@ const styles = StyleSheet.create({
   signupCtaBtnText: {
     fontSize: 14,
     fontWeight: '800',
+  },
+  fab: {
+    position: 'absolute',
+    bottom: 80,
+    alignSelf: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
+    zIndex: 10,
+  },
+  fabText: {
+    color: '#000',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   myTabRow: {
     flexDirection: 'row',

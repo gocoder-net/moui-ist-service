@@ -88,9 +88,6 @@ export default function CreateArtworkScreen() {
     if (!imageUri) { showAlert('알림', '이미지를 선택해주세요.'); return; }
     if (!title.trim()) { showAlert('알림', '작품명을 입력해주세요.'); return; }
     if (!year.trim()) { showAlert('알림', '제작연도를 입력해주세요.'); return; }
-    if (!medium.trim()) { showAlert('알림', '재료를 입력해주세요.'); return; }
-    if (!technique.trim()) { showAlert('알림', '기법을 입력해주세요.'); return; }
-    if (!widthCm.trim() || !heightCm.trim()) { showAlert('알림', '크기(가로, 세로)를 입력해주세요.'); return; }
     if (!description.trim() || description.trim().length < 10) {
       showAlert('알림', `설명은 10글자 이상 입력해주세요. (현재 ${description.trim().length}자)`);
       return;
@@ -271,7 +268,7 @@ export default function CreateArtworkScreen() {
 
         {/* 재료 */}
         <Animated.View entering={FadeInDown.delay(300).duration(400).springify()}>
-          <Text style={[styles.label, { color: C.fg }]}>재료 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+          <Text style={[styles.label, { color: C.fg }]}>재료 <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
           <TextInput
             style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
             value={medium}
@@ -283,7 +280,7 @@ export default function CreateArtworkScreen() {
 
         {/* 기법 */}
         <Animated.View entering={FadeInDown.delay(350).duration(400).springify()}>
-          <Text style={[styles.label, { color: C.fg }]}>기법 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+          <Text style={[styles.label, { color: C.fg }]}>기법 <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
           <TextInput
             style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
             value={technique}
@@ -295,7 +292,7 @@ export default function CreateArtworkScreen() {
 
         {/* 크기 (가로 / 세로 세로 배치) */}
         <Animated.View entering={FadeInDown.delay(400).duration(400).springify()}>
-          <Text style={[styles.label, { color: C.fg }]}>크기 (cm) <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+          <Text style={[styles.label, { color: C.fg }]}>크기 (cm) <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
           <TextInput
             style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg, marginBottom: 8 }]}
             value={widthCm}
