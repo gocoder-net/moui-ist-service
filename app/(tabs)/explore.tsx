@@ -123,6 +123,18 @@ function FloatingShape({
   );
 }
 
+/* ── SpinningDiamond ── */
+function SpinningDiamond({ size = 12, color = '#000' }: { size?: number; color?: string }) {
+  const rot = useSharedValue(0);
+  useEffect(() => {
+    rot.value = withRepeat(withTiming(360, { duration: 3000, easing: Easing.linear }), -1, false);
+  }, []);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rot.value}deg` }],
+  }));
+  return <Animated.View style={[{ width: size, height: size, borderWidth: 1.5, borderColor: color }, animStyle]} />;
+}
+
 /* ── PlayfulDiamond ── */
 function PlayfulDiamond({
   color = '#C8A96E',
@@ -813,7 +825,10 @@ export default function ExploreScreen() {
           router.push('/artwork/create');
         }}
       >
-        <Text style={styles.fabText}>+ 작품 올리기</Text>
+        <View style={styles.fabContent}>
+          <PlayfulDiamond size={12} color="#000" borderWidth={1.5} />
+          <Text style={styles.fabText}>작품 올리기</Text>
+        </View>
       </Pressable>
     </View>
   );
@@ -1134,6 +1149,11 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
     zIndex: 10,
+  },
+  fabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   fabText: {
     color: '#000',
