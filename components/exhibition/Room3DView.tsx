@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { StyleSheet, View, Text, Pressable } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Image as RNImage } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import {
@@ -70,8 +70,8 @@ export default function Room3DView({
             borderRadius: 1, overflow: 'hidden',
           }}
         >
-          <Image source={{ uri: art.uri }}
-            style={{ width: '100%', height: '100%' }} contentFit="cover" />
+          <RNImage source={{ uri: art.uri }}
+            style={{ width: '100%', height: '100%' }} resizeMode="cover" />
         </Pressable>
       );
     });
