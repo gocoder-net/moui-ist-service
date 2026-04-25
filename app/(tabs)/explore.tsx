@@ -1157,17 +1157,20 @@ const styles = StyleSheet.create({
   },
   masonryTypeBadge: {
     position: 'absolute',
-    top: 8,
-    left: 8,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 12,
-    width: 36,
-    height: 36,
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  masonryTypeEmoji: {
-    fontSize: 22,
+  masonryTypeLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#C8A96E',
+    letterSpacing: 0.5,
   },
   masonryInfo: {
     padding: 8,
