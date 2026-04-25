@@ -191,6 +191,8 @@ export default function HomeScreen() {
   const [popularArtworks, setPopularArtworks] = useState<PopularArtwork[]>([]);
   const [newArtists, setNewArtists] = useState<NewArtist[]>([]);
   const [nearbyMouis, setNearbyMouis] = useState<NearbyMoui[]>([]);
+  const [recommendedMouis, setRecommendedMouis] = useState<NearbyMoui[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   // 출석
   const [attendanceDay, setAttendanceDay] = useState(0); // 현재까지 출석한 일수 (0~7)
@@ -241,6 +243,10 @@ export default function HomeScreen() {
 
   const loadHomeFeed = useCallback(async () => {
     if (!user) return;
+
+    // Unread notifications count
+    const { count: uc } = await (supabase as any).from('notifications').select('id', { count: 'exact', head: true }).eq('user_id', user.id).eq('is_read', false);
+    setUnreadCount(uc ?? 0);
 
     // 1. 연결한 사람들의 최신 활동
     const { data: myFollowings } = await supabase
@@ -295,18 +301,24 @@ export default function HomeScreen() {
       })));
     }
 
-    // 4. 근처 모임
-    const myRegion = profile?.region;
-    if (myRegion) {
-      const { data: mouis } = await (supabase as any).from('moui_posts').select('id, title, category, region, max_participants, created_at')
-        .eq('status', 'open').order('created_at', { ascending: false }).limit(10);
-      if (mouis) {
-        const nearby = mouis.filter((m: any) => m.region && myRegion && m.region.split(' ').slice(0, 2).join(' ') === myRegion.split(' ').slice(0, 2).join(' ')).slice(0, 3);
-        const withCounts = await Promise.all(nearby.map(async (m: any) => {
-          const { count } = await (supabase as any).from('moui_participants').select('moui_post_id', { count: 'exact', head: true }).eq('moui_post_id', m.id);
-          return { ...m, participant_count: count ?? 0 };
-        }));
-        setNearbyMouis(withCounts);
+    // 4. 근처 모임 + 추천 모임
+    const { data: allMouis } = await (supabase as any).from('moui_posts').select('id, title, category, region, max_participants, created_at')
+      .eq('status', 'open').order('created_at', { ascending: false }).limit(10);
+    if (allMouis) {
+      const addCounts = async (list: any[]) => Promise.all(list.map(async (m: any) => {
+        const { count } = await (supabase as any).from('moui_participants').select('moui_post_id', { count: 'exact', head: true }).eq('moui_post_id', m.id);
+        return { ...m, participant_count: count ?? 0 };
+      }));
+
+      const myRegion = profile?.region;
+      if (myRegion) {
+        const nearby = allMouis.filter((m: any) => m.region && m.region.split(' ').slice(0, 2).join(' ') === myRegion.split(' ').slice(0, 2).join(' ')).slice(0, 3);
+        setNearbyMouis(await addCounts(nearby));
+        const rest = allMouis.filter((m: any) => !nearby.find((n: any) => n.id === m.id)).slice(0, 3);
+        setRecommendedMouis(await addCounts(rest));
+      } else {
+        setNearbyMouis([]);
+        setRecommendedMouis(await addCounts(allMouis.slice(0, 3)));
       }
     }
   }, [user, profile]);
@@ -437,6 +449,20 @@ export default function HomeScreen() {
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* 히어로 배너 */}
         <Animated.View entering={FadeInDown.delay(100).duration(600).springify()} style={styles.heroBanner}>
+          {/* 알림 벨 */}
+          {user && (
+            <Pressable
+              style={({ pressed }) => [styles.bellBtn, pressed && { opacity: 0.6 }]}
+              onPress={() => router.push('/notifications')}
+            >
+              <Text style={{ fontSize: 20 }}>🔔</Text>
+              {unreadCount > 0 && (
+                <View style={styles.bellBadge}>
+                  <Text style={styles.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
+                </View>
+              )}
+            </Pressable>
+          )}
           <View style={styles.heroAccent}>
             <PlayfulDiamond size={16} color={C.gold} />
           </View>
@@ -618,6 +644,31 @@ export default function HomeScreen() {
           </>
         )}
 
+        {/* 추천 모임 */}
+        {recommendedMouis.length > 0 && (
+          <>
+            <View style={styles.sectionHeader}>
+              <Animated.Text entering={FadeIn.delay(820).duration(300)} style={[styles.sectionTitle, { color: C.fg }]}>
+                추천 모임
+              </Animated.Text>
+            </View>
+            {recommendedMouis.map((item, idx) => (
+              <Animated.View key={item.id} entering={FadeInDown.delay(840 + idx * 60).duration(400).springify()}>
+                <Pressable
+                  style={({ pressed }) => [styles.mouiFeedCard, { backgroundColor: C.card, borderColor: C.border }, pressed && { opacity: 0.8 }]}
+                  onPress={() => router.push(`/moui/${item.id}` as any)}
+                >
+                  <Text style={[styles.mouiFeedTitle, { color: C.fg }]} numberOfLines={1}>{item.title}</Text>
+                  <View style={styles.mouiFeedMeta}>
+                    <Text style={[styles.mouiFeedMetaText, { color: C.muted }]}>{item.participant_count}명 참여</Text>
+                    {item.region && <Text style={[styles.mouiFeedMetaText, { color: C.muted }]}>· {item.region}</Text>}
+                  </View>
+                </Pressable>
+              </Animated.View>
+            ))}
+          </>
+        )}
+
         {/* 출석 이벤트 (하단) */}
         {user && (
           <>
@@ -740,6 +791,31 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 32,
     gap: 8,
+    position: 'relative',
+  },
+  bellBtn: {
+    position: 'absolute',
+    top: 10,
+    right: 0,
+    padding: 8,
+    zIndex: 10,
+  },
+  bellBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    backgroundColor: '#D94040',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 3,
+  },
+  bellBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
   },
   heroAccent: {
     marginBottom: 6,

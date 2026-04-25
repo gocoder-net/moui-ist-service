@@ -42,6 +42,7 @@ import Animated, {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/auth-context';
 import { spendPoints } from '@/lib/points';
+import { sendNotification } from '@/lib/notifications';
 import type { Database } from '@/types/database';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -422,16 +423,19 @@ function ArtworkViewer({
       await supabase.from('artwork_likes').insert({ artwork_id: aw.id, user_id: user.id });
       setLiked(true);
       setLikeCount(c => c + 1);
+      sendNotification({ userId: aw.user_id, type: 'like', title: `작품 "${aw.title}"에 좋아요`, fromUserId: user.id, targetId: aw.id });
     }
   };
 
   const submitComment = async () => {
     const aw = artworks[currentIndex];
     if (!aw || !user?.id || !commentText.trim()) return;
-    await supabase.from('artwork_comments').insert({ artwork_id: aw.id, user_id: user.id, content: commentText.trim() });
+    const txt = commentText.trim();
+    await supabase.from('artwork_comments').insert({ artwork_id: aw.id, user_id: user.id, content: txt });
     setCommentText('');
     setCommentCount(c => c + 1);
     loadCommentsList(aw.id);
+    sendNotification({ userId: aw.user_id, type: 'comment', title: `작품 "${aw.title}"에 댓글`, body: txt, fromUserId: user.id, targetId: aw.id });
   };
 
   useEffect(() => {
@@ -1052,6 +1056,7 @@ export default function ArtistPortfolioScreen() {
     } else {
       await supabase.from('follows').insert({ follower_id: user.id, following_id: resolvedId });
       setFollowerCount((c) => c + 1);
+      sendNotification({ userId: resolvedId, type: 'follow', title: '새로운 연결', fromUserId: user.id });
     }
     setIsFollowing(!isFollowing);
   };
@@ -1078,6 +1083,7 @@ export default function ArtistPortfolioScreen() {
     setChatModalVisible(false);
     setChatMessage('');
     setChatStatus('pending');
+    if (resolvedId) sendNotification({ userId: resolvedId, type: 'chat_request', title: '새 채팅 요청', body: chatMessage.trim(), fromUserId: user.id });
     Alert.alert('완료', '채팅 요청을 보냈습니다!');
   };
 

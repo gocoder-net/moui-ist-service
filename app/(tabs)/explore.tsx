@@ -757,7 +757,7 @@ export default function ExploreScreen() {
                         />
                         {item.type !== 'artwork' && (
                           <View style={styles.masonryTypeBadge}>
-                            <Text style={styles.masonryTypeEmoji}>{item.type === 'exhibition' ? '🏛️' : '📂'}</Text>
+                            <Text style={styles.masonryTypeLabel}>{item.type === 'exhibition' ? '전시관' : '아카이브'}</Text>
                           </View>
                         )}
                       </View>
@@ -808,7 +808,7 @@ export default function ExploreScreen() {
                         />
                         {item.type !== 'artwork' && (
                           <View style={styles.masonryTypeBadge}>
-                            <Text style={styles.masonryTypeEmoji}>{item.type === 'exhibition' ? '🏛️' : '📂'}</Text>
+                            <Text style={styles.masonryTypeLabel}>{item.type === 'exhibition' ? '전시관' : '아카이브'}</Text>
                           </View>
                         )}
                       </View>
