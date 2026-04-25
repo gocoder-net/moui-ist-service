@@ -2761,14 +2761,14 @@ const styles = StyleSheet.create({
   colFilterCircle: {
     width: 64,
     height: 64,
-    borderRadius: 32,
+    borderRadius: 12,
     borderWidth: 2.5,
     padding: 2,
   },
   colFilterCircleInner: {
     width: '100%',
     height: '100%',
-    borderRadius: 30,
+    borderRadius: 9,
     overflow: 'hidden',
   },
   colFilterName: {
