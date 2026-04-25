@@ -68,6 +68,7 @@ type FeedItem = {
   extra?: string;
   artwork_index?: number; // index in artist's artworks for viewer
   aspect?: number; // width/height ratio for masonry
+  tags?: string[];
   exhibition_num?: number; // 3D exhibition number for direct entry
 };
 
@@ -211,6 +212,8 @@ export default function ExploreScreen() {
   const [artists, setArtists] = useState<ArtistCard[]>([]);
   const [feedItems, setFeedItems] = useState<FeedItem[]>([]);
   const [feedVisible, setFeedVisible] = useState(10);
+  const [trendingTags, setTrendingTags] = useState<string[]>([]);
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [loading, setLoading] = useState(true);
@@ -298,6 +301,7 @@ export default function ExploreScreen() {
         artist_avatar: p.avatar_url,
         artist_username: p.username,
         artwork_index: idx,
+        tags: a.tags ?? [],
         aspect: Math.max(0.6, Math.min(1.6, w / h)),
       });
     });
@@ -368,6 +372,24 @@ export default function ExploreScreen() {
       [items[i], items[j]] = [items[j], items[i]];
     }
     setFeedItems(items);
+
+    // Trending tags from artworks
+    const { data: tagData } = await supabase.from('artworks').select('tags');
+    const tagCount = new Map<string, number>();
+    tagData?.forEach((a: any) => {
+      a.tags?.forEach((t: string) => {
+        if (t && !t.match(/^\d+$/) && !t.match(/^\d+x\d+cm$/)) {
+          tagCount.set(t, (tagCount.get(t) ?? 0) + 1);
+        }
+      });
+    });
+    const sorted = [...tagCount.entries()].sort((a, b) => b[1] - a[1]).slice(0, 12).map(e => e[0]);
+    // Shuffle for variety
+    for (let i = sorted.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [sorted[i], sorted[j]] = [sorted[j], sorted[i]];
+    }
+    setTrendingTags(sorted.slice(0, 8));
   }, []);
 
   useFocusEffect(
@@ -433,6 +455,25 @@ export default function ExploreScreen() {
       coverImage: null,
     }));
     return [...filtered, ...fillers];
+  })();
+
+  // Filtered feed for 'all' tab (search + tags)
+  const filteredFeed = (() => {
+    let list = feedItems;
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(fi =>
+        fi.title.toLowerCase().includes(q) ||
+        fi.artist_name.toLowerCase().includes(q) ||
+        fi.artist_username.toLowerCase().includes(q) ||
+        fi.subtitle?.toLowerCase().includes(q) ||
+        fi.tags?.some(t => t.toLowerCase().includes(q))
+      );
+    }
+    if (selectedTags.size > 0) {
+      list = list.filter(fi => [...selectedTags].every(t => fi.tags?.includes(t)));
+    }
+    return list;
   })();
 
   const isMe = (item: ArtistCard) => user?.id === item.id;
@@ -629,6 +670,35 @@ export default function ExploreScreen() {
             </Pressable>
           )}
         </View>
+        {/* 태그 필터 */}
+        {trendingTags.length > 0 && activeTab === 'all' && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagScroll}>
+            {selectedTags.size > 0 && (
+              <Pressable
+                style={[styles.tagChip, { backgroundColor: C.danger + '20', borderColor: C.danger }]}
+                onPress={() => setSelectedTags(new Set())}
+              >
+                <Text style={[styles.tagChipText, { color: C.danger }]}>✕</Text>
+              </Pressable>
+            )}
+            {trendingTags.map(tag => {
+              const active = selectedTags.has(tag);
+              return (
+                <Pressable
+                  key={tag}
+                  style={[styles.tagChip, { borderColor: active ? C.gold : C.border }, active && { backgroundColor: C.gold + '20' }]}
+                  onPress={() => setSelectedTags(prev => {
+                    const next = new Set(prev);
+                    if (next.has(tag)) next.delete(tag); else next.add(tag);
+                    return next;
+                  })}
+                >
+                  <Text style={[styles.tagChipText, { color: active ? C.gold : C.muted }]}>#{tag}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
       </Animated.View>
 
       {/* 콘텐츠 */}
@@ -637,10 +707,12 @@ export default function ExploreScreen() {
           <View style={[styles.loadingDiamond, { borderColor: C.gold }]} />
         </View>
       ) : activeTab === 'all' ? (
-        feedItems.length === 0 ? (
+        filteredFeed.length === 0 ? (
           <View style={styles.emptyWrap}>
             <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
-            <Text style={[styles.emptyText, { color: C.muted }]}>아직 등록된 작품이 없습니다</Text>
+            <Text style={[styles.emptyText, { color: C.muted }]}>
+              {search.trim() || selectedTags.size > 0 ? '검색 결과가 없습니다' : '아직 등록된 작품이 없습니다'}
+            </Text>
           </View>
         ) : (
           <ScrollView
@@ -657,7 +729,7 @@ export default function ExploreScreen() {
             <View style={styles.masonryWrap}>
               {/* Left column */}
               <View style={styles.masonryCol}>
-                {feedItems.slice(0, user?.id ? feedVisible : 10).filter((_, i) => i % 2 === 0).map((item, idx) => (
+                {filteredFeed.slice(0, user?.id ? feedVisible : 10).filter((_, i) => i % 2 === 0).map((item, idx) => (
                   <Animated.View key={item.id} entering={FadeInDown.delay(60 + idx * 40).duration(400).springify()}>
                     <Pressable
                       style={({ pressed }) => [
@@ -708,7 +780,7 @@ export default function ExploreScreen() {
               </View>
               {/* Right column */}
               <View style={styles.masonryCol}>
-                {feedItems.slice(0, user?.id ? feedVisible : 10).filter((_, i) => i % 2 === 1).map((item, idx) => (
+                {filteredFeed.slice(0, user?.id ? feedVisible : 10).filter((_, i) => i % 2 === 1).map((item, idx) => (
                   <Animated.View key={item.id} entering={FadeInDown.delay(80 + idx * 40).duration(400).springify()}>
                     <Pressable
                       style={({ pressed }) => [
@@ -759,7 +831,7 @@ export default function ExploreScreen() {
               </View>
             </View>
             {/* 비회원 회원가입 유도 */}
-            {!user?.id && feedItems.length > 10 && (
+            {!user?.id && filteredFeed.length > 10 && (
               <View style={styles.signupCta}>
                 <View style={[styles.signupCtaBox, { backgroundColor: C.card, borderColor: C.gold }]}>
                   <Text style={[styles.signupCtaTitle, { color: C.fg }]}>더 많은 작품이 기다리고 있어요</Text>
@@ -885,23 +957,38 @@ const styles = StyleSheet.create({
 
   searchWrap: {
     paddingHorizontal: 20,
-    marginBottom: 14,
+    marginBottom: 10,
+  },
+  tagScroll: {
+    paddingHorizontal: 20,
+    gap: 6,
+    paddingBottom: 8,
+  },
+  tagChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  tagChipText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1.5,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    gap: 10,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 6,
   },
   searchIcon: {
-    fontSize: 16,
+    fontSize: 13,
   },
   searchInput: {
     flex: 1,
-    fontSize: 14,
+    fontSize: 12,
     padding: 0,
   },
 
