@@ -217,6 +217,7 @@ export default function ExploreScreen() {
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [loading, setLoading] = useState(true);
+  const [feedLoading, setFeedLoading] = useState(true);
 
   const loadArtists = useCallback(async () => {
     setLoading(true);
@@ -268,6 +269,7 @@ export default function ExploreScreen() {
   }, []);
 
   const loadFeed = useCallback(async () => {
+    setFeedLoading(true);
     // profiles map for artist info
     const { data: profiles } = await supabase
       .from('profiles')
@@ -390,6 +392,7 @@ export default function ExploreScreen() {
       [sorted[i], sorted[j]] = [sorted[j], sorted[i]];
     }
     setTrendingTags(sorted.slice(0, 8));
+    setFeedLoading(false);
   }, []);
 
   useFocusEffect(
@@ -702,18 +705,18 @@ export default function ExploreScreen() {
       </Animated.View>
 
       {/* 콘텐츠 */}
-      {loading ? (
+      {loading || (activeTab === 'all' && feedLoading) ? (
         <View style={styles.loadingWrap}>
           <View style={[styles.loadingDiamond, { borderColor: C.gold }]} />
         </View>
       ) : activeTab === 'all' ? (
         filteredFeed.length === 0 ? (
-          <View style={styles.emptyWrap}>
-            <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
-            <Text style={[styles.emptyText, { color: C.muted }]}>
-              {search.trim() || selectedTags.size > 0 ? '검색 결과가 없습니다' : '아직 등록된 작품이 없습니다'}
-            </Text>
-          </View>
+          (search.trim() || selectedTags.size > 0) ? (
+            <View style={styles.emptyWrap}>
+              <View style={[styles.emptyDiamond, { borderColor: C.gold }]} />
+              <Text style={[styles.emptyText, { color: C.muted }]}>검색 결과가 없습니다</Text>
+            </View>
+          ) : null
         ) : (
           <ScrollView
             contentContainerStyle={styles.listContent}

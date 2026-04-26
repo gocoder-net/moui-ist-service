@@ -2,9 +2,11 @@ import {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "@/lib/supabase";
 import type { Session, User } from "@supabase/supabase-js";
@@ -52,6 +54,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setAdminModeState(false);
     }
   };
+
+  // 앱이 포그라운드로 돌아올 때 세션 자동 갱신
+  const appState = useRef(AppState.currentState);
+  useEffect(() => {
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (appState.current.match(/inactive|background/) && nextState === "active") {
+        // 앱이 다시 활성화되면 세션 갱신 시도
+        supabase.auth.getSession().then(({ data: { session: cached } }) => {
+          if (cached) {
+            // refresh token으로 새 액세스 토큰 발급
+            supabase.auth.refreshSession().then(({ data: { session: fresh } }) => {
+              if (fresh) {
+                setSession(fresh);
+              }
+            });
+          }
+        });
+      }
+      appState.current = nextState;
+    };
+
+    const sub = AppState.addEventListener("change", handleAppStateChange);
+    return () => sub.remove();
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
