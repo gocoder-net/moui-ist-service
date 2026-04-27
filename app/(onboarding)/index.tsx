@@ -476,9 +476,9 @@ export default function OnboardingScreen() {
                 returnKeyType="next"
                 onSubmitEditing={() => realNameRef.current?.focus()}
                 autoFocus
-                maxLength={30}
+                maxLength={15}
               />
-              <Text style={styles.inputHint}>다른 사용자에게 보이는 이름이에요</Text>
+              <Text style={styles.inputHint}>다른 사용자에게 보이는 이름이에요 (최대 15자)</Text>
             </View>
 
             <View style={styles.inputGroup}>

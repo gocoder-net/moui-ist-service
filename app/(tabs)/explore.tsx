@@ -674,7 +674,7 @@ export default function ExploreScreen() {
                               <Text style={{ fontSize: 8, fontWeight: '800', color: C.fg }}>{item.artist_name.charAt(0)}</Text>
                             </View>
                           )}
-                          <Text style={[styles.masonryArtistName, { color: C.muted }]} numberOfLines={1}>{item.artist_name}</Text>
+                          <Text style={[styles.masonryArtistName, { color: C.muted }]} numberOfLines={1}>{item.artist_name} <Text style={{ fontSize: 8, color: C.mutedLight }}>@{item.artist_username}</Text></Text>
                         </View>
                         <Text style={[styles.masonryTitle, { color: C.fg }]} numberOfLines={1}>{item.title}</Text>
                       </View>
@@ -729,7 +729,7 @@ export default function ExploreScreen() {
                               <Text style={{ fontSize: 8, fontWeight: '800', color: C.fg }}>{item.artist_name.charAt(0)}</Text>
                             </View>
                           )}
-                          <Text style={[styles.masonryArtistName, { color: C.muted }]} numberOfLines={1}>{item.artist_name}</Text>
+                          <Text style={[styles.masonryArtistName, { color: C.muted }]} numberOfLines={1}>{item.artist_name} <Text style={{ fontSize: 8, color: C.mutedLight }}>@{item.artist_username}</Text></Text>
                         </View>
                         <Text style={[styles.masonryTitle, { color: C.fg }]} numberOfLines={1}>{item.title}</Text>
                       </View>

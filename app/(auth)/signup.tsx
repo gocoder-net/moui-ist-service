@@ -63,8 +63,10 @@ function AnimatedInput({
   onSubmitEditing,
   inputRef,
   helperText,
+  helperColor,
   autoCapitalize = 'none',
   required = false,
+  maxLength,
   delay: enterDelay,
 }: {
   label: string;
@@ -81,6 +83,7 @@ function AnimatedInput({
   helperColor?: string;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   required?: boolean;
+  maxLength?: number;
   delay: number;
 }) {
   const focused = useSharedValue(0);
@@ -108,6 +111,7 @@ function AnimatedInput({
           keyboardType={keyboardType}
           returnKeyType={returnKeyType}
           onSubmitEditing={onSubmitEditing}
+          maxLength={maxLength}
           onFocus={() => { focused.value = withTiming(1, { duration: 200 }); }}
           onBlur={() => { focused.value = withTiming(0, { duration: 200 }); }}
         />
@@ -300,13 +304,14 @@ export default function SignUpScreen() {
           <View style={styles.form}>
             <AnimatedInput
               label="활동명"
-              placeholder="모의스트에서 사용할 이름"
+              placeholder="모의스트에서 사용할 이름 (최대 15자)"
               value={displayName}
               onChangeText={setDisplayName}
               autoCapitalize="words"
               returnKeyType="next"
               onSubmitEditing={() => usernameRef.current?.focus()}
-              helperText="다른 사용자에게 보이는 이름이에요."
+              helperText="다른 사용자에게 보이는 이름이에요. (최대 15자)"
+              maxLength={15}
               required
               delay={350}
             />

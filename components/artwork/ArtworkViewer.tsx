@@ -421,6 +421,7 @@ export function ArtworkViewer({
               )}
               <Text style={styles.viewerArtistName}>
                 {displayProfile.name ?? displayProfile.username}
+                <Text style={styles.viewerArtistUsername}> @{displayProfile.username}</Text>
               </Text>
             </Pressable>
           )}
@@ -663,6 +664,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.8)',
+  },
+  viewerArtistUsername: {
+    fontSize: 11,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.4)',
   },
   viewerInfoRow: {
     flexDirection: 'row',
