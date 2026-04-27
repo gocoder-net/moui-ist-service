@@ -22,14 +22,7 @@ import {
   FIELD_CATEGORIES,
   SUB_FIELDS,
 } from '@/constants/artwork-form';
-
-function showAlert(title: string, message: string) {
-  if (Platform.OS === 'web') {
-    window.alert(`${title}\n${message}`);
-  } else {
-    Alert.alert(title, message);
-  }
-}
+import { showAlert } from '@/lib/utils';
 
 export default function CreateArtworkScreen() {
   const insets = useSafeAreaInsets();

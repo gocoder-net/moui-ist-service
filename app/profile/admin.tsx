@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { showAlert } from '@/lib/utils';
 
 type VerificationRequest = {
   id: string;
@@ -20,10 +21,6 @@ type VerificationRequest = {
 };
 
 type Tab = 'pending' | 'processed';
-
-function showAlert(title: string, msg: string) {
-  Platform.OS === 'web' ? window.alert(`${title}\n${msg}`) : Alert.alert(title, msg);
-}
 
 export default function AdminScreen() {
   const insets = useSafeAreaInsets();

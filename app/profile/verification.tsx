@@ -11,10 +11,7 @@ import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-
-function showAlert(title: string, msg: string) {
-  Platform.OS === 'web' ? window.alert(`${title}\n${msg}`) : Alert.alert(title, msg);
-}
+import { showAlert } from '@/lib/utils';
 
 export default function VerificationScreen() {
   const insets = useSafeAreaInsets();

@@ -15,6 +15,9 @@ import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
+import { showConfirm } from '@/lib/utils';
+import { USER_TYPE_LABELS, USER_TYPE_EMOJI } from '@/constants/user';
+import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -27,21 +30,6 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-const USER_TYPE_LABELS = { creator: '작가', aspiring: '지망생', audience: '일반' } as const;
-const USER_TYPE_EMOJI = { creator: '🎨', aspiring: '✏️', audience: '👀' } as const;
-
-/* ── 유틸 ── */
-function confirmAlert(title: string, message: string, onConfirm: () => void) {
-  if (Platform.OS === 'web') {
-    if (window.confirm(`${title}\n${message}`)) onConfirm();
-  } else {
-    const { Alert } = require('react-native');
-    Alert.alert(title, message, [
-      { text: '취소', style: 'cancel' },
-      { text: '삭제', style: 'destructive', onPress: onConfirm },
-    ]);
-  }
-}
 
 function extractStoragePath(url: string, bucket: string): string | null {
   const marker = `/storage/v1/object/public/${bucket}/`;
@@ -76,61 +64,6 @@ type ArtworkCollection = {
 const ROOM_EMOJI: Record<string, string> = { small: '🏠', medium: '🏛️', large: '🏰' };
 const ROOM_LABEL: Record<string, string> = { small: '소형', medium: '중형', large: '대형' };
 
-/* ── PlayfulDiamond ── */
-function PlayfulDiamond({ size = 14, color = '#C8A96E' }: { size?: number; color?: string }) {
-  const rot = useSharedValue(0);
-  const scale = useSharedValue(1);
-
-  useEffect(() => {
-    const play = () => {
-      rot.value = withSequence(
-        withTiming(360, { duration: 600, easing: Easing.in(Easing.cubic) }),
-        withSpring(360, { damping: 6, stiffness: 200 }),
-        withDelay(1500, withTiming(360, { duration: 0 })),
-        withTiming(180, { duration: 400, easing: Easing.inOut(Easing.cubic) }),
-        withSpring(180, { damping: 8, stiffness: 250 }),
-        withDelay(2000, withTiming(180, { duration: 0 })),
-        withTiming(720, { duration: 800, easing: Easing.in(Easing.quad) }),
-        withSpring(720, { damping: 5, stiffness: 180 }),
-        withDelay(1200, withTiming(720, { duration: 0 })),
-        withTiming(740, { duration: 200, easing: Easing.out(Easing.cubic) }),
-        withSpring(720, { damping: 10, stiffness: 300 }),
-        withDelay(1500, withTiming(0, { duration: 0 })),
-      );
-      scale.value = withSequence(
-        withTiming(1.1, { duration: 300 }),
-        withTiming(1, { duration: 300 }),
-        withDelay(1500, withTiming(1, { duration: 0 })),
-        withTiming(0.9, { duration: 200 }),
-        withSpring(1, { damping: 8 }),
-        withDelay(2000, withTiming(1, { duration: 0 })),
-        withTiming(1.15, { duration: 400 }),
-        withTiming(1, { duration: 400 }),
-        withDelay(1200, withTiming(1, { duration: 0 })),
-        withTiming(1.05, { duration: 200 }),
-        withSpring(1, { damping: 12 }),
-        withDelay(1500, withTiming(1, { duration: 0 })),
-      );
-    };
-
-    play();
-    const interval = setInterval(play, 9200);
-    return () => clearInterval(interval);
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rot.value}deg` }, { scale: scale.value }],
-  }));
-
-  return (
-    <Animated.View
-      style={[
-        { width: size, height: size, borderWidth: 1.5, borderColor: color, transform: [{ rotate: '45deg' }] },
-        animStyle,
-      ]}
-    />
-  );
-}
 
 /* ── 전시관 카드 ── */
 function ExhibitionCard({ item, onPress, onEdit, onDelete, C }: { item: Exhibition; onPress: () => void; onEdit: () => void; onDelete: () => void; C: any }) {
@@ -351,7 +284,7 @@ export default function ProfileScreen() {
   );
 
   const handleDelete = useCallback((id: string) => {
-    confirmAlert('전시관 삭제', '정말 삭제하시겠습니까?\n전시관과 관련 파일이 모두 삭제됩니다.', async () => {
+    showConfirm('전시관 삭제', '정말 삭제하시겠습니까?\n전시관과 관련 파일이 모두 삭제됩니다.', async () => {
       try {
         const { data: ex } = await supabase
           .from('exhibitions')
@@ -401,7 +334,7 @@ export default function ProfileScreen() {
 
   const handleDeleteArtwork = useCallback(
     (item: RecentArtwork) => {
-      confirmAlert('작품 삭제', '정말 삭제하시겠습니까?\n삭제한 작품은 되돌릴 수 없습니다.', async () => {
+      showConfirm('작품 삭제', '정말 삭제하시겠습니까?\n삭제한 작품은 되돌릴 수 없습니다.', async () => {
         try {
           if (item.image_url) {
             const parts = item.image_url.split('/artworks/');
@@ -426,7 +359,7 @@ export default function ProfileScreen() {
 
   const handleDeleteCollection = useCallback(
     (col: ArtworkCollection) => {
-      confirmAlert('아카이브 삭제', `"${col.title}" 아카이브를 삭제하시겠습니까?\n(작품은 삭제되지 않습니다)`, async () => {
+      showConfirm('아카이브 삭제', `"${col.title}" 아카이브를 삭제하시겠습니까?\n(작품은 삭제되지 않습니다)`, async () => {
         try {
           if (col.cover_image_url) {
             const parts = col.cover_image_url.split('/artworks/');

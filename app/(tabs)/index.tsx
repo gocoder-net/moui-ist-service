@@ -26,104 +26,9 @@ import Animated, {
   FadeIn,
   FadeInDown,
 } from 'react-native-reanimated';
-
-/* ── 배경 떠다니는 도형 ── */
-function FloatingShape({
-  size, color, opacity, top, left, duration, delay, shape,
-}: {
-  size: number; color: string; opacity: number; top: string; left: string;
-  duration: number; delay: number; shape: 'circle' | 'diamond' | 'ring' | 'line';
-}) {
-  const translateY = useSharedValue(0);
-  const translateX = useSharedValue(0);
-  const rotate = useSharedValue(0);
-  const scale = useSharedValue(1);
-
-  useEffect(() => {
-    translateY.value = withDelay(delay, withRepeat(withSequence(
-      withTiming(-20, { duration, easing: Easing.inOut(Easing.sin) }),
-      withTiming(20, { duration, easing: Easing.inOut(Easing.sin) }),
-    ), -1, true));
-    translateX.value = withDelay(delay + 500, withRepeat(withSequence(
-      withTiming(12, { duration: duration * 1.3, easing: Easing.inOut(Easing.sin) }),
-      withTiming(-12, { duration: duration * 1.3, easing: Easing.inOut(Easing.sin) }),
-    ), -1, true));
-    rotate.value = withDelay(delay, withRepeat(
-      withTiming(360, { duration: duration * 4, easing: Easing.linear }), -1));
-    scale.value = withDelay(delay, withRepeat(withSequence(
-      withTiming(1.15, { duration: duration * 1.5, easing: Easing.inOut(Easing.sin) }),
-      withTiming(0.85, { duration: duration * 1.5, easing: Easing.inOut(Easing.sin) }),
-    ), -1, true));
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value }, { translateX: translateX.value },
-      { rotate: `${rotate.value}deg` }, { scale: scale.value },
-    ],
-  }));
-
-  const shapeStyle = (() => {
-    switch (shape) {
-      case 'circle': return { width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity };
-      case 'diamond': return { width: size, height: size, borderWidth: 1, borderColor: color, opacity, transform: [{ rotate: '45deg' }] };
-      case 'ring': return { width: size, height: size, borderRadius: size / 2, borderWidth: 1, borderColor: color, opacity };
-      case 'line': return { width: size, height: 1, backgroundColor: color, opacity };
-    }
-  })();
-
-  return (
-    <Animated.View style={[{ position: 'absolute', top: top as any, left: left as any }, animStyle]}>
-      <View style={shapeStyle} />
-    </Animated.View>
-  );
-}
-
-/* ── PlayfulDiamond ── */
-function PlayfulDiamond({ size = 14, color = '#C8A96E' }: { size?: number; color?: string }) {
-  const rot = useSharedValue(0);
-  const scale = useSharedValue(1);
-
-  useEffect(() => {
-    const play = () => {
-      rot.value = withSequence(
-        withTiming(360, { duration: 600, easing: Easing.in(Easing.cubic) }),
-        withSpring(360, { damping: 6, stiffness: 200 }),
-        withDelay(1500, withTiming(360, { duration: 0 })),
-        withTiming(180, { duration: 400, easing: Easing.inOut(Easing.cubic) }),
-        withSpring(180, { damping: 8, stiffness: 250 }),
-        withDelay(2000, withTiming(180, { duration: 0 })),
-        withTiming(720, { duration: 800, easing: Easing.in(Easing.quad) }),
-        withSpring(720, { damping: 5, stiffness: 180 }),
-        withDelay(1200, withTiming(720, { duration: 0 })),
-        withTiming(740, { duration: 200, easing: Easing.out(Easing.cubic) }),
-        withSpring(720, { damping: 10, stiffness: 300 }),
-        withDelay(1500, withTiming(0, { duration: 0 })),
-      );
-      scale.value = withSequence(
-        withTiming(1.1, { duration: 300 }), withTiming(1, { duration: 300 }),
-        withDelay(1500, withTiming(1, { duration: 0 })),
-        withTiming(0.9, { duration: 200 }), withSpring(1, { damping: 8 }),
-        withDelay(2000, withTiming(1, { duration: 0 })),
-        withTiming(1.15, { duration: 400 }), withTiming(1, { duration: 400 }),
-        withDelay(1200, withTiming(1, { duration: 0 })),
-        withTiming(1.05, { duration: 200 }), withSpring(1, { damping: 12 }),
-        withDelay(1500, withTiming(1, { duration: 0 })),
-      );
-    };
-    play();
-    const interval = setInterval(play, 9200);
-    return () => clearInterval(interval);
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rot.value}deg` }, { scale: scale.value }],
-  }));
-
-  return (
-    <Animated.View style={[{ width: size, height: size, borderWidth: 1.5, borderColor: color, transform: [{ rotate: '45deg' }] }, animStyle]} />
-  );
-}
+import { timeAgo, getTodayString, getYesterday } from '@/lib/utils';
+import { FloatingShape } from '@/components/ui/FloatingShape';
+import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
 
 /* ── 퀵 액션 카드 (보상 표시 포함) ── */
 function QuickCard({
@@ -154,28 +59,6 @@ function QuickCard({
 
 /* ── 출석 보상 ── */
 const ATTENDANCE_REWARDS = [50, 50, 50, 50, 50, 50, 500]; // 1~7일
-
-function getToday(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return '방금';
-  if (mins < 60) return `${mins}분 전`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  const days = Math.floor(hours / 24);
-  return `${days}일 전`;
-}
-
-function getYesterday(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 /* ── 메인 화면 ── */
 export default function HomeScreen() {
@@ -382,7 +265,7 @@ export default function HomeScreen() {
       setCheckedToday(false);
       return;
     }
-    const today = getToday();
+    const today = getTodayString();
     const yesterday = getYesterday();
     const latest = data[0];
 
@@ -412,7 +295,7 @@ export default function HomeScreen() {
     setCheckingIn(true);
     const nextDay = attendanceDay + 1;
     const reward = ATTENDANCE_REWARDS[nextDay - 1] ?? 50;
-    const today = getToday();
+    const today = getTodayString();
 
     // 1. 출석 기록
     const { error } = await (supabase as any).from('attendance').insert({

@@ -29,12 +29,10 @@ import Animated, {
   FadeInDown,
 } from 'react-native-reanimated';
 import { supabase } from '@/lib/supabase';
-
-const USER_TYPE_LABELS: Record<string, string> = {
-  creator: '작가',
-  aspiring: '지망생',
-  audience: '일반',
-};
+import { USER_TYPE_LABELS } from '@/constants/user';
+import { SpinningDiamond } from '@/components/ui/SpinningDiamond';
+import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
+import { FloatingShape } from '@/components/ui/FloatingShape';
 
 type TabKey = 'all' | 'creator' | 'aspiring' | 'audience';
 const TABS: { key: TabKey; label: string }[] = [
@@ -72,134 +70,6 @@ type FeedItem = {
   exhibition_num?: number; // 3D exhibition number for direct entry
   category?: string;
 };
-
-/* ── 배경 떠다니는 도형 ── */
-function FloatingShape({
-  size, color, opacity, top, left, duration, delay, shape,
-}: {
-  size: number; color: string; opacity: number; top: string; left: string;
-  duration: number; delay: number; shape: 'circle' | 'diamond' | 'ring' | 'line';
-}) {
-  const translateY = useSharedValue(0);
-  const translateX = useSharedValue(0);
-  const rotate = useSharedValue(0);
-  const scale = useSharedValue(1);
-
-  useEffect(() => {
-    translateY.value = withDelay(delay, withRepeat(withSequence(
-      withTiming(-20, { duration, easing: Easing.inOut(Easing.sin) }),
-      withTiming(20, { duration, easing: Easing.inOut(Easing.sin) }),
-    ), -1, true));
-    translateX.value = withDelay(delay + 500, withRepeat(withSequence(
-      withTiming(12, { duration: duration * 1.3, easing: Easing.inOut(Easing.sin) }),
-      withTiming(-12, { duration: duration * 1.3, easing: Easing.inOut(Easing.sin) }),
-    ), -1, true));
-    rotate.value = withDelay(delay, withRepeat(
-      withTiming(360, { duration: duration * 4, easing: Easing.linear }), -1));
-    scale.value = withDelay(delay, withRepeat(withSequence(
-      withTiming(1.15, { duration: duration * 1.5, easing: Easing.inOut(Easing.sin) }),
-      withTiming(0.85, { duration: duration * 1.5, easing: Easing.inOut(Easing.sin) }),
-    ), -1, true));
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value }, { translateX: translateX.value },
-      { rotate: `${rotate.value}deg` }, { scale: scale.value },
-    ],
-  }));
-
-  const shapeStyle = (() => {
-    switch (shape) {
-      case 'circle': return { width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity };
-      case 'diamond': return { width: size, height: size, borderWidth: 1, borderColor: color, opacity, transform: [{ rotate: '45deg' }] };
-      case 'ring': return { width: size, height: size, borderRadius: size / 2, borderWidth: 1, borderColor: color, opacity };
-      case 'line': return { width: size, height: 1, backgroundColor: color, opacity };
-    }
-  })();
-
-  return (
-    <Animated.View style={[{ position: 'absolute', top: top as any, left: left as any }, animStyle]}>
-      <View style={shapeStyle} />
-    </Animated.View>
-  );
-}
-
-/* ── SpinningDiamond ── */
-function SpinningDiamond({ size = 12, color = '#000' }: { size?: number; color?: string }) {
-  const rot = useSharedValue(0);
-  useEffect(() => {
-    rot.value = withRepeat(withTiming(360, { duration: 3000, easing: Easing.linear }), -1, false);
-  }, []);
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rot.value}deg` }],
-  }));
-  return <Animated.View style={[{ width: size, height: size, borderWidth: 1.5, borderColor: color }, animStyle]} />;
-}
-
-/* ── PlayfulDiamond ── */
-function PlayfulDiamond({
-  color = '#C8A96E',
-  size = 16,
-  borderWidth = 1.5,
-}: {
-  color?: string;
-  size?: number;
-  borderWidth?: number;
-}) {
-  const rot = useSharedValue(0);
-  const scale = useSharedValue(1);
-
-  useEffect(() => {
-    const play = () => {
-      rot.value = withSequence(
-        withTiming(360, { duration: 600, easing: Easing.in(Easing.cubic) }),
-        withSpring(360, { damping: 6, stiffness: 200 }),
-        withDelay(1500, withTiming(360, { duration: 0 })),
-        withTiming(180, { duration: 400, easing: Easing.inOut(Easing.cubic) }),
-        withSpring(180, { damping: 8, stiffness: 250 }),
-        withDelay(2000, withTiming(180, { duration: 0 })),
-        withTiming(720, { duration: 800, easing: Easing.in(Easing.quad) }),
-        withSpring(720, { damping: 5, stiffness: 180 }),
-        withDelay(1200, withTiming(720, { duration: 0 })),
-        withTiming(740, { duration: 200, easing: Easing.out(Easing.cubic) }),
-        withSpring(720, { damping: 10, stiffness: 300 }),
-        withDelay(1500, withTiming(0, { duration: 0 })),
-      );
-      scale.value = withSequence(
-        withTiming(1.1, { duration: 300 }), withTiming(1, { duration: 300 }),
-        withDelay(1500, withTiming(1, { duration: 0 })),
-        withTiming(0.9, { duration: 200 }), withSpring(1, { damping: 8 }),
-        withDelay(2000, withTiming(1, { duration: 0 })),
-        withTiming(1.15, { duration: 400 }), withTiming(1, { duration: 400 }),
-        withDelay(1200, withTiming(1, { duration: 0 })),
-        withTiming(1.05, { duration: 200 }), withSpring(1, { damping: 12 }),
-        withDelay(1500, withTiming(1, { duration: 0 })),
-      );
-    };
-    play();
-    const interval = setInterval(play, 9200);
-    return () => clearInterval(interval);
-  }, []);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rot.value}deg` }, { scale: scale.value }],
-  }));
-
-  return (
-    <Animated.View style={animStyle}>
-      <View
-        style={{
-          width: size,
-          height: size,
-          borderWidth,
-          borderColor: color,
-          transform: [{ rotate: '45deg' }],
-        }}
-      />
-    </Animated.View>
-  );
-}
 
 /* ── 메인 화면 ── */
 export default function ExploreScreen() {

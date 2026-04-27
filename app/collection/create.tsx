@@ -12,16 +12,9 @@ import { supabase } from '@/lib/supabase';
 import * as ImagePicker from 'expo-image-picker';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import type { Database } from '@/types/database';
+import { showAlert } from '@/lib/utils';
 
 type Artwork = Database['public']['Tables']['artworks']['Row'];
-
-function showAlert(title: string, message: string) {
-  if (Platform.OS === 'web') {
-    window.alert(`${title}\n${message}`);
-  } else {
-    Alert.alert(title, message);
-  }
-}
 
 export default function CreateCollectionScreen() {
   const insets = useSafeAreaInsets();

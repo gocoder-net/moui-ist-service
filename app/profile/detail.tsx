@@ -15,9 +15,8 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { getCreatorVerificationStatusText, getCreatorVerificationResetLabel } from '@/constants/creator-verification';
 import { REGIONS, PROVINCE_LIST, parseRegion } from '@/constants/regions';
 import { spendPoints } from '@/lib/points';
-
-const USER_TYPE_LABELS = { creator: '작가', aspiring: '지망생', audience: '일반' } as const;
-const USER_TYPE_EMOJI = { creator: '🎨', aspiring: '✏️', audience: '👀' } as const;
+import { detectSnsType } from '@/lib/utils';
+import { USER_TYPE_LABELS, USER_TYPE_EMOJI } from '@/constants/user';
 
 /* 분야 카테고리 */
 const FIELD_CATEGORIES = [
@@ -53,54 +52,6 @@ function detectFieldFromInput(input: string): { category: string; icon: string }
     }
   }
   return null;
-}
-
-/* URL → SNS 플랫폼 자동 감지 */
-function detectSnsType(url: string): { key: string; icon: string; label: string } {
-  const lower = url.toLowerCase();
-  if (lower.includes('instagram.com') || lower.includes('instagr.am'))
-    return { key: 'instagram', icon: '📸', label: 'Instagram' };
-  if (lower.includes('threads.net'))
-    return { key: 'threads', icon: '🧵', label: 'Threads' };
-  if (lower.includes('twitter.com') || lower.includes('x.com'))
-    return { key: 'twitter', icon: '🐦', label: 'X (Twitter)' };
-  if (lower.includes('youtube.com') || lower.includes('youtu.be'))
-    return { key: 'youtube', icon: '🎬', label: 'YouTube' };
-  if (lower.includes('tiktok.com'))
-    return { key: 'tiktok', icon: '🎵', label: 'TikTok' };
-  if (lower.includes('facebook.com') || lower.includes('fb.com'))
-    return { key: 'facebook', icon: '👥', label: 'Facebook' };
-  if (lower.includes('linkedin.com'))
-    return { key: 'linkedin', icon: '💼', label: 'LinkedIn' };
-  if (lower.includes('behance.net'))
-    return { key: 'behance', icon: '🎨', label: 'Behance' };
-  if (lower.includes('dribbble.com'))
-    return { key: 'dribbble', icon: '🏀', label: 'Dribbble' };
-  if (lower.includes('artstation.com'))
-    return { key: 'artstation', icon: '🖼️', label: 'ArtStation' };
-  if (lower.includes('pixiv.net'))
-    return { key: 'pixiv', icon: '🖌️', label: 'Pixiv' };
-  if (lower.includes('github.com'))
-    return { key: 'github', icon: '💻', label: 'GitHub' };
-  if (lower.includes('notion.so') || lower.includes('notion.site'))
-    return { key: 'notion', icon: '🗂️', label: 'Notion' };
-  if (lower.includes('blog.naver.com'))
-    return { key: 'blog', icon: '📝', label: '네이버 블로그' };
-  if (lower.includes('brunch.co.kr'))
-    return { key: 'blog', icon: '🍞', label: '브런치' };
-  if (lower.includes('tistory.com'))
-    return { key: 'blog', icon: '📔', label: '티스토리' };
-  if (lower.includes('medium.com'))
-    return { key: 'blog', icon: '✒️', label: 'Medium' };
-  if (lower.includes('soundcloud.com'))
-    return { key: 'soundcloud', icon: '🔊', label: 'SoundCloud' };
-  if (lower.includes('spotify.com'))
-    return { key: 'spotify', icon: '🎧', label: 'Spotify' };
-  if (lower.includes('bandcamp.com'))
-    return { key: 'bandcamp', icon: '💿', label: 'Bandcamp' };
-  if (lower.includes('vimeo.com'))
-    return { key: 'vimeo', icon: '🎞️', label: 'Vimeo' };
-  return { key: 'website', icon: '🌐', label: '웹사이트' };
 }
 
 export default function ProfileDetailScreen() {

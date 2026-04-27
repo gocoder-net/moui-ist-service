@@ -12,11 +12,7 @@ import { spendPoints } from '@/lib/points';
 import { parseRegion, REGIONS, PROVINCE_LIST } from '@/constants/regions';
 import { MOUI_CATEGORIES, MOUI_POST_COST, FIELD_OPTIONS, TARGET_TOP, TARGET_CREATOR_SUB } from '@/constants/moui';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-
-function showAlert(title: string, message: string) {
-  if (Platform.OS === 'web') window.alert(`${title}\n${message}`);
-  else Alert.alert(title, message);
-}
+import { showAlert, getTodayDate } from '@/lib/utils';
 
 const MAP_DOMAINS = ['naver.me', 'map.naver.com', 'naver.com', 'map.kakao.com', 'kakao.com', 'maps.app.goo.gl', 'goo.gl', 'google.com', 'maps.google.com'];
 
@@ -40,11 +36,6 @@ function getMaxDate(months: number) {
   const d = new Date();
   d.setMonth(d.getMonth() + months);
   return d;
-}
-
-function getToday() {
-  const n = new Date();
-  return new Date(n.getFullYear(), n.getMonth(), n.getDate());
 }
 
 /** 달력 그리드 생성 */
@@ -104,7 +95,7 @@ function CalendarPicker({ visible, onClose, onSelect, selected, minDate, maxDate
   };
 
   const grid = buildCalendarGrid(viewYear, viewMonth);
-  const today = getToday();
+  const today = getTodayDate();
 
   const isDisabled = (day: number) => {
     const d = new Date(viewYear, viewMonth - 1, day);
@@ -379,7 +370,7 @@ export default function CreateMouiScreen() {
     setShowDistrictPicker(false);
   };
 
-  const recruitStartDate = getToday();
+  const recruitStartDate = getTodayDate();
 
   const recruitDaysGap = recruitEndDate
     ? Math.ceil((recruitEndDate.getTime() - recruitStartDate.getTime()) / 86400000)
@@ -675,8 +666,8 @@ export default function CreateMouiScreen() {
               onClose={() => setShowRecruitCalendar(false)}
               onSelect={(d) => setRecruitEndDate(d)}
               selected={recruitEndDate}
-              minDate={new Date(getToday().getTime() + 86400000)}
-              maxDate={new Date(getToday().getTime() + MAX_RECRUIT_DAYS * 86400000)}
+              minDate={new Date(getTodayDate().getTime() + 86400000)}
+              maxDate={new Date(getTodayDate().getTime() + MAX_RECRUIT_DAYS * 86400000)}
               colors={C}
             />
 
@@ -714,7 +705,7 @@ export default function CreateMouiScreen() {
               onClose={() => setShowMeetingCalendar(false)}
               onSelect={(d) => setMeetingDate(d)}
               selected={meetingDate}
-              minDate={recruitEndDate ?? getToday()}
+              minDate={recruitEndDate ?? getTodayDate()}
               maxDate={getMaxDate(MAX_MEETING_MONTHS)}
               colors={C}
               showTime

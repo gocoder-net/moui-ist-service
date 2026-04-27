@@ -14,6 +14,7 @@ import { supabase } from '@/lib/supabase';
 import { parseRegion } from '@/constants/regions';
 import { MOUI_CATEGORIES, TARGET_OPTIONS, FIELD_OPTIONS } from '@/constants/moui';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { showAlert, formatRegionLabel, formatRecruitPeriod, formatMeetingDate } from '@/lib/utils';
 
 type MouiParticipant = {
   user_id: string;
@@ -52,48 +53,6 @@ type MouiPost = {
   };
   moui_participants?: MouiParticipant[];
 };
-
-function showAlert(title: string, message: string) {
-  if (Platform.OS === 'web') window.alert(`${title}\n${message}`);
-  else Alert.alert(title, message);
-}
-
-function formatRegionLabel(region: string | null | undefined) {
-  const parsed = parseRegion(region);
-  if (!parsed) return region?.trim() ?? '';
-
-  const compactProvince = parsed.province
-    .replace('특별시', '시')
-    .replace('광역시', '시')
-    .replace('특별자치시', '시')
-    .replace('특별자치도', '도');
-
-  return `${compactProvince} ${parsed.district}`;
-}
-
-function formatRecruitPeriod(start: string | null, end: string | null) {
-  if (!end) return null;
-  const fmt = (s: string) => {
-    const d = new Date(s);
-    return `${d.getMonth() + 1}/${d.getDate()}`;
-  };
-  if (start) return `${fmt(start)} ~ ${fmt(end)}`;
-  return `~ ${fmt(end)}`;
-}
-
-function formatMeetingDate(dateStr: string) {
-  const d = new Date(dateStr);
-  const month = d.getMonth() + 1;
-  const day = d.getDate();
-  const hour = d.getHours();
-  const minute = d.getMinutes();
-  const weekdays = ['일', '월', '화', '수', '목', '금', '토'];
-  const weekday = weekdays[d.getDay()];
-  if (hour === 0 && minute === 0) {
-    return `${month}/${day}(${weekday})`;
-  }
-  return `${month}/${day}(${weekday}) ${hour}:${String(minute).padStart(2, '0')}`;
-}
 
 export default function MouiScreen() {
   const insets = useSafeAreaInsets();
