@@ -1,0 +1,18 @@
+name = "moui-ist-r2"
+main = "worker.js"
+compatibility_date = "2024-12-01"
+
+[[r2_buckets]]
+binding = "ARTWORKS_BUCKET"
+bucket_name = "artworks"
+
+[[r2_buckets]]
+binding = "CHAT_IMAGES_BUCKET"
+bucket_name = "chat-images"
+
+[[r2_buckets]]
+binding = "BGM_BUCKET"
+bucket_name = "bgm"
+
+# API_TOKEN은 아래 명령어로 설정:
+# wrangler secret put API_TOKEN

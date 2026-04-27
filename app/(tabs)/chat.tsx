@@ -15,6 +15,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useThemeMode } from '@/contexts/theme-context';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
+import { r2Delete, r2ExtractPath } from '@/lib/r2';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
 
@@ -124,11 +125,9 @@ export default function ChatScreen() {
         .not('image_url', 'is', null);
       if (imgMsgs && imgMsgs.length > 0) {
         const paths = imgMsgs
-          .map((m: any) => m.image_url?.split('/chat-images/')[1])
-          .filter(Boolean);
-        if (paths.length > 0) {
-          await supabase.storage.from('chat-images').remove(paths);
-        }
+          .map((m: any) => r2ExtractPath(m.image_url, 'chat-images'))
+          .filter(Boolean) as string[];
+        if (paths.length > 0) await r2Delete('chat-images', paths);
       }
       await supabase.from('chat_messages').delete().eq('request_id', chat.id);
       await supabase.from('chat_requests').delete().eq('id', chat.id);
@@ -191,11 +190,9 @@ export default function ChatScreen() {
           .not('image_url', 'is', null);
         if (imgMsgs && imgMsgs.length > 0) {
           const paths = imgMsgs
-            .map((m: any) => m.image_url?.split('/chat-images/')[1])
-            .filter(Boolean);
-          if (paths.length > 0) {
-            await supabase.storage.from('chat-images').remove(paths);
-          }
+            .map((m: any) => r2ExtractPath(m.image_url, 'chat-images'))
+            .filter(Boolean) as string[];
+          if (paths.length > 0) await r2Delete('chat-images', paths);
         }
         await (supabase as any).from('moui_chat_messages').delete().eq('moui_post_id', postId);
         await (supabase as any).from('moui_participants').delete().eq('moui_post_id', postId);

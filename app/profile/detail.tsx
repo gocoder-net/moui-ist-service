@@ -9,6 +9,7 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { r2Upload, r2Delete, r2ExtractPath } from '@/lib/r2';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -413,26 +414,18 @@ export default function ProfileDetailScreen() {
 
       // Delete old avatar if exists
       if (profile?.avatar_url) {
-        const marker = '/storage/v1/object/public/artworks/';
-        const idx = profile.avatar_url.indexOf(marker);
-        if (idx !== -1) {
-          const oldPath = decodeURIComponent(profile.avatar_url.slice(idx + marker.length));
-          await supabase.storage.from('artworks').remove([oldPath]);
-        }
+        const oldPath = r2ExtractPath(profile.avatar_url, 'artworks');
+        if (oldPath) await r2Delete('artworks', [oldPath]);
       }
 
-      const { error: uploadError } = await supabase.storage
-        .from('artworks')
-        .upload(fileName, blob, { contentType: 'image/jpeg' });
+      const { url: publicUrl, error: uploadError } = await r2Upload('artworks', fileName, blob, 'image/jpeg');
 
-      if (uploadError) {
+      if (uploadError || !publicUrl) {
         const msg = '이미지 업로드에 실패했습니다.';
         Platform.OS === 'web' ? window.alert(msg) : Alert.alert('오류', msg);
         setUploadingAvatar(false);
         return;
       }
-
-      const publicUrl = supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
       await supabase.from('profiles').update({ avatar_url: publicUrl }).eq('id', user.id);
       await refreshProfile();
     } catch (err) {

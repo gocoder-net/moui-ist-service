@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
+import { r2Upload } from '@/lib/r2';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { parseRegion } from '@/constants/regions';
 import { TARGET_OPTIONS, FIELD_OPTIONS } from '@/constants/moui';
@@ -219,12 +220,8 @@ export default function MouiChatScreen() {
     try {
       const response = await fetch(uri);
       const blob = await response.blob();
-      const { error: uploadError } = await supabase.storage
-        .from('chat-images')
-        .upload(fileName, blob, { contentType: 'image/jpeg' });
-      if (uploadError) throw uploadError;
-
-      const imageUrl = supabase.storage.from('chat-images').getPublicUrl(fileName).data.publicUrl;
+      const { url: imageUrl, error: uploadError } = await r2Upload('chat-images', fileName, blob, 'image/jpeg');
+      if (uploadError || !imageUrl) throw new Error(uploadError || 'Upload failed');
       const { error } = await (supabase as any).from('moui_chat_messages').insert({
         moui_post_id: postId,
         sender_id: user.id,

@@ -17,6 +17,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
+import { r2Upload } from '@/lib/r2';
 import { useRouter } from 'expo-router';
 import Animated, {
   useSharedValue,
@@ -255,11 +256,9 @@ export default function OnboardingScreen() {
         const fileName = `avatars/${user.id}/${Date.now()}.jpg`;
         const response = await fetch(manipulated.uri);
         const blob = await response.blob();
-        const { error: uploadErr } = await supabase.storage
-          .from('artworks')
-          .upload(fileName, blob, { contentType: 'image/jpeg' });
-        if (!uploadErr) {
-          avatarUrl = supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
+        const { url: uploadedUrl, error: uploadErr } = await r2Upload('artworks', fileName, blob, 'image/jpeg');
+        if (!uploadErr && uploadedUrl) {
+          avatarUrl = uploadedUrl;
         }
       } catch {}
     }

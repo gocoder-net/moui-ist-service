@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { r2List, r2Delete } from '@/lib/r2';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 type Member = {
@@ -114,20 +115,14 @@ export default function MembersScreen() {
     }
   };
 
-  /** 스토리지 버킷에서 유저 폴더 전체 삭제 */
+  /** R2 버킷에서 유저 폴더 전체 삭제 */
   const clearBucket = async (bucket: string, userId: string) => {
-    const { data: files } = await supabase.storage.from(bucket).list(userId, { limit: 1000 });
-    if (files && files.length > 0) {
-      const paths = files.map(f => `${userId}/${f.name}`);
-      await supabase.storage.from(bucket).remove(paths);
-    }
+    const keys = await r2List(bucket, `${userId}/`);
+    if (keys.length > 0) await r2Delete(bucket, keys);
     // avatars 서브폴더 (artworks 버킷 안에 avatars/{userId}/)
     if (bucket === 'artworks') {
-      const { data: avatarFiles } = await supabase.storage.from(bucket).list(`avatars/${userId}`, { limit: 1000 });
-      if (avatarFiles && avatarFiles.length > 0) {
-        const paths = avatarFiles.map(f => `avatars/${userId}/${f.name}`);
-        await supabase.storage.from(bucket).remove(paths);
-      }
+      const avatarKeys = await r2List(bucket, `avatars/${userId}/`);
+      if (avatarKeys.length > 0) await r2Delete(bucket, avatarKeys);
     }
   };
 

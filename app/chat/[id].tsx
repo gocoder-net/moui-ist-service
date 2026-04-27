@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
+import { r2Upload, r2Delete, r2ExtractPath } from '@/lib/r2';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -225,13 +226,9 @@ export default function ChatRoomScreen() {
     try {
       const response = await fetch(uri);
       const blob = await response.blob();
-      const { error: uploadError } = await supabase.storage
-        .from('chat-images')
-        .upload(fileName, blob, { contentType: 'image/jpeg' });
+      const { url: imageUrl, error: uploadError } = await r2Upload('chat-images', fileName, blob, 'image/jpeg');
 
-      if (uploadError) throw uploadError;
-
-      const imageUrl = supabase.storage.from('chat-images').getPublicUrl(fileName).data.publicUrl;
+      if (uploadError || !imageUrl) throw new Error(uploadError || 'Upload failed');
 
       const { error } = await supabase.from('chat_messages').insert({
         request_id: requestId,
@@ -269,11 +266,9 @@ export default function ChatRoomScreen() {
       .not('image_url', 'is', null);
     if (imgMsgs && imgMsgs.length > 0) {
       const paths = imgMsgs
-        .map((m: any) => m.image_url?.split('/chat-images/')[1])
-        .filter(Boolean);
-      if (paths.length > 0) {
-        await supabase.storage.from('chat-images').remove(paths);
-      }
+        .map((m: any) => r2ExtractPath(m.image_url, 'chat-images'))
+        .filter(Boolean) as string[];
+      if (paths.length > 0) await r2Delete('chat-images', paths);
     }
     await supabase.from('chat_messages').delete().eq('request_id', requestId);
     await supabase.from('chat_requests').delete().eq('id', requestId);

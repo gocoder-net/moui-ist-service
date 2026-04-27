@@ -72,10 +72,7 @@ export default function NotificationsScreen() {
       if (aw) {
         const username = (aw as any).profiles?.username;
         if (username) {
-          // Find artwork index
-          const { data: allAw } = await supabase.from('artworks').select('id').eq('user_id', aw.user_id).order('created_at', { ascending: false });
-          const idx = allAw?.findIndex(a => a.id === n.target_id) ?? -1;
-          router.push(`/artist/${username}?artworkId=${idx >= 0 ? idx + 1 : 1}` as any);
+          router.push(`/artist/${username}?artworkId=${n.target_id}` as any);
           return;
         }
       }

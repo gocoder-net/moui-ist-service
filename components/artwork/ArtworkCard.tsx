@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { View, Text, Pressable, Image, Linking, StyleSheet } from 'react-native';
 import { META_KEY_LABEL } from '@/constants/artwork-form';
+import { r2ThumbUrl } from '@/lib/r2';
 import type { Database } from '@/types/database';
 
 type Artwork = Database['public']['Tables']['artworks']['Row'];
@@ -21,7 +22,7 @@ export function ArtworkCard({
 
   useEffect(() => {
     if (artwork.image_url) {
-      Image.getSize(artwork.image_url, (w, h) => {
+      Image.getSize(r2ThumbUrl(artwork.image_url), (w, h) => {
         if (w && h) setImgRatio(w / h);
       });
     }
@@ -36,7 +37,7 @@ export function ArtworkCard({
       <Pressable onPress={onPress}>
         <View style={[styles.artCard, { backgroundColor: C.card }]}>
           <Image
-            source={{ uri: artwork.image_url }}
+            source={{ uri: r2ThumbUrl(artwork.image_url) }}
             style={{ width: '100%', height: imgH }}
             resizeMode="contain"
           />

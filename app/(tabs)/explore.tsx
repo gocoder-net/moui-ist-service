@@ -29,10 +29,14 @@ import Animated, {
   FadeInDown,
 } from 'react-native-reanimated';
 import { supabase } from '@/lib/supabase';
+import { r2ThumbUrl } from '@/lib/r2';
 import { USER_TYPE_LABELS } from '@/constants/user';
 import { SpinningDiamond } from '@/components/ui/SpinningDiamond';
 import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
 import { FloatingShape } from '@/components/ui/FloatingShape';
+import { ArtworkViewer } from '@/components/artwork/ArtworkViewer';
+import type { Database } from '@/types/database';
+type Artwork = Database['public']['Tables']['artworks']['Row'];
 
 type TabKey = 'all' | 'creator' | 'aspiring' | 'audience';
 const TABS: { key: TabKey; label: string }[] = [
@@ -64,7 +68,8 @@ type FeedItem = {
   artist_avatar: string | null;
   artist_username: string;
   extra?: string;
-  artwork_index?: number; // index in artist's artworks for viewer
+  artwork_id?: string; // artwork UUID for viewer
+  user_id?: string; // artwork owner for viewer
   aspect?: number; // width/height ratio for masonry
   tags?: string[];
   exhibition_num?: number; // 3D exhibition number for direct entry
@@ -89,6 +94,25 @@ export default function ExploreScreen() {
   const [activeTab, setActiveTab] = useState<TabKey>('all');
   const [loading, setLoading] = useState(true);
   const [feedLoading, setFeedLoading] = useState(true);
+
+  // 작품 뷰어 상태
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerArtworks, setViewerArtworks] = useState<Artwork[]>([]);
+  const [viewerIndex, setViewerIndex] = useState(0);
+
+  const openArtworkViewer = async (artworkId: string, userId: string) => {
+    const { data: allAw } = await supabase
+      .from('artworks')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+    if (allAw && allAw.length > 0) {
+      const idx = allAw.findIndex(a => a.id === artworkId);
+      setViewerArtworks(allAw);
+      setViewerIndex(idx >= 0 ? idx : 0);
+      setViewerVisible(true);
+    }
+  };
 
   const loadArtists = useCallback(async () => {
     setLoading(true);
@@ -173,7 +197,8 @@ export default function ExploreScreen() {
         artist_name: p.name ?? p.username,
         artist_avatar: p.avatar_url,
         artist_username: p.username,
-        artwork_index: idx,
+        artwork_id: a.id,
+        user_id: a.user_id,
         tags: a.tags ?? [],
         aspect: Math.max(0.6, Math.min(1.6, w / h)),
         category: (a as any).category ?? undefined,
@@ -616,7 +641,7 @@ export default function ExploreScreen() {
                       ]}
                       onPress={() => {
                         if (item.type === 'artwork') {
-                          router.push(`/artist/${item.artist_username}?artworkId=${(item.artwork_index ?? 0) + 1}`);
+                          if (item.artwork_id && item.user_id) openArtworkViewer(item.artwork_id, item.user_id);
                         } else if (item.type === 'exhibition') {
                           router.push(`/3dexhibition/${item.artist_username}/${item.exhibition_num ?? 1}`);
                         } else {
@@ -626,7 +651,7 @@ export default function ExploreScreen() {
                     >
                       <View>
                         <Image
-                          source={{ uri: item.image_url }}
+                          source={{ uri: r2ThumbUrl(item.image_url) }}
                           style={[styles.masonryImage, { aspectRatio: item.aspect ?? 1 }]}
                           resizeMode="cover"
                         />
@@ -671,7 +696,7 @@ export default function ExploreScreen() {
                       ]}
                       onPress={() => {
                         if (item.type === 'artwork') {
-                          router.push(`/artist/${item.artist_username}?artworkId=${(item.artwork_index ?? 0) + 1}`);
+                          if (item.artwork_id && item.user_id) openArtworkViewer(item.artwork_id, item.user_id);
                         } else if (item.type === 'exhibition') {
                           router.push(`/3dexhibition/${item.artist_username}/${item.exhibition_num ?? 1}`);
                         } else {
@@ -681,7 +706,7 @@ export default function ExploreScreen() {
                     >
                       <View>
                         <Image
-                          source={{ uri: item.image_url }}
+                          source={{ uri: r2ThumbUrl(item.image_url) }}
                           style={[styles.masonryImage, { aspectRatio: item.aspect ?? 1 }]}
                           resizeMode="cover"
                         />
@@ -785,6 +810,15 @@ export default function ExploreScreen() {
           <Text style={styles.fabText}>작품 올리기</Text>
         </View>
       </Pressable>
+
+      {/* 작품 뷰어 */}
+      <ArtworkViewer
+        visible={viewerVisible}
+        artworks={viewerArtworks}
+        initialIndex={viewerIndex}
+        onClose={() => { setViewerVisible(false); setViewerArtworks([]); }}
+        onIndexChange={(idx) => setViewerIndex(idx)}
+      />
     </View>
   );
 }

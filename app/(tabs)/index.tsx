@@ -14,6 +14,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { r2ThumbUrl } from '@/lib/r2';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -455,7 +456,7 @@ export default function HomeScreen() {
                     style={({ pressed }) => [styles.feedCard, { backgroundColor: C.card, borderColor: C.border }, pressed && { opacity: 0.8 }]}
                     onPress={() => router.push(`/artist/${item.artist_username}`)}
                   >
-                    <Image source={{ uri: item.image_url }} style={styles.feedCardImage} resizeMode="cover" />
+                    <Image source={{ uri: r2ThumbUrl(item.image_url) }} style={styles.feedCardImage} resizeMode="cover" />
                     <View style={styles.feedCardInfo}>
                       <View style={styles.feedCardArtistRow}>
                         {item.artist_avatar ? (
@@ -491,7 +492,7 @@ export default function HomeScreen() {
                     style={({ pressed }) => [styles.feedCard, { backgroundColor: C.card, borderColor: C.border }, pressed && { opacity: 0.8 }]}
                     onPress={() => router.push(`/artist/${item.artist_username}`)}
                   >
-                    <Image source={{ uri: item.image_url }} style={styles.feedCardImage} resizeMode="cover" />
+                    <Image source={{ uri: r2ThumbUrl(item.image_url) }} style={styles.feedCardImage} resizeMode="cover" />
                     <View style={styles.feedCardLikeBadge}>
                       <Text style={styles.feedCardLikeText}>◆ {item.like_count}</Text>
                     </View>

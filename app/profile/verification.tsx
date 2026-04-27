@@ -8,6 +8,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { r2Upload } from '@/lib/r2';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
@@ -46,17 +47,13 @@ export default function VerificationScreen() {
       const response = await fetch(uri);
       const blob = await response.blob();
 
-      const { error: uploadError } = await supabase.storage
-        .from('artworks')
-        .upload(fileName, blob, { contentType: 'image/jpeg' });
+      const { url: publicUrl, error: uploadError } = await r2Upload('artworks', fileName, blob, 'image/jpeg');
 
-      if (uploadError) {
+      if (uploadError || !publicUrl) {
         showAlert('오류', '이미지 업로드에 실패했습니다.');
         setSubmitting(false);
         return;
       }
-
-      const publicUrl = supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
 
       const { error: insertError } = await (supabase as any)
         .from('verification_requests')

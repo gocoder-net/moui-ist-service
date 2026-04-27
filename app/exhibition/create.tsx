@@ -7,9 +7,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
+import { r2Upload, r2Delete } from '@/lib/r2';
 import { spendPoints } from '@/lib/points';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 
@@ -308,12 +310,21 @@ export default function CreateExhibitionScreen() {
       const uploadImage = async (uri: string): Promise<string | null> => {
         // 이미 업로드된 URL이면 그대로 반환
         if (isExistingUrl(uri)) return uri;
-        const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+        const baseName = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const fileName = `${user.id}/${baseName}.jpg`;
+        const thumbName = `${user.id}/thumb_${baseName}.jpg`;
         const response = await fetch(uri);
         const blob = await response.blob();
-        const { error } = await supabase.storage.from('artworks').upload(fileName, blob, { contentType: 'image/jpeg' });
-        if (error) return null;
-        return supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
+        const { url, error } = await r2Upload('artworks', fileName, blob, 'image/jpeg');
+        if (error || !url) return null;
+        // 썸네일
+        try {
+          const thumb = await manipulateAsync(uri, [{ resize: { width: 400 } }], { compress: 0.6, format: SaveFormat.JPEG });
+          const thumbRes = await fetch(thumb.uri);
+          const thumbBlob = await thumbRes.blob();
+          await r2Upload('artworks', thumbName, thumbBlob, 'image/jpeg');
+        } catch {}
+        return url;
       };
 
       // Upload poster if present
@@ -331,9 +342,9 @@ export default function CreateExhibitionScreen() {
           const bgmFn = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`;
           const bgmResponse = await fetch(bgmLocalUri);
           const bgmBlob = await bgmResponse.blob();
-          const { error: bgmErr } = await supabase.storage.from('bgm').upload(bgmFn, bgmBlob, { contentType: 'audio/mpeg' });
-          if (!bgmErr) {
-            bgmUrl = supabase.storage.from('bgm').getPublicUrl(bgmFn).data.publicUrl;
+          const { url: bgmUploadedUrl, error: bgmErr } = await r2Upload('bgm', bgmFn, bgmBlob, 'audio/mpeg');
+          if (!bgmErr && bgmUploadedUrl) {
+            bgmUrl = bgmUploadedUrl;
           }
         }
       }

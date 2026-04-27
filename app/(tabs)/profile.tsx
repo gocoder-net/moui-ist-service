@@ -14,6 +14,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { r2Delete, r2ExtractPath, r2ThumbUrl } from '@/lib/r2';
 import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
 import { showConfirm } from '@/lib/utils';
 import { USER_TYPE_LABELS, USER_TYPE_EMOJI } from '@/constants/user';
@@ -29,14 +30,6 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-
-
-function extractStoragePath(url: string, bucket: string): string | null {
-  const marker = `/storage/v1/object/public/${bucket}/`;
-  const idx = url.indexOf(marker);
-  if (idx === -1) return null;
-  return decodeURIComponent(url.slice(idx + marker.length));
-}
 
 /* ── 전시관 타입 ── */
 type Exhibition = {
@@ -72,7 +65,7 @@ function ExhibitionCard({ item, onPress, onEdit, onDelete, C }: { item: Exhibiti
       <Pressable style={({ pressed }) => [pressed && { opacity: 0.7 }]} onPress={onPress}>
         <View style={s.exPosterWrap}>
           {item.poster_image_url ? (
-            <Image source={{ uri: item.poster_image_url }} style={s.exPoster} contentFit="cover" />
+            <Image source={{ uri: r2ThumbUrl(item.poster_image_url) }} style={s.exPoster} contentFit="cover" />
           ) : (
             <View style={[s.exPosterPlaceholder, { backgroundColor: C.bg }]}>
               <Text style={s.exPosterEmoji}>{ROOM_EMOJI[item.room_type] ?? '🏛️'}</Text>
@@ -126,7 +119,7 @@ function ArtworkPreviewCard({
     <View style={[s.exCard, { borderColor: C.border, backgroundColor: C.bg }]}>
       <Pressable style={({ pressed }) => [pressed && { opacity: 0.7 }]} onPress={onPress}>
         <View style={s.exPosterWrap}>
-          <Image source={{ uri: item.image_url }} style={s.exPoster} contentFit="cover" />
+          <Image source={{ uri: r2ThumbUrl(item.image_url) }} style={s.exPoster} contentFit="cover" />
           <View style={s.exBadgeRow}>
             <View style={[s.exBadge, s.exThumbMarkBadge, { borderColor: 'rgba(200,169,110,0.45)' }]}>
               <Text style={s.exThumbMarkEmoji}>🖼️</Text>
@@ -296,24 +289,24 @@ export default function ProfileScreen() {
           const artworkPaths: string[] = [];
           const bgmPaths: string[] = [];
           if (ex.poster_image_url) {
-            const p = extractStoragePath(ex.poster_image_url, 'artworks');
+            const p = r2ExtractPath(ex.poster_image_url, 'artworks');
             if (p) artworkPaths.push(p);
           }
           if (ex.wall_images && typeof ex.wall_images === 'object') {
             const wi = ex.wall_images as Record<string, { url: string; mode: string } | null>;
             for (const wall of ['north', 'south', 'east', 'west']) {
               if (wi[wall]?.url) {
-                const p = extractStoragePath(wi[wall]!.url, 'artworks');
+                const p = r2ExtractPath(wi[wall]!.url, 'artworks');
                 if (p) artworkPaths.push(p);
               }
             }
           }
           if (ex.bgm_url) {
-            const p = extractStoragePath(ex.bgm_url, 'bgm');
+            const p = r2ExtractPath(ex.bgm_url, 'bgm');
             if (p) bgmPaths.push(p);
           }
-          if (artworkPaths.length > 0) await supabase.storage.from('artworks').remove(artworkPaths);
-          if (bgmPaths.length > 0) await supabase.storage.from('bgm').remove(bgmPaths);
+          if (artworkPaths.length > 0) await r2Delete('artworks', artworkPaths);
+          if (bgmPaths.length > 0) await r2Delete('bgm', bgmPaths);
         }
 
         const { error: eaErr } = await supabase.from('exhibition_artworks').delete().eq('exhibition_id', id);
@@ -337,10 +330,8 @@ export default function ProfileScreen() {
       showConfirm('작품 삭제', '정말 삭제하시겠습니까?\n삭제한 작품은 되돌릴 수 없습니다.', async () => {
         try {
           if (item.image_url) {
-            const parts = item.image_url.split('/artworks/');
-            if (parts[1]) {
-              await supabase.storage.from('artworks').remove([decodeURIComponent(parts[1])]);
-            }
+            const p = r2ExtractPath(item.image_url, 'artworks');
+            if (p) await r2Delete('artworks', [p]);
           }
           const { error } = await supabase.from('artworks').delete().eq('id', item.id);
           if (error) {
@@ -362,10 +353,8 @@ export default function ProfileScreen() {
       showConfirm('아카이브 삭제', `"${col.title}" 아카이브를 삭제하시겠습니까?\n(작품은 삭제되지 않습니다)`, async () => {
         try {
           if (col.cover_image_url) {
-            const parts = col.cover_image_url.split('/artworks/');
-            if (parts[1]) {
-              await supabase.storage.from('artworks').remove([decodeURIComponent(parts[1])]);
-            }
+            const p = r2ExtractPath(col.cover_image_url, 'artworks');
+            if (p) await r2Delete('artworks', [p]);
           }
           await supabase.from('collection_artworks').delete().eq('collection_id', col.id);
           const { error } = await supabase.from('artwork_collections').delete().eq('id', col.id);
@@ -645,7 +634,7 @@ export default function ProfileScreen() {
                 {collections.map((col) => (
                   <View key={col.id} style={[s.collectionCard, { borderColor: C.border }]}>
                     {col.cover_image_url ? (
-                      <Image source={{ uri: col.cover_image_url }} style={s.collectionCover} contentFit="cover" />
+                      <Image source={{ uri: r2ThumbUrl(col.cover_image_url) }} style={s.collectionCover} contentFit="cover" />
                     ) : (
                       <View style={[s.collectionCoverEmpty, { backgroundColor: C.bg }]}>
                         <Text style={{ fontSize: 28 }}>📂</Text>

@@ -225,11 +225,22 @@ export function ArtworkViewer({
       keyExtractor={(item) => item.id}
       renderItem={({ item }) => (
         <View style={{ width: screenW, height: screenH, justifyContent: 'center', alignItems: 'center' }}>
-          <Image
-            source={{ uri: item.image_url }}
-            style={{ width: viewerFrameWidth, height: viewerImageHeight }}
-            resizeMode="contain"
-          />
+          <ScrollView
+            maximumZoomScale={5}
+            minimumZoomScale={1}
+            bouncesZoom
+            centerContent
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ justifyContent: 'center', alignItems: 'center', minHeight: screenH }}
+            style={{ width: viewerFrameWidth, height: screenH }}
+          >
+            <Image
+              source={{ uri: item.image_url }}
+              style={{ width: viewerFrameWidth, height: viewerImageHeight }}
+              resizeMode="contain"
+            />
+          </ScrollView>
         </View>
       )}
     />

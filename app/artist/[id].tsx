@@ -45,6 +45,7 @@ import Animated, {
   runOnJS,
 } from 'react-native-reanimated';
 import { supabase } from '@/lib/supabase';
+import { r2Delete, r2ExtractPath } from '@/lib/r2';
 import { useAuth } from '@/contexts/auth-context';
 import { spendPoints } from '@/lib/points';
 import { sendNotification } from '@/lib/notifications';
@@ -204,7 +205,9 @@ export default function ArtistPortfolioScreen() {
       .range(from, to);
     if (data && data.length > 0) {
       setArtworks(prev => {
-        const next = [...prev, ...data];
+        const existingIds = new Set(prev.map(a => a.id));
+        const newItems = data.filter(a => !existingIds.has(a.id));
+        const next = [...prev, ...newItems];
         artworksRef.current = next;
         return next;
       });
@@ -384,8 +387,8 @@ export default function ArtistPortfolioScreen() {
   const updateUrlArtwork = (index: number | null) => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const url = new URL(window.location.href);
-      if (index !== null) {
-        url.searchParams.set('artworkId', String(index + 1)); // 0-based → 1-based
+      if (index !== null && viewerArtworks?.[index]) {
+        url.searchParams.set('artworkId', viewerArtworks[index].id); // UUID 사용
       } else {
         url.searchParams.delete('artworkId');
       }
@@ -584,7 +587,7 @@ export default function ArtistPortfolioScreen() {
     .map((item) => item.trim())
     .filter(Boolean);
 
-  const openViewer = async (artworkIndex: number) => {
+  const openViewer = async (artworkId: string) => {
     // 전체 작품 로드해서 뷰어에 넘기기
     if (resolvedId) {
       const { data: allAw } = await supabase
@@ -593,16 +596,16 @@ export default function ArtistPortfolioScreen() {
         .eq('user_id', resolvedId)
         .order('created_at', { ascending: false });
       if (allAw && allAw.length > 0) {
+        const idx = allAw.findIndex(a => a.id === artworkId);
         setViewerArtworks(allAw);
-        setViewerIndex(artworkIndex);
+        setViewerIndex(idx >= 0 ? idx : 0);
         setViewerVisible(true);
-        updateUrlArtwork(artworkIndex);
+        updateUrlArtwork(idx >= 0 ? idx : 0);
         return;
       }
     }
-    setViewerIndex(artworkIndex);
+    setViewerIndex(0);
     setViewerVisible(true);
-    updateUrlArtwork(artworkIndex);
   };
 
   const handleEditArtwork = (artwork: Artwork) => {
@@ -612,10 +615,8 @@ export default function ArtistPortfolioScreen() {
 
   const handleDeleteArtwork = async (artwork: Artwork) => {
     if (artwork.image_url) {
-      const parts = artwork.image_url.split('/artworks/');
-      if (parts[1]) {
-        await supabase.storage.from('artworks').remove([decodeURIComponent(parts[1])]);
-      }
+      const p = r2ExtractPath(artwork.image_url, 'artworks');
+      if (p) await r2Delete('artworks', [p]);
     }
     await supabase.from('artworks').delete().eq('id', artwork.id);
     setArtworks(prev => prev.filter(a => a.id !== artwork.id));
@@ -965,9 +966,7 @@ export default function ArtistPortfolioScreen() {
               const selectedCol = selectedCollectionId ? collections.find(c => c.id === selectedCollectionId) : null;
               const baseArtworks = selectedCol ? selectedCol.artworks : artworks;
               // 카테고리 목록 추출
-              const displayArtworks = selectedCategoryFilter.length > 0
-                ? baseArtworks.filter(a => selectedCategoryFilter.includes((a as any).category))
-                : baseArtworks;
+              const displayArtworks = baseArtworks.filter(a => selectedCategoryFilter.includes((a as any).category));
               const sectionTitle = selectedCol ? selectedCol.title.toUpperCase() : 'WORKS';
               return baseArtworks.length > 0 ? (
                 <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
@@ -989,7 +988,7 @@ export default function ArtistPortfolioScreen() {
                             setViewerIndex(idx >= 0 ? idx : 0);
                             setViewerVisible(true);
                           } else {
-                            openViewer(idx);
+                            openViewer(aw.id);
                           }
                         }}
                         C={C}
@@ -1260,6 +1259,7 @@ export default function ArtistPortfolioScreen() {
           <View style={[styles.footerDiamond, { borderColor: C.gold }]} />
           <Text style={[styles.footerText, { color: C.mutedLight }]}>MOUI-IST</Text>
         </View>
+        <View style={{ height: 80 }} />
       </Animated.ScrollView>
 
       {/* Bottom tab bar */}
@@ -1270,7 +1270,7 @@ export default function ArtistPortfolioScreen() {
         visible={viewerVisible}
         artworks={viewerArtworks ?? artworks}
         initialIndex={viewerIndex}
-        onClose={() => { setViewerVisible(false); setViewerArtworks(null); updateUrlArtwork(null); }}
+        onClose={() => { updateUrlArtwork(null); setViewerVisible(false); setViewerArtworks(null); }}
         isOwner={isOwner}
         onEdit={handleEditArtwork}
         onDelete={handleDeleteArtwork}

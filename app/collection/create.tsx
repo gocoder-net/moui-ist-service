@@ -9,7 +9,9 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { r2Upload, r2Delete, r2ExtractPath } from '@/lib/r2';
 import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import type { Database } from '@/types/database';
 import { showAlert } from '@/lib/utils';
@@ -98,24 +100,31 @@ export default function CreateCollectionScreen() {
       const coverChanged = coverUri !== originalCoverUrl;
 
       if (coverChanged && coverUri) {
-        const fileName = `${user.id}/col_${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+        const baseName = `col_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const fileName = `${user.id}/${baseName}.jpg`;
+        const thumbName = `${user.id}/thumb_${baseName}.jpg`;
+
         const response = await fetch(coverUri);
         const blob = await response.blob();
-        const { error: uploadError } = await supabase.storage
-          .from('artworks')
-          .upload(fileName, blob, { contentType: 'image/jpeg' });
-        if (uploadError) {
+        const { url: uploadedUrl, error: uploadError } = await r2Upload('artworks', fileName, blob, 'image/jpeg');
+        if (uploadError || !uploadedUrl) {
           showAlert('오류', '이미지 업로드에 실패했습니다.');
           setLoading(false);
           return;
         }
-        coverUrl = supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
+        coverUrl = uploadedUrl;
+
+        // 썸네일
+        try {
+          const thumb = await manipulateAsync(coverUri, [{ resize: { width: 400 } }], { compress: 0.6, format: SaveFormat.JPEG });
+          const thumbRes = await fetch(thumb.uri);
+          const thumbBlob = await thumbRes.blob();
+          await r2Upload('artworks', thumbName, thumbBlob, 'image/jpeg');
+        } catch {}
 
         if (isEditing && originalCoverUrl) {
-          const parts = originalCoverUrl.split('/artworks/');
-          if (parts[1]) {
-            await supabase.storage.from('artworks').remove([decodeURIComponent(parts[1])]);
-          }
+          const oldPath = r2ExtractPath(originalCoverUrl, 'artworks');
+          if (oldPath) await r2Delete('artworks', [oldPath]);
         }
       }
 

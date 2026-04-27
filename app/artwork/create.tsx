@@ -8,8 +8,10 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
+import { r2Upload, r2Delete, r2ExtractPath } from '@/lib/r2';
 import { spendPoints } from '@/lib/points';
 import * as ImagePicker from 'expo-image-picker';
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
 import {
@@ -265,23 +267,33 @@ export default function CreateArtworkScreen() {
       const imageChanged = imageUri !== originalImageUrl;
 
       if (imageChanged) {
-        const fileName = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.jpg`;
+        const baseName = `${Date.now()}_${Math.random().toString(36).slice(2)}`;
+        const fileName = `${user.id}/${baseName}.jpg`;
+        const thumbName = `${user.id}/thumb_${baseName}.jpg`;
+
+        // 원본 업로드
         const response = await fetch(imageUri);
         const blob = await response.blob();
-        const { error: uploadError } = await supabase.storage
-          .from('artworks')
-          .upload(fileName, blob, { contentType: 'image/jpeg' });
-        if (uploadError) {
+        const { url: uploadedUrl, error: uploadError } = await r2Upload('artworks', fileName, blob, 'image/jpeg');
+        if (uploadError || !uploadedUrl) {
           showAlert('오류', '이미지 업로드에 실패했습니다.');
           setLoading(false);
           return;
         }
-        imageUrl = supabase.storage.from('artworks').getPublicUrl(fileName).data.publicUrl;
+        imageUrl = uploadedUrl;
+
+        // 썸네일 생성 + 업로드
+        try {
+          const thumb = await manipulateAsync(imageUri, [{ resize: { width: 400 } }], { compress: 0.6, format: SaveFormat.JPEG });
+          const thumbRes = await fetch(thumb.uri);
+          const thumbBlob = await thumbRes.blob();
+          await r2Upload('artworks', thumbName, thumbBlob, 'image/jpeg');
+        } catch {}
 
         if (isEditing && originalImageUrl) {
-          const parts = originalImageUrl.split('/artworks/');
-          if (parts[1]) {
-            await supabase.storage.from('artworks').remove([decodeURIComponent(parts[1])]);
+          const oldPath = r2ExtractPath(originalImageUrl, 'artworks');
+          if (oldPath) {
+            await r2Delete('artworks', [oldPath, `thumb_${oldPath.split('/').pop()}`].filter(Boolean));
           }
         }
       }
@@ -352,7 +364,11 @@ export default function CreateArtworkScreen() {
       }
 
       if (!isEditing) await refreshProfile();
-      router.back();
+      if (!isEditing && profile?.username) {
+        router.replace(`/artist/${profile.username}`);
+      } else {
+        router.back();
+      }
     } catch (err) {
       console.error('작품 저장 오류:', err);
       showAlert('오류', '알 수 없는 오류가 발생했습니다.');

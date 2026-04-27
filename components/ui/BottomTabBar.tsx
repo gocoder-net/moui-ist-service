@@ -29,7 +29,7 @@ export function BottomTabBar() {
 
   if (Platform.OS === 'web') {
     return (
-      <View style={tabStyles.wrapper}>
+      <View style={[tabStyles.wrapper, { position: 'fixed' as any }]}>
         <View style={[tabStyles.blurFallback, {
           backgroundColor: mode === 'dark' ? 'rgba(0, 0, 0, 0.85)' : 'rgba(245, 246, 248, 0.85)',
         }]}>{content}</View>
@@ -52,6 +52,7 @@ const tabStyles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 999,
   },
   blur: {
     overflow: 'hidden',
