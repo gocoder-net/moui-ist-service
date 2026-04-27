@@ -43,8 +43,27 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/auth-context';
 import { spendPoints } from '@/lib/points';
 import { sendNotification } from '@/lib/notifications';
+import { WebView } from 'react-native-webview';
 import type { Database } from '@/types/database';
 import { getFormType, META_KEY_LABEL, FORM_META_FIELDS } from '@/constants/artwork-form';
+
+/* ── 임베드 URL 변환 ── */
+function getEmbedUrl(url: string, opts?: { autoplay?: boolean; mute?: boolean }): { embedUrl: string; type: 'youtube' | 'vimeo' | 'soundcloud' } | null {
+  if (!url) return null;
+  const ap = opts?.autoplay ? 1 : 0;
+  const mt = opts?.mute ? 1 : 0;
+  // YouTube
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (ytMatch) return { embedUrl: `https://www.youtube.com/embed/${ytMatch[1]}?playsinline=1&rel=0&autoplay=${ap}&mute=${mt}`, type: 'youtube' };
+  // Vimeo
+  const vimeoMatch = url.match(/vimeo\.com\/(\d+)/);
+  if (vimeoMatch) return { embedUrl: `https://player.vimeo.com/video/${vimeoMatch[1]}?autoplay=${ap}&muted=${mt}`, type: 'vimeo' };
+  // SoundCloud
+  if (url.includes('soundcloud.com/')) {
+    return { embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23C8A96E&auto_play=${ap === 1 ? 'true' : 'false'}&show_artwork=true`, type: 'soundcloud' };
+  }
+  return null;
+}
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Artwork = Database['public']['Tables']['artworks']['Row'];
@@ -338,9 +357,17 @@ function ArtworkCard({
             const skipKeys = new Set(['medium', 'technique', 'width_cm', 'height_cm', 'edition']);
             const entries = Object.entries(meta).filter(([k, v]) => v && !skipKeys.has(k));
             return entries.length > 0 ? entries.map(([k, v]) => (
-              <Text key={k} style={[styles.artExpandedMeta, { color: C.muted }]}>
-                {META_KEY_LABEL[k] ?? k}: {v}
-              </Text>
+              k === 'link' ? (
+                <Pressable key={k} onPress={() => Linking.openURL(v)}>
+                  <Text style={[styles.artExpandedMeta, { color: '#C8A96E', textDecorationLine: 'underline' }]}>
+                    {META_KEY_LABEL[k] ?? k} 열기 ↗
+                  </Text>
+                </Pressable>
+              ) : (
+                <Text key={k} style={[styles.artExpandedMeta, { color: C.muted }]}>
+                  {META_KEY_LABEL[k] ?? k}: {v}
+                </Text>
+              )
             )) : null;
           })()}
           {(artwork as any).description && (
@@ -387,6 +414,9 @@ function ArtworkViewer({
   const viewerFrameWidth = isWebViewer ? Math.min(screenW * 0.88, 1280) : screenW;
   const viewerImageHeight = isWebViewer ? screenH * 0.72 : screenH * 0.6;
   const viewerNavOffset = isWebViewer ? Math.max((screenW - viewerFrameWidth) / 2 + 18, 18) : 18;
+
+  const [embedExpanded, setEmbedExpanded] = useState(false);
+  const [embedHidden, setEmbedHidden] = useState(false);
 
   // Likes & Comments
   const [liked, setLiked] = useState(false);
@@ -458,6 +488,8 @@ function ArtworkViewer({
 
   useEffect(() => {
     setCurrentIndex(initialIndex);
+    setEmbedExpanded(false);
+    setEmbedHidden(false);
   }, [initialIndex]);
 
   useEffect(() => {
@@ -499,6 +531,8 @@ function ArtworkViewer({
     if (index < 0 || index >= artworks.length) return;
     flatListRef.current?.scrollToIndex({ index, animated: true });
     setCurrentIndex(index);
+    setEmbedExpanded(false);
+    setEmbedHidden(false);
     onIndexChange?.(index);
   };
 
@@ -593,12 +627,90 @@ function ArtworkViewer({
           </View>
         )}
 
+        {/* 임베드 미니 플레이어 (이미지 오른쪽 상단, 음소거 자동재생) */}
+        {!embedExpanded && !embedHidden && (() => {
+          const meta = ((artwork as any)?.metadata ?? {}) as Record<string, string>;
+          const linkUrl = meta?.link;
+          if (!linkUrl) return null;
+          const embed = getEmbedUrl(linkUrl, { autoplay: true, mute: true });
+          if (!embed) return null;
+          return (
+            <View style={styles.embedMiniFloat}>
+              <Pressable onPress={() => setEmbedExpanded(true)} style={styles.embedMiniInner}>
+                <View style={{ flex: 1 }} pointerEvents="none">
+                  {Platform.OS === 'web' ? (
+                    <iframe
+                      src={embed.embedUrl}
+                      style={{ width: '100%', height: '100%', border: 'none' } as any}
+                      allow="autoplay; encrypted-media"
+                    />
+                  ) : (
+                    <WebView
+                      source={{ uri: embed.embedUrl }}
+                      style={{ flex: 1 }}
+                      allowsInlineMediaPlayback
+                      mediaPlaybackRequiresUserAction={false}
+                      scrollEnabled={false}
+                    />
+                  )}
+                </View>
+              </Pressable>
+              {/* 닫기 X */}
+              <Pressable onPress={() => setEmbedHidden(true)} style={styles.embedMiniClose}>
+                <Text style={styles.embedMiniCloseText}>✕</Text>
+              </Pressable>
+              {/* 크게 보기 */}
+              <Pressable onPress={() => setEmbedExpanded(true)} style={styles.embedExpandHint}>
+                <Text style={styles.embedExpandHintText}>크게 보기</Text>
+              </Pressable>
+            </View>
+          );
+        })()}
+
+        {/* 임베드 확장 오버레이 */}
+        {embedExpanded && (() => {
+          const meta = ((artwork as any)?.metadata ?? {}) as Record<string, string>;
+          const linkUrl = meta?.link;
+          if (!linkUrl) return null;
+          const embed = getEmbedUrl(linkUrl, { autoplay: true, mute: false });
+          if (!embed) return null;
+          const embedW = isWebViewer ? viewerFrameWidth : screenW;
+          const embedH = embed.type === 'soundcloud' ? 166 : Math.round(embedW * 9 / 16);
+          return (
+            <View style={[styles.embedOverlay, { top: 0, bottom: 0 }]}>
+              <View style={{ width: embedW, height: embedH, maxHeight: viewerImageHeight, borderRadius: 12, overflow: 'hidden' }}>
+                {Platform.OS === 'web' ? (
+                  <iframe
+                    src={embed.embedUrl}
+                    style={{ width: '100%', height: '100%', border: 'none' } as any}
+                    allow="autoplay; encrypted-media; fullscreen"
+                    allowFullScreen
+                  />
+                ) : (
+                  <WebView
+                    source={{ uri: embed.embedUrl }}
+                    style={styles.embedWebView}
+                    allowsInlineMediaPlayback
+                    mediaPlaybackRequiresUserAction={false}
+                    javaScriptEnabled
+                    scrollEnabled={false}
+                  />
+                )}
+              </View>
+              <Pressable style={styles.embedCloseBtn} onPress={() => setEmbedExpanded(false)}>
+                <Text style={styles.embedCloseBtnText}>닫기</Text>
+              </Pressable>
+            </View>
+          );
+        })()}
+
         {/* Bottom info */}
         <LinearGradient
           colors={['transparent', 'rgba(0,0,0,0.85)']}
           style={[styles.viewerBottom, { paddingBottom: insets.bottom + 24 }]}
           pointerEvents="box-none"
         >
+          <View style={styles.viewerBottomInner}>
           {artistProfile && (
             <Pressable
               style={styles.viewerArtistRow}
@@ -655,7 +767,13 @@ function ArtworkViewer({
                 const skipKeys = new Set(['medium', 'technique', 'width_cm', 'height_cm', 'edition']);
                 const entries = Object.entries(meta).filter(([k, v]) => v && !skipKeys.has(k));
                 return entries.length > 0 ? entries.map(([k, v]) => (
-                  <Text key={k} style={styles.viewerSize}>{META_KEY_LABEL[k] ?? k}: {v}</Text>
+                  k === 'link' ? (
+                    <Pressable key={k} onPress={() => Linking.openURL(v)} style={styles.viewerLinkBtn}>
+                      <Text style={styles.viewerLinkText}>외부에서 보기 ↗</Text>
+                    </Pressable>
+                  ) : (
+                    <Text key={k} style={styles.viewerSize}>{META_KEY_LABEL[k] ?? k}: {v}</Text>
+                  )
                 )) : null;
               })()}
             </View>
@@ -678,6 +796,7 @@ function ArtworkViewer({
               </View>
             )}
           </View>
+
 
           {/* Like + Comment + Pagination row */}
           <View style={styles.viewerBottomRow}>
@@ -752,6 +871,7 @@ function ArtworkViewer({
               )}
             </View>
           )}
+          </View>
         </LinearGradient>
       </View>
     </Modal>
@@ -2563,8 +2683,13 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 24,
     paddingTop: 60,
+    alignItems: 'center',
+  },
+  viewerBottomInner: {
+    width: '100%',
+    maxWidth: 680,
+    paddingHorizontal: 24,
   },
   viewerTagsWrap: {
     marginBottom: 12,
@@ -2624,6 +2749,94 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255,255,255,0.4)',
     marginTop: 2,
+  },
+  viewerLinkBtn: {
+    marginTop: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C8A96E',
+    alignSelf: 'flex-start',
+  },
+  viewerLinkText: {
+    fontSize: 12,
+    color: '#C8A96E',
+    fontWeight: '600',
+  },
+  embedMiniFloat: {
+    position: 'absolute',
+    top: 80,
+    right: 16,
+    width: 120,
+    height: 120,
+    borderRadius: 12,
+    overflow: 'hidden',
+    zIndex: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#000',
+  },
+  embedMiniInner: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  embedMiniClose: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  embedMiniCloseText: {
+    fontSize: 10,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  embedExpandHint: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+  },
+  embedExpandHintText: {
+    fontSize: 11,
+    color: '#fff',
+    fontWeight: '700',
+  },
+  embedOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 8,
+    backgroundColor: 'rgba(0,0,0,0.92)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  embedCloseBtn: {
+    position: 'absolute',
+    bottom: 24,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  embedCloseBtnText: {
+    fontSize: 13,
+    color: '#fff',
+    fontWeight: '600',
+  },
+  embedWebView: {
+    flex: 1,
+    backgroundColor: 'transparent',
   },
   viewerActions: {
     flexDirection: 'row',
