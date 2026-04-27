@@ -711,7 +711,7 @@ function ArtworkViewer({
                 )}
               </View>
               <Pressable style={styles.embedCloseBtn} onPress={() => setEmbedExpanded(false)}>
-                <Text style={styles.embedCloseBtnText}>닫기</Text>
+                <Text style={styles.embedCloseBtnText}>영상 닫기</Text>
               </Pressable>
             </View>
           );
