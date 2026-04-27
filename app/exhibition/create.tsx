@@ -66,6 +66,8 @@ export default function CreateExhibitionScreen() {
   const [wallSurfaceMode, setWallSurfaceMode] = useState<'color' | 'image'>('color');
   const [bgmLocalUri, setBgmLocalUri] = useState<string | null>(null);
   const [bgmFileName, setBgmFileName] = useState<string | null>(null);
+  const [bgmMode, setBgmMode] = useState<'mp3' | 'youtube'>('mp3');
+  const [bgmYoutubeUrl, setBgmYoutubeUrl] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(!!editId);
 
@@ -113,8 +115,13 @@ export default function CreateExhibitionScreen() {
 
         if (ex.poster_image_url) setPosterUri(ex.poster_image_url);
         if (ex.bgm_url) {
-          setBgmLocalUri(ex.bgm_url);
-          setBgmFileName(ex.bgm_url.split('/').pop() || 'BGM');
+          if (ex.bgm_url.includes('youtube.com') || ex.bgm_url.includes('youtu.be')) {
+            setBgmMode('youtube');
+            setBgmYoutubeUrl(ex.bgm_url);
+          } else {
+            setBgmLocalUri(ex.bgm_url);
+            setBgmFileName(ex.bgm_url.split('/').pop() || 'BGM');
+          }
         }
 
         // 벽면 이미지 로드
@@ -333,9 +340,11 @@ export default function CreateExhibitionScreen() {
         posterImageUrl = isExistingUrl(posterUri) ? posterUri : await uploadImage(posterUri);
       }
 
-      // Upload BGM if present
+      // Upload BGM if present (MP3 or YouTube URL)
       let bgmUrl: string | null = null;
-      if (bgmLocalUri) {
+      if (bgmMode === 'youtube' && bgmYoutubeUrl.trim()) {
+        bgmUrl = bgmYoutubeUrl.trim();
+      } else if (bgmLocalUri) {
         if (isExistingUrl(bgmLocalUri)) {
           bgmUrl = bgmLocalUri;
         } else {
@@ -539,31 +548,65 @@ export default function CreateExhibitionScreen() {
             )}
 
             <Text style={[styles.label, { marginTop: 20 }]}>배경음악 (선택)</Text>
-            <Text style={styles.hint}>전시관 3D 뷰어에서 재생됩니다 (MP3)</Text>
-            {bgmLocalUri ? (
-              <View style={styles.bgmRow}>
-                <View style={styles.bgmInfo}>
-                  <Text style={styles.bgmIcon}>♪</Text>
-                  <Text style={styles.bgmFileName} numberOfLines={1}>{bgmFileName}</Text>
-                </View>
-                <Pressable onPress={() => { setBgmLocalUri(null); setBgmFileName(null); }}>
-                  <Text style={{ fontSize: 11, color: C.muted }}>삭제</Text>
-                </Pressable>
-              </View>
-            ) : (
+            <Text style={styles.hint}>전시관 3D 뷰어에서 재생됩니다</Text>
+
+            {/* MP3 / YouTube 토글 */}
+            <View style={styles.surfaceToggleRow}>
               <Pressable
-                style={styles.bgmPicker}
-                onPress={async () => {
-                  const result = await DocumentPicker.getDocumentAsync({ type: 'audio/mpeg' });
-                  if (!result.canceled && result.assets[0]) {
-                    setBgmLocalUri(result.assets[0].uri);
-                    setBgmFileName(result.assets[0].name);
-                  }
-                }}
-              >
-                <Text style={{ fontSize: 22, color: C.mutedLight }}>♪</Text>
-                <Text style={{ fontSize: 11, color: C.muted }}>MP3 파일 선택</Text>
+                style={[styles.surfaceToggleBtn, bgmMode === 'mp3' && styles.surfaceToggleBtnActive]}
+                onPress={() => setBgmMode('mp3')}>
+                <Text style={[styles.surfaceToggleText, bgmMode === 'mp3' && styles.surfaceToggleTextActive]}>MP3 파일</Text>
               </Pressable>
+              <Pressable
+                style={[styles.surfaceToggleBtn, bgmMode === 'youtube' && styles.surfaceToggleBtnActive]}
+                onPress={() => setBgmMode('youtube')}>
+                <Text style={[styles.surfaceToggleText, bgmMode === 'youtube' && styles.surfaceToggleTextActive]}>YouTube</Text>
+              </Pressable>
+            </View>
+
+            {bgmMode === 'mp3' ? (
+              bgmLocalUri ? (
+                <View style={styles.bgmRow}>
+                  <View style={styles.bgmInfo}>
+                    <Text style={styles.bgmIcon}>♪</Text>
+                    <Text style={styles.bgmFileName} numberOfLines={1}>{bgmFileName}</Text>
+                  </View>
+                  <Pressable onPress={() => { setBgmLocalUri(null); setBgmFileName(null); }}>
+                    <Text style={{ fontSize: 11, color: C.muted }}>삭제</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable
+                  style={styles.bgmPicker}
+                  onPress={async () => {
+                    const result = await DocumentPicker.getDocumentAsync({ type: 'audio/mpeg' });
+                    if (!result.canceled && result.assets[0]) {
+                      setBgmLocalUri(result.assets[0].uri);
+                      setBgmFileName(result.assets[0].name);
+                    }
+                  }}
+                >
+                  <Text style={{ fontSize: 22, color: C.mutedLight }}>♪</Text>
+                  <Text style={{ fontSize: 11, color: C.muted }}>MP3 파일 선택</Text>
+                </Pressable>
+              )
+            ) : (
+              <View style={{ gap: 8 }}>
+                <TextInput
+                  style={styles.input}
+                  placeholder="YouTube URL 붙여넣기"
+                  placeholderTextColor={C.mutedLight}
+                  value={bgmYoutubeUrl}
+                  onChangeText={setBgmYoutubeUrl}
+                  autoCapitalize="none"
+                  keyboardType="url"
+                />
+                {bgmYoutubeUrl.trim() && (
+                  <Pressable onPress={() => setBgmYoutubeUrl('')} style={{ alignSelf: 'flex-end' }}>
+                    <Text style={{ fontSize: 11, color: C.muted }}>삭제</Text>
+                  </Pressable>
+                )}
+              </View>
             )}
 
             <Pressable style={styles.nextBtn} onPress={() => {

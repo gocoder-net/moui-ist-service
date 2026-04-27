@@ -3,14 +3,15 @@
  * 실행: node scripts/cleanup.mjs
  */
 import { createClient } from '@supabase/supabase-js';
+import 'dotenv/config';
 
 const supabase = createClient(
-  'https://xtcyfuizbdegshaujfof.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh0Y3lmdWl6YmRlZ3NoYXVqZm9mIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NjQwMjY3NywiZXhwIjoyMDkxOTc4Njc3fQ.6OY8tbBDzl40Ft5Y7-t6Rd1GzUOVkSDsIQZv3bnPH0U'
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-const R2_WORKER_URL = 'https://moui-ist-r2.gocoder-net.workers.dev';
-const R2_API_TOKEN = 'moui-r2-secret-2026';
+const R2_WORKER_URL = process.env.EXPO_PUBLIC_R2_WORKER_URL;
+const R2_API_TOKEN = process.env.R2_API_TOKEN;
 
 // ── Supabase Storage 삭제 ──
 async function clearSupabaseBucket(bucket) {

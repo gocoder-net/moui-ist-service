@@ -2,6 +2,7 @@ import { useRef, useCallback, useState, useMemo, useEffect } from 'react';
 import {
   View, Text, Pressable, ScrollView, StyleSheet, useWindowDimensions, Platform, PixelRatio,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import Animated, {
   useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing,
 } from 'react-native-reanimated';
@@ -61,9 +62,17 @@ export default function GalleryScene({
   const [sceneReady, setSceneReady] = useState(false);
   const doorStartRef = useRef(0);
 
-  // BGM
-  const bgmPlayer = useAudioPlayer(bgmUrl || undefined);
+  // BGM — YouTube or MP3
+  const isYoutubeBgm = !!(bgmUrl && (bgmUrl.includes('youtube.com') || bgmUrl.includes('youtu.be')));
+  const youtubeVideoId = useMemo(() => {
+    if (!bgmUrl) return null;
+    const m = bgmUrl.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+    return m ? m[1] : null;
+  }, [bgmUrl]);
+  const mp3Url = isYoutubeBgm ? undefined : (bgmUrl || undefined);
+  const bgmPlayer = useAudioPlayer(mp3Url);
   const [bgmMuted, setBgmMuted] = useState(false);
+  const [ytExpanded, setYtExpanded] = useState(false);
 
   // Artwork detail overlay state
   const [selectedPlacement, setSelectedPlacement] = useState<Placement3D | null>(null);
@@ -232,24 +241,24 @@ export default function GalleryScene({
     }
   }, [sceneReady]);
 
-  // BGM: configure player
+  // BGM (MP3 only): configure player
   useEffect(() => {
-    if (!bgmUrl) return;
+    if (!bgmUrl || isYoutubeBgm) return;
     bgmPlayer.loop = true;
     bgmPlayer.volume = 0.5;
-  }, [bgmUrl, bgmPlayer]);
+  }, [bgmUrl, isYoutubeBgm, bgmPlayer]);
 
-  // BGM: play when intro ends
+  // BGM (MP3 only): play when intro ends
   useEffect(() => {
-    if (!bgmUrl || introPhase !== null) return;
+    if (!bgmUrl || isYoutubeBgm || introPhase !== null) return;
     bgmPlayer.play();
-  }, [bgmUrl, introPhase, bgmPlayer]);
+  }, [bgmUrl, isYoutubeBgm, introPhase, bgmPlayer]);
 
-  // BGM: toggle mute
+  // BGM (MP3 only): toggle mute
   useEffect(() => {
-    if (!bgmUrl) return;
+    if (!bgmUrl || isYoutubeBgm) return;
     bgmPlayer.muted = bgmMuted;
-  }, [bgmMuted, bgmUrl, bgmPlayer]);
+  }, [bgmMuted, bgmUrl, isYoutubeBgm, bgmPlayer]);
 
   const artCountOnWall = useMemo(
     () => placements.filter((p) => p.wall === currentDir).length,
@@ -377,7 +386,7 @@ export default function GalleryScene({
             </View>
 
             <View style={{ flexDirection: 'row', gap: 6 }}>
-              {bgmUrl && (
+              {bgmUrl && !isYoutubeBgm && (
                 <Pressable
                   style={[styles.exitBtn, !bgmMuted && styles.tourBtnActive]}
                   onPress={() => setBgmMuted((v) => !v)}
@@ -385,6 +394,17 @@ export default function GalleryScene({
                   <Text style={styles.hudBtnIcon}>{bgmMuted ? '🔇' : '🔊'}</Text>
                   <Text style={[styles.hudBtnText, !bgmMuted && { color: C.gold }]}>
                     {bgmMuted ? '음소거' : '음악'}
+                  </Text>
+                </Pressable>
+              )}
+              {isYoutubeBgm && (
+                <Pressable
+                  style={[styles.exitBtn, ytExpanded && styles.tourBtnActive]}
+                  onPress={() => setYtExpanded((v) => !v)}
+                >
+                  <Text style={styles.hudBtnIcon}>▶</Text>
+                  <Text style={[styles.hudBtnText, ytExpanded && { color: C.gold }]}>
+                    {ytExpanded ? '영상 닫기' : '영상'}
                   </Text>
                 </Pressable>
               )}
@@ -406,6 +426,28 @@ export default function GalleryScene({
             </View>
             <Joystick setJoystick={controls.setLook} label="시선" />
           </View>
+        </View>
+      )}
+
+      {/* YouTube 미니 플레이어 */}
+      {isYoutubeBgm && youtubeVideoId && introPhase === null && !selectedPlacement && (
+        <View style={[
+          styles.ytPlayer,
+          ytExpanded ? styles.ytPlayerExpanded : styles.ytPlayerMini,
+        ]}>
+          <Pressable
+            style={styles.ytToggleBtn}
+            onPress={() => setYtExpanded((v) => !v)}
+          >
+            <Text style={styles.ytToggleText}>{ytExpanded ? '▼ 축소' : '▲ 확대'}</Text>
+          </Pressable>
+          <WebView
+            source={{ uri: `https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&loop=1&playlist=${youtubeVideoId}&playsinline=1&rel=0` }}
+            style={{ flex: 1, borderRadius: 8 }}
+            allowsInlineMediaPlayback
+            mediaPlaybackRequiresUserAction={false}
+            javaScriptEnabled
+          />
         </View>
       )}
 
@@ -872,6 +914,41 @@ function SpeedControl({ onChange, label = '이동속도', defaultLevel = 1, spee
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   canvasArea: { flex: 1, position: 'relative' },
+
+  // YouTube 미니 플레이어
+  ytPlayer: {
+    position: 'absolute',
+    zIndex: 50,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    borderWidth: 1,
+    borderColor: 'rgba(200,169,110,0.3)',
+  },
+  ytPlayerMini: {
+    bottom: 140,
+    right: 12,
+    width: 180,
+    height: 110,
+  },
+  ytPlayerExpanded: {
+    bottom: 80,
+    right: 12,
+    left: 12,
+    height: 240,
+  },
+  ytToggleBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+  },
+  ytToggleText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#C8A96E',
+    letterSpacing: 1,
+  },
 
   // HUD
   hud: {
