@@ -27,7 +27,7 @@ const FIELD_CATEGORIES = [
   { key: '소리', icon: '🎵', keywords: ['작곡가', '연주자', '사운드 아티스트', 'DJ', '뮤지션', '음악가', '성악가', '래퍼', '프로듀서', '작곡', '연주', '보컬', '싱어송라이터'] },
   { key: '사진', icon: '📷', keywords: ['사진작가', '포토그래퍼', '사진가', '사진'] },
   { key: '입체/공간', icon: '🗿', keywords: ['조각가', '도예가', '설치미술가', '건축가', '공예가', '금속공예', '목공예', '세라믹', '조각', '도자기', '설치미술', '건축', '도예', '텍스타일'] },
-  { key: '디지털/인터랙티브', icon: '💻', keywords: ['미디어 아티스트', '게임 디자이너', 'AI 아티스트', 'NFT', '코딩 아티스트', '인터랙티브', '뉴미디어', '디지털 아트', '제너레이티브', '웹 아트'] },
+  { key: '디지털/인터랙티브', icon: '💻', keywords: ['미디어 아티스트', 'AI 아티스트', 'NFT', '코딩 아티스트', '인터랙티브', '뉴미디어', '디지털 아트', '제너레이티브', '웹 아트'] },
   { key: '공연', icon: '🎭', keywords: ['무용가', '배우', '퍼포먼스 아티스트', '댄서', '안무가', '연극', '뮤지컬', '무용', '퍼포먼스', '행위예술'] },
 ] as const;
 
@@ -38,7 +38,7 @@ const SUB_FIELDS: Record<string, string[]> = {
   '소리': ['작곡', '연주', '보컬', '프로듀싱', '사운드아트', 'DJ', '기타'],
   '사진': ['순수사진', '상업사진', '다큐멘터리사진', '기타'],
   '입체/공간': ['조각', '도예/세라믹', '설치미술', '건축', '공예', '기타'],
-  '디지털/인터랙티브': ['미디어아트', '게임', 'AI아트', '제너레이티브', '웹아트', '기타'],
+  '디지털/인터랙티브': ['미디어아트', 'AI아트', '제너레이티브', '웹아트', '기타'],
   '공연': ['연극', '무용', '뮤지컬', '퍼포먼스', '기타'],
 };
 
@@ -154,14 +154,10 @@ export default function ProfileDetailScreen() {
   const avatarUrl = profile?.avatar_url;
   const realNameLocked = !!profile?.real_name?.trim();
 
-  /* 분야 카테고리 토글 (최대 2개) */
+  /* 분야 카테고리 토글 (최대 2개) — 해제해도 세부분야 유지 */
   const toggleField = (key: string) => {
     setSelectedFields(prev => {
-      if (prev.includes(key)) {
-        const subs = SUB_FIELDS[key] ?? [];
-        setSelectedSubFields(p => p.filter(s => !subs.includes(s)));
-        return prev.filter(k => k !== key);
-      }
+      if (prev.includes(key)) return prev.filter(k => k !== key);
       if (prev.length >= 2) return prev;
       return [...prev, key];
     });
@@ -380,7 +376,14 @@ export default function ProfileDetailScreen() {
     setSaving(true);
     const snsLinks = buildSnsLinks();
     const fieldValue = selectedFields.length > 0 ? selectedFields.join(', ') : null;
-    const subFieldValue = selectedSubFields.length > 0 ? selectedSubFields.join(', ') : null;
+    // 선택된 상위분야에 속하는 세부분야만 저장
+    const validSubs = selectedSubFields.filter(s => {
+      for (const f of selectedFields) {
+        if ((SUB_FIELDS[f] ?? []).includes(s)) return true;
+      }
+      return false;
+    });
+    const subFieldValue = validSubs.length > 0 ? validSubs.join(', ') : null;
     const regionValue = regionProvince && regionDistrict ? `${regionProvince} ${regionDistrict}` : null;
     const updatePayload: Record<string, any> = {
       name: name || null,

@@ -44,6 +44,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { spendPoints } from '@/lib/points';
 import { sendNotification } from '@/lib/notifications';
 import type { Database } from '@/types/database';
+import { getFormType, META_KEY_LABEL, FORM_META_FIELDS } from '@/constants/artwork-form';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Artwork = Database['public']['Tables']['artworks']['Row'];
@@ -310,6 +311,12 @@ function ArtworkCard({
       </View>
       {expanded && (
         <View style={[styles.artExpandedInfo, { borderTopColor: C.border }]}>
+          {/* 카테고리 배지 */}
+          {(artwork as any).category && (
+            <View style={[styles.artCategoryBadge, { backgroundColor: C.goldDim, borderColor: C.gold }]}>
+              <Text style={[styles.artCategoryBadgeText, { color: C.gold }]}>{(artwork as any).category}</Text>
+            </View>
+          )}
           {(artwork.year || artwork.medium) && (
             <Text style={[styles.artExpandedMeta, { color: C.muted }]}>
               {[artwork.year, artwork.medium].filter(Boolean).join(' · ')}
@@ -325,6 +332,17 @@ function ArtworkCard({
               에디션: {(artwork as any).edition}
             </Text>
           )}
+          {/* 메타데이터 추가 정보 */}
+          {(() => {
+            const meta = ((artwork as any).metadata ?? {}) as Record<string, string>;
+            const skipKeys = new Set(['medium', 'technique', 'width_cm', 'height_cm', 'edition']);
+            const entries = Object.entries(meta).filter(([k, v]) => v && !skipKeys.has(k));
+            return entries.length > 0 ? entries.map(([k, v]) => (
+              <Text key={k} style={[styles.artExpandedMeta, { color: C.muted }]}>
+                {META_KEY_LABEL[k] ?? k}: {v}
+              </Text>
+            )) : null;
+          })()}
           {(artwork as any).description && (
             <Text style={[styles.artExpandedDesc, { color: C.fg }]}>
               {(artwork as any).description}
@@ -621,6 +639,9 @@ function ArtworkViewer({
           <View style={styles.viewerInfoRow}>
             <View style={styles.viewerInfoLeft}>
               <Text style={styles.viewerTitle}>{artwork?.title}</Text>
+              {(artwork as any)?.category && (
+                <Text style={styles.viewerMeta}>{(artwork as any).category}</Text>
+              )}
               {(artwork?.year || artwork?.medium) && (
                 <Text style={styles.viewerMeta}>
                   {[artwork?.year, artwork?.medium].filter(Boolean).join(' · ')}
@@ -629,6 +650,14 @@ function ArtworkViewer({
               {artwork?.width_cm && artwork?.height_cm && (
                 <Text style={styles.viewerSize}>{artwork.width_cm} × {artwork.height_cm} cm</Text>
               )}
+              {(() => {
+                const meta = ((artwork as any)?.metadata ?? {}) as Record<string, string>;
+                const skipKeys = new Set(['medium', 'technique', 'width_cm', 'height_cm', 'edition']);
+                const entries = Object.entries(meta).filter(([k, v]) => v && !skipKeys.has(k));
+                return entries.length > 0 ? entries.map(([k, v]) => (
+                  <Text key={k} style={styles.viewerSize}>{META_KEY_LABEL[k] ?? k}: {v}</Text>
+                )) : null;
+              })()}
             </View>
 
             {/* Owner action buttons - small, bottom-right */}
@@ -2346,6 +2375,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 20,
     marginTop: 4,
+  },
+  artCategoryBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 2,
+  },
+  artCategoryBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
 
   /* Exhibition Grid */

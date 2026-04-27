@@ -76,6 +76,8 @@ export type Database = {
           image_left_url: string | null;
           image_right_url: string | null;
           tags: string[];
+          category: string | null;
+          metadata: Json;
           created_at: string;
           updated_at: string;
         };
@@ -95,6 +97,8 @@ export type Database = {
           image_left_url?: string | null;
           image_right_url?: string | null;
           tags?: string[];
+          category?: string | null;
+          metadata?: Json;
         };
         Update: {
           title?: string;
@@ -110,6 +114,8 @@ export type Database = {
           image_left_url?: string | null;
           image_right_url?: string | null;
           tags?: string[];
+          category?: string | null;
+          metadata?: Json;
         };
         Relationships: [
           {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   StyleSheet, View, Text, TextInput, Pressable, ScrollView,
   ActivityIndicator, Alert, Platform,
@@ -12,6 +12,16 @@ import { spendPoints } from '@/lib/points';
 import * as ImagePicker from 'expo-image-picker';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
+import {
+  type FormType,
+  getFormType,
+  getParentField,
+  FORM_TYPE_LABEL,
+  FORM_META_FIELDS,
+  YEAR_FIELD_LABEL,
+  FIELD_CATEGORIES,
+  SUB_FIELDS,
+} from '@/constants/artwork-form';
 
 function showAlert(title: string, message: string) {
   if (Platform.OS === 'web') {
@@ -24,27 +34,79 @@ function showAlert(title: string, message: string) {
 export default function CreateArtworkScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { colors: C } = useThemeMode();
   const { artworkId } = useLocalSearchParams<{ artworkId?: string }>();
 
   const isEditing = !!artworkId;
 
+  // ── 카테고리 선택 ──
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [showFieldPicker, setShowFieldPicker] = useState(false);
+  const [pickerField, setPickerField] = useState<string | null>(null);
+  const [profileSavedMsg, setProfileSavedMsg] = useState(false);
+
+  // 진입 시 분야가 이미 설정되어 있었는지 추적
+  const hadSubFieldOnEntry = useRef(!!profile?.sub_field);
+
+  // 유저의 세부 분야 파싱
+  const userSubFields = useMemo(() => {
+    if (!profile?.sub_field) return [];
+    return profile.sub_field.split(',').map(s => s.trim()).filter(Boolean);
+  }, [profile?.sub_field]);
+
+  // 상위분야별 세부분야 개수 계산
+  const parentFieldCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const sf of userSubFields) {
+      const p = getParentField(sf);
+      if (p) counts[p] = (counts[p] ?? 0) + 1;
+    }
+    return counts;
+  }, [userSubFields]);
+
+  const userParentFields = useMemo(() => Object.keys(parentFieldCounts), [parentFieldCounts]);
+
+  // 제한: 상위분야 최대 2개, 분야별 세부분야 최대 2개, 총 최대 4개
+  const canAddMore = userSubFields.length < 4;
+  const canAddNewParent = userParentFields.length < 2;
+
+  // 세부 분야 1개면 자동 선택
+  useEffect(() => {
+    if (!isEditing && userSubFields.length === 1 && !selectedCategory) {
+      setSelectedCategory(userSubFields[0]);
+    }
+  }, [userSubFields, isEditing, selectedCategory]);
+
+  const formType: FormType = getFormType(selectedCategory);
+  // onlyFor 필터: 선택된 세부분야에 해당하는 필드만 표시
+  const metaFields = useMemo(() => {
+    return FORM_META_FIELDS[formType].filter(f => {
+      if (!f.onlyFor) return true;
+      return selectedCategory ? f.onlyFor.includes(selectedCategory) : false;
+    });
+  }, [formType, selectedCategory]);
+
+  // ── 공통 필드 ──
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [originalImageUrl, setOriginalImageUrl] = useState<string | null>(null);
   const [title, setTitle] = useState('');
   const [year, setYear] = useState('');
-  const [medium, setMedium] = useState('');
-  const [technique, setTechnique] = useState('');
-  const [widthCm, setWidthCm] = useState('');
-  const [heightCm, setHeightCm] = useState('');
-  const [edition, setEdition] = useState('');
   const [description, setDescription] = useState('');
   const [tagChips, setTagChips] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+
+  // ── 메타데이터 (폼 타입별 추가 필드) ──
+  const [metadata, setMetadata] = useState<Record<string, string>>({});
+
+  const setMeta = (key: string, value: string) => {
+    setMetadata(prev => ({ ...prev, [key]: value }));
+  };
+
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(false);
 
+  // ── 편집 모드: 기존 데이터 로드 ──
   useEffect(() => {
     if (!artworkId) return;
     setInitialLoading(true);
@@ -52,22 +114,47 @@ export default function CreateArtworkScreen() {
       if (data) {
         setTitle(data.title ?? '');
         setYear(data.year ? String(data.year) : '');
-        setMedium(data.medium ?? '');
-        setWidthCm(data.width_cm ? String(data.width_cm) : '');
-        setHeightCm(data.height_cm ? String(data.height_cm) : '');
-        setEdition(data.edition ?? '');
         setDescription(data.description ?? '');
-        // 기존 태그 중 자동생성이 아닌 커스텀 태그만 로드
+        setImageUri(data.image_url);
+        setOriginalImageUrl(data.image_url);
+
+        // category 로드
+        const cat = (data as any).category as string | null;
+        if (cat) {
+          setSelectedCategory(cat);
+        }
+
+        // metadata 로드
+        const meta = ((data as any).metadata ?? {}) as Record<string, string>;
+        const loaded: Record<string, string> = { ...meta };
+
+        // 기존 작품 (category 없음): visual 컬럼에서 역파싱
+        if (!cat) {
+          if (data.medium) {
+            const parts = data.medium.split(',').map((s: string) => s.trim());
+            if (parts.length >= 2) {
+              loaded.medium = parts.slice(0, -1).join(', ');
+              loaded.technique = parts[parts.length - 1];
+            } else {
+              loaded.medium = data.medium;
+            }
+          }
+          if (data.width_cm) loaded.width_cm = String(data.width_cm);
+          if (data.height_cm) loaded.height_cm = String(data.height_cm);
+          if (data.edition) loaded.edition = data.edition;
+        }
+
+        setMetadata(loaded);
+
+        // 태그 로드 (커스텀만)
         if (data.tags && data.tags.length > 0) {
           const autoTags = new Set<string>();
           if (data.year) autoTags.add(String(data.year));
-          if (data.medium) data.medium.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.add(t); });
+          if (data.medium) data.medium.split(/[,،]/).forEach((s: string) => { const t = s.trim(); if (t) autoTags.add(t); });
           if (data.width_cm && data.height_cm) autoTags.add(`${data.width_cm}x${data.height_cm}cm`);
           const custom = data.tags.filter((t: string) => !autoTags.has(t));
           setTagChips(custom);
         }
-        setImageUri(data.image_url);
-        setOriginalImageUrl(data.image_url);
       }
       setInitialLoading(false);
     });
@@ -83,19 +170,64 @@ export default function CreateArtworkScreen() {
     }
   };
 
+  // ── 분야 선택 시 프로필에도 저장 (미설정 유저) ──
+  const selectCategoryAndSaveProfile = async (subField: string, parentField: string) => {
+    setSelectedCategory(subField);
+    setShowFieldPicker(false);
+    setPickerField(null);
+
+    // 진입 시 분야가 없었던 유저만 프로필에 저장
+    if (!hadSubFieldOnEntry.current && user) {
+      const currentSubs = profile?.sub_field
+        ? profile.sub_field.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+
+      // 이미 포함된 분야면 스킵
+      if (currentSubs.includes(subField)) return;
+
+      // 제한 체크: 총 4개, 분야별 2개
+      if (currentSubs.length >= 4) return;
+      const siblingCount = currentSubs.filter(s => getParentField(s) === parentField).length;
+      if (siblingCount >= 2) return;
+
+      const newSubs = [...currentSubs, subField].join(', ');
+      const currentParents = profile?.field
+        ? profile.field.split(',').map(s => s.trim()).filter(Boolean)
+        : [];
+      const newField = currentParents.includes(parentField)
+        ? currentParents.join(', ')
+        : [...currentParents, parentField].join(', ');
+
+      await supabase.from('profiles').update({
+        field: newField,
+        sub_field: newSubs,
+      }).eq('id', user.id);
+      await refreshProfile();
+      setProfileSavedMsg(true);
+    }
+  };
+
+  // ── 저장 ──
   const handleSave = async () => {
     if (!user) { showAlert('알림', '로그인이 필요합니다.'); return; }
+    if (!selectedCategory) { showAlert('알림', '분야를 선택해주세요.'); return; }
     if (!imageUri) { showAlert('알림', '이미지를 선택해주세요.'); return; }
     if (!title.trim()) { showAlert('알림', '작품명을 입력해주세요.'); return; }
-    if (!year.trim()) { showAlert('알림', '제작연도를 입력해주세요.'); return; }
+    if (!year.trim()) { showAlert('알림', `${YEAR_FIELD_LABEL[formType].label}를 입력해주세요.`); return; }
     if (!description.trim() || description.trim().length < 10) {
       showAlert('알림', `설명은 10글자 이상 입력해주세요. (현재 ${description.trim().length}자)`);
       return;
     }
+    // 필수 메타 필드 검증
+    for (const field of metaFields) {
+      if (field.required && !metadata[field.key]?.trim()) {
+        showAlert('알림', `${field.label}을(를) 입력해주세요.`);
+        return;
+      }
+    }
 
     setLoading(true);
     try {
-      // 새 작품 등록 시 10모의 차감
       if (!isEditing) {
         const { error: pointErr } = await spendPoints(user.id, 10, '작품 업로드');
         if (pointErr) {
@@ -130,32 +262,48 @@ export default function CreateArtworkScreen() {
         }
       }
 
-      const combinedMedium = `${medium.trim()}, ${technique.trim()}`;
-
-      // 자동 태그 생성: 제작연도 + 재료/기법 + 크기
+      // 자동 태그
       const autoTags: string[] = [];
       if (year.trim()) autoTags.push(year.trim());
-      if (medium.trim()) medium.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.push(t); });
-      if (technique.trim()) technique.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.push(t); });
-      if (widthCm.trim() && heightCm.trim()) autoTags.push(`${widthCm.trim()}x${heightCm.trim()}cm`);
-      // 커스텀 태그 추가 (칩 + 입력중인 텍스트)
+      if (selectedCategory) autoTags.push(selectedCategory);
+      // visual 타입 전용 자동태그
+      if (formType === 'visual') {
+        if (metadata.medium) metadata.medium.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.push(t); });
+        if (metadata.technique) metadata.technique.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.push(t); });
+        if (metadata.width_cm && metadata.height_cm) autoTags.push(`${metadata.width_cm}x${metadata.height_cm}cm`);
+      }
+      // 장르 자동태그
+      if (metadata.genre) metadata.genre.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.push(t); });
       tagChips.forEach(t => { if (t) autoTags.push(t); });
       if (tagInput.trim()) {
         tagInput.split(/[,،]/).forEach(s => { const t = s.trim(); if (t) autoTags.push(t); });
       }
-      // 중복 제거
       const tags = [...new Set(autoTags)];
 
-      const artworkData = {
+      // 저장할 메타데이터 (빈 값 제외)
+      const cleanMeta: Record<string, string> = {};
+      for (const [k, v] of Object.entries(metadata)) {
+        if (v && v.trim()) cleanMeta[k] = v.trim();
+      }
+
+      // visual 타입: 기존 컬럼 활용
+      const isVisual = formType === 'visual';
+      const combinedMedium = isVisual
+        ? [metadata.medium?.trim(), metadata.technique?.trim()].filter(Boolean).join(', ')
+        : null;
+
+      const artworkData: any = {
         title: title.trim(),
         image_url: imageUrl!,
         year: year ? parseInt(year, 10) : null,
         medium: combinedMedium || null,
-        width_cm: widthCm ? parseFloat(widthCm) : null,
-        height_cm: heightCm ? parseFloat(heightCm) : null,
-        edition: edition.trim() || null,
+        width_cm: isVisual && metadata.width_cm ? parseFloat(metadata.width_cm) : null,
+        height_cm: isVisual && metadata.height_cm ? parseFloat(metadata.height_cm) : null,
+        edition: (isVisual || formType === 'writing') && metadata.edition ? metadata.edition.trim() : null,
         description: description.trim() || null,
         tags,
+        category: selectedCategory || null,
+        metadata: cleanMeta,
       };
 
       if (isEditing) {
@@ -210,9 +358,9 @@ export default function CreateArtworkScreen() {
         </Pressable>
         <Text style={[styles.topTitle, { color: C.fg }]}>{isEditing ? '작품 수정' : '작품 업로드'}</Text>
         <Pressable
-          style={({ pressed }) => [styles.saveBtn, { backgroundColor: C.gold }, pressed && { opacity: 0.6 }, loading && { opacity: 0.4 }]}
+          style={({ pressed }) => [styles.saveBtn, { backgroundColor: (!selectedCategory || loading) ? C.border : C.gold }, pressed && selectedCategory && { opacity: 0.6 }]}
           onPress={handleSave}
-          disabled={loading}
+          disabled={loading || !selectedCategory}
         >
           {loading ? (
             <ActivityIndicator size="small" color={C.bg} />
@@ -223,7 +371,130 @@ export default function CreateArtworkScreen() {
       </View>
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* 이미지 선택 */}
+        {/* ── 카테고리(세부 분야) 선택 ── */}
+        <Animated.View entering={FadeInDown.delay(50).duration(400).springify()}>
+          <Text style={[styles.label, { color: C.fg }]}>분야 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+
+          {/* 유저의 세부 분야가 있으면 칩으로 표시 */}
+          {userSubFields.length > 0 ? (
+            <View style={styles.categoryChipsWrap}>
+              {userSubFields.map((sf) => {
+                const active = selectedCategory === sf;
+                return (
+                  <Pressable
+                    key={sf}
+                    style={[
+                      styles.categoryChip,
+                      { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.goldDim : C.card },
+                    ]}
+                    onPress={() => setSelectedCategory(sf)}
+                  >
+                    <Text style={[styles.categoryChipText, { color: active ? C.gold : C.muted }]}>{sf}</Text>
+                  </Pressable>
+                );
+              })}
+              {/* 미설정 유저 + 세부분야 4개 미만일 때만 "다른 분야" */}
+              {!hadSubFieldOnEntry.current && canAddMore && (
+                <Pressable
+                  style={[styles.categoryChip, { borderColor: C.border, backgroundColor: C.card, borderStyle: 'dashed' }]}
+                  onPress={() => setShowFieldPicker(true)}
+                >
+                  <Text style={[styles.categoryChipText, { color: C.mutedLight }]}>+ 다른 분야</Text>
+                </Pressable>
+              )}
+            </View>
+          ) : (
+            /* 세부 분야 미설정: 전체 선택 UI */
+            <>
+              <Pressable
+                style={[styles.fieldPickerBtn, { borderColor: C.border, backgroundColor: C.card }]}
+                onPress={() => setShowFieldPicker(true)}
+              >
+                <Text style={[styles.fieldPickerBtnText, { color: C.mutedLight }]}>
+                  세부 분야를 선택해주세요
+                </Text>
+              </Pressable>
+              <Text style={[styles.fieldPickerHint, { color: C.mutedLight }]}>
+                여기서 분야를 선택하면 작가 분야가 프로필에 설정됩니다.
+              </Text>
+            </>
+          )}
+
+          {/* 분야 미선택 시 빨간 안내 */}
+          {!selectedCategory && (
+            <Text style={styles.fieldWarning}>
+              분야를 선택해야 작품을 등록할 수 있습니다.
+            </Text>
+          )}
+
+          {/* 프로필 저장 완료 메시지 */}
+          {profileSavedMsg && (
+            <Text style={styles.fieldSavedMsg}>
+              작가 분야가 프로필에 저장되었습니다.
+            </Text>
+          )}
+
+          {/* 선택된 폼 타입 표시 */}
+          {selectedCategory && (
+            <Text style={[styles.formTypeHint, { color: C.mutedLight }]}>
+              {FORM_TYPE_LABEL[formType]} 폼이 적용됩니다
+            </Text>
+          )}
+        </Animated.View>
+
+        {/* ── 분야 선택 팝업 ── */}
+        {showFieldPicker && (
+          <Animated.View entering={FadeInDown.duration(300).springify()} style={[styles.fieldPickerPanel, { backgroundColor: C.card, borderColor: C.border }]}>
+            {!pickerField ? (
+              <>
+                <Text style={[styles.fieldPickerTitle, { color: C.fg }]}>분야를 선택하세요</Text>
+                <View style={styles.categoryChipsWrap}>
+                  {/* 상위분야 2개 꽉 찼으면 기존만, + 분야별 2개 꽉 찬 분야 제외 */}
+                  {(canAddNewParent
+                    ? FIELD_CATEGORIES
+                    : FIELD_CATEGORIES.filter(fc => userParentFields.includes(fc.key))
+                  ).filter(fc => (parentFieldCounts[fc.key] ?? 0) < 2).map((fc) => (
+                    <Pressable
+                      key={fc.key}
+                      style={[styles.fieldCategoryChip, { borderColor: C.border, backgroundColor: C.bg }]}
+                      onPress={() => setPickerField(fc.key)}
+                    >
+                      <Text style={styles.fieldCategoryIcon}>{fc.icon}</Text>
+                      <Text style={[styles.fieldCategoryText, { color: C.fg }]}>{fc.key}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                {!canAddNewParent && (
+                  <Text style={[styles.fieldPickerLimitHint, { color: C.mutedLight }]}>
+                    상위 분야는 최대 2개, 분야별 세부분야는 최대 2개까지 선택할 수 있습니다.
+                  </Text>
+                )}
+                <Pressable onPress={() => { setShowFieldPicker(false); setPickerField(null); }} style={styles.fieldPickerClose}>
+                  <Text style={[styles.fieldPickerCloseText, { color: C.muted }]}>닫기</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Pressable onPress={() => setPickerField(null)} style={{ marginBottom: 8 }}>
+                  <Text style={[styles.fieldPickerBack, { color: C.gold }]}>← {pickerField}</Text>
+                </Pressable>
+                <View style={styles.categoryChipsWrap}>
+                  {(SUB_FIELDS[pickerField] ?? []).filter(sf => !userSubFields.includes(sf)).map((sf) => (
+                    <Pressable
+                      key={sf}
+                      style={[styles.categoryChip, { borderColor: C.border, backgroundColor: C.bg }]}
+                      onPress={() => selectCategoryAndSaveProfile(sf, pickerField)}
+                    >
+                      <Text style={[styles.categoryChipText, { color: C.fg }]}>{sf}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
+          </Animated.View>
+        )}
+
+        {/* ── 이미지 선택 ── */}
         <Animated.View entering={FadeInDown.delay(100).duration(400).springify()}>
           <Text style={[styles.label, { color: C.fg }]}>작품 이미지 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
           <Pressable
@@ -241,7 +512,7 @@ export default function CreateArtworkScreen() {
           </Pressable>
         </Animated.View>
 
-        {/* 제목 */}
+        {/* ── 제목 ── */}
         <Animated.View entering={FadeInDown.delay(200).duration(400).springify()}>
           <Text style={[styles.label, { color: C.fg }]}>제목 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
           <TextInput
@@ -253,78 +524,65 @@ export default function CreateArtworkScreen() {
           />
         </Animated.View>
 
-        {/* 제작연도 */}
+        {/* ── 제작연도/공연연도/발표연도 ── */}
         <Animated.View entering={FadeInDown.delay(250).duration(400).springify()}>
-          <Text style={[styles.label, { color: C.fg }]}>제작연도 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
+          <Text style={[styles.label, { color: C.fg }]}>{YEAR_FIELD_LABEL[formType].label} <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
           <TextInput
             style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
             value={year}
             onChangeText={setYear}
-            placeholder="예: 2024"
+            placeholder={YEAR_FIELD_LABEL[formType].placeholder}
             placeholderTextColor={C.mutedLight}
             keyboardType="number-pad"
           />
         </Animated.View>
 
-        {/* 재료 */}
-        <Animated.View entering={FadeInDown.delay(300).duration(400).springify()}>
-          <Text style={[styles.label, { color: C.fg }]}>재료 <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
-            value={medium}
-            onChangeText={setMedium}
-            placeholder="예: 캔버스에 유채"
-            placeholderTextColor={C.mutedLight}
-          />
-        </Animated.View>
+        {/* ── 폼 타입별 추가 필드 ── */}
+        {metaFields.map((field, idx) => (
+          <Animated.View key={`${field.key}-${field.label}`} entering={FadeInDown.delay(300 + idx * 50).duration(400).springify()}>
+            <Text style={[styles.label, { color: C.fg }]}>
+              {field.label} {field.required
+                ? <Text style={[styles.required, { color: C.gold }]}>*</Text>
+                : <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text>
+              }
+            </Text>
+            {/* 크기 필드: width_cm과 height_cm을 함께 렌더링 */}
+            {field.key === 'width_cm' ? (
+              <>
+                <TextInput
+                  style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg, marginBottom: 8 }]}
+                  value={metadata.width_cm ?? ''}
+                  onChangeText={(v) => setMeta('width_cm', v)}
+                  placeholder={field.placeholder}
+                  placeholderTextColor={C.mutedLight}
+                  keyboardType={field.keyboard ?? 'default'}
+                />
+              </>
+            ) : field.key === 'height_cm' ? (
+              <TextInput
+                style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
+                value={metadata.height_cm ?? ''}
+                onChangeText={(v) => setMeta('height_cm', v)}
+                placeholder={field.placeholder}
+                placeholderTextColor={C.mutedLight}
+                keyboardType={field.keyboard ?? 'default'}
+              />
+            ) : (
+              <TextInput
+                style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
+                value={metadata[field.key] ?? ''}
+                onChangeText={(v) => setMeta(field.key, v)}
+                placeholder={field.placeholder}
+                placeholderTextColor={C.mutedLight}
+                keyboardType={field.keyboard ?? 'default'}
+                autoCapitalize={field.keyboard === 'url' ? 'none' : 'sentences'}
+              />
+            )}
+          </Animated.View>
+        ))}
 
-        {/* 기법 */}
-        <Animated.View entering={FadeInDown.delay(350).duration(400).springify()}>
-          <Text style={[styles.label, { color: C.fg }]}>기법 <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
-            value={technique}
-            onChangeText={setTechnique}
-            placeholder="예: 임파스토, 글레이징"
-            placeholderTextColor={C.mutedLight}
-          />
-        </Animated.View>
-
-        {/* 크기 (가로 / 세로 세로 배치) */}
-        <Animated.View entering={FadeInDown.delay(400).duration(400).springify()}>
-          <Text style={[styles.label, { color: C.fg }]}>크기 (cm) <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg, marginBottom: 8 }]}
-            value={widthCm}
-            onChangeText={setWidthCm}
-            placeholder="가로 (cm)"
-            placeholderTextColor={C.mutedLight}
-            keyboardType="decimal-pad"
-          />
-          <TextInput
-            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
-            value={heightCm}
-            onChangeText={setHeightCm}
-            placeholder="세로 (cm)"
-            placeholderTextColor={C.mutedLight}
-            keyboardType="decimal-pad"
-          />
-        </Animated.View>
-
-        {/* 에디션 */}
-        <Animated.View entering={FadeInDown.delay(450).duration(400).springify()}>
-          <Text style={[styles.label, { color: C.fg }]}>에디션 <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
-            value={edition}
-            onChangeText={setEdition}
-            placeholder="예: 1/10"
-            placeholderTextColor={C.mutedLight}
-          />
-        </Animated.View>
-
-        {/* 설명 */}
-        <Animated.View entering={FadeInDown.delay(500).duration(400).springify()}>
+        {/* ── 설명 ── */}
+        <Animated.View entering={FadeInDown.delay(300 + metaFields.length * 50).duration(400).springify()}>
           <View style={styles.labelRow}>
             <Text style={[styles.label, { color: C.fg, marginTop: 0 }]}>설명 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
             <Text style={[styles.charCount, { color: description.trim().length >= 10 ? C.gold : C.danger }]}>
@@ -342,27 +600,35 @@ export default function CreateArtworkScreen() {
           />
         </Animated.View>
 
-        {/* 태그 */}
-        <Animated.View entering={FadeInDown.delay(550).duration(400).springify()}>
-          <Text style={[styles.label, { color: C.fg }]}>추가 태그 <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
-          <TextInput
-            style={[styles.input, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
-            value={tagInput}
-            onChangeText={(text) => {
-              if (text.includes(',') || text.includes('،')) {
-                const parts = text.split(/[,،]/);
-                const newTags = parts.slice(0, -1).map(s => s.trim()).filter(Boolean);
+        {/* ── 태그 ── */}
+        <Animated.View entering={FadeInDown.delay(350 + metaFields.length * 50).duration(400).springify()}>
+          <Text style={[styles.label, { color: C.fg }]}>태그 <Text style={[styles.optional, { color: C.mutedLight }]}>(선택)</Text></Text>
+          <View style={styles.tagInputRow}>
+            <TextInput
+              style={[styles.input, styles.tagInputField, { backgroundColor: C.card, borderColor: C.border, color: C.fg }]}
+              value={tagInput}
+              onChangeText={setTagInput}
+              placeholder="예: 네오팝, 스트릿아트"
+              placeholderTextColor={C.mutedLight}
+            />
+            <Pressable
+              style={({ pressed }) => [
+                styles.tagAddBtn,
+                { backgroundColor: tagInput.trim() ? C.gold : C.border },
+                pressed && { opacity: 0.7 },
+              ]}
+              onPress={() => {
+                const newTags = tagInput.split(/[,،]/).map(s => s.trim()).filter(Boolean);
                 if (newTags.length > 0) {
                   setTagChips(prev => [...new Set([...prev, ...newTags])]);
+                  setTagInput('');
                 }
-                setTagInput(parts[parts.length - 1]);
-              } else {
-                setTagInput(text);
-              }
-            }}
-            placeholder={tagChips.length > 0 ? '태그 추가...' : '예: 네오팝, 스트릿아트 (쉼표로 구분)'}
-            placeholderTextColor={C.mutedLight}
-          />
+              }}
+              disabled={!tagInput.trim()}
+            >
+              <Text style={[styles.tagAddBtnText, { color: tagInput.trim() ? C.bg : C.mutedLight }]}>등록</Text>
+            </Pressable>
+          </View>
           {tagChips.length > 0 && (
             <View style={styles.tagChipsWrap}>
               {tagChips.map((tag, i) => (
@@ -378,7 +644,7 @@ export default function CreateArtworkScreen() {
             </View>
           )}
           <Text style={[styles.tagHint, { color: C.mutedLight }]}>
-            제작연도, 재료, 기법, 크기는 자동 태그 · 탭하면 삭제
+            연도, 분야, 재료 등은 자동 태그 · 탭하면 삭제
           </Text>
         </Animated.View>
 
@@ -472,6 +738,122 @@ const styles = StyleSheet.create({
   textArea: {
     minHeight: 140,
     paddingTop: 14,
+  },
+  // ── 카테고리 칩 ──
+  categoryChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  categoryChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  categoryChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  formTypeHint: {
+    fontSize: 11,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  fieldWarning: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#e74c3c',
+    marginTop: 8,
+  },
+  fieldSavedMsg: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#3498db',
+    marginTop: 8,
+  },
+  fieldPickerLimitHint: {
+    fontSize: 11,
+    marginTop: 10,
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
+  // ── 분야 선택 패널 ──
+  fieldPickerBtn: {
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  fieldPickerBtnText: {
+    fontSize: 14,
+  },
+  fieldPickerHint: {
+    fontSize: 11,
+    marginTop: 6,
+    fontStyle: 'italic',
+  },
+  fieldPickerPanel: {
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 12,
+  },
+  fieldPickerTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  fieldPickerClose: {
+    marginTop: 12,
+    alignSelf: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  fieldPickerCloseText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  fieldPickerBack: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  fieldCategoryChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  fieldCategoryIcon: {
+    fontSize: 16,
+  },
+  fieldCategoryText: {
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  // ── 태그 ──
+  tagInputRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+  },
+  tagInputField: {
+    flex: 1,
+  },
+  tagAddBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagAddBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
   },
   tagChipsWrap: {
     flexDirection: 'row',
