@@ -49,28 +49,6 @@ const C = {
 
 const normalizePhoneNumber = (value: string) => value.replace(/\D/g, '').slice(0, 11);
 
-/* ── 분야 & 세부분야 데이터 ── */
-const FIELD_CATEGORIES = [
-  { key: '글', icon: '✍️' },
-  { key: '그림', icon: '🎨' },
-  { key: '영상', icon: '🎬' },
-  { key: '소리', icon: '🎵' },
-  { key: '사진', icon: '📷' },
-  { key: '입체/공간', icon: '🗿' },
-  { key: '디지털/인터랙티브', icon: '💻' },
-  { key: '공연', icon: '🎭' },
-] as const;
-
-const SUB_FIELDS: Record<string, string[]> = {
-  '글': ['소설', '시', '에세이', '웹소설', '극본', '평론', '번역', '칼럼', '기타'],
-  '그림': ['회화', '일러스트', '웹툰/만화', '캘리그래피', '판화', '그래픽디자인', '기타'],
-  '영상': ['영화', '애니메이션', '다큐멘터리', '뮤직비디오', '숏폼', '기타'],
-  '소리': ['작곡', '연주', '보컬', '프로듀싱', '사운드아트', 'DJ', '기타'],
-  '사진': ['순수사진', '상업사진', '다큐멘터리사진', '기타'],
-  '입체/공간': ['조각', '도예/세라믹', '설치미술', '건축', '공예', '기타'],
-  '디지털/인터랙티브': ['미디어아트', 'AI아트', '제너레이티브', '웹아트', '기타'],
-  '공연': ['연극', '무용', '뮤지컬', '퍼포먼스', '기타'],
-};
 
 /* ── 인풋 포커스 애니메이션 ── */
 function AnimatedInput({
@@ -100,6 +78,7 @@ function AnimatedInput({
   onSubmitEditing?: () => void;
   inputRef?: React.RefObject<TextInput>;
   helperText?: string;
+  helperColor?: string;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   required?: boolean;
   delay: number;
@@ -133,7 +112,7 @@ function AnimatedInput({
           onBlur={() => { focused.value = withTiming(0, { duration: 200 }); }}
         />
       </Animated.View>
-      {helperText ? <Text style={styles.inputHint}>{helperText}</Text> : null}
+      {helperText ? <Text style={[styles.inputHint, helperColor ? { color: helperColor } : undefined]}>{helperText}</Text> : null}
     </Animated.View>
   );
 }
@@ -159,15 +138,15 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [selectedFields, setSelectedFields] = useState<string[]>([]);
-  const [selectedSubFields, setSelectedSubFields] = useState<string[]>([]);
+
+
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const USERNAME_REGEX = /^[a-z0-9_.]{2,20}$/;
+  const USERNAME_REGEX = /^[a-z0-9_.]{2,15}$/;
 
   const handleUsernameChange = (text: string) => {
-    const lower = text.toLowerCase().replace(/[^a-z0-9_.]/g, '').slice(0, 20);
+    const lower = text.toLowerCase().replace(/[^a-z0-9_.]/g, '').slice(0, 15);
     setUsername(lower);
 
     if (usernameTimerRef.current) clearTimeout(usernameTimerRef.current);
@@ -218,7 +197,7 @@ export default function SignUpScreen() {
       return;
     }
     if (!USERNAME_REGEX.test(username)) {
-      setError('아이디는 영문 소문자, 숫자, 밑줄, 점만 사용 가능합니다. (2~20자)');
+      setError('아이디는 영문 소문자, 숫자, 밑줄, 점만 사용 가능합니다. (2~15자)');
       return;
     }
     if (usernameStatus !== 'available') {
@@ -247,8 +226,8 @@ export default function SignUpScreen() {
       displayName.trim(),
       normalizedPhoneNumber,
       username.trim(),
-      selectedFields.length > 0 ? selectedFields.join(', ') : undefined,
-      selectedSubFields.length > 0 ? selectedSubFields.join(', ') : undefined,
+      undefined,
+      undefined,
     );
     setLoading(false);
 
@@ -256,11 +235,11 @@ export default function SignUpScreen() {
       setError(result.error);
     } else {
       // 가입 성공 — 이메일 인증 안내
-      if (Platform.OS === 'web') {
-        window.alert('가입이 완료되었습니다!\n이메일 인증 링크를 확인해주세요.');
-      } else {
-        Alert.alert('가입 완료', '이메일 인증 링크를 확인해주세요.');
-      }
+      // if (Platform.OS === 'web') {
+      //   window.alert('가입이 완료되었습니다!\n이메일 인증 링크를 확인해주세요.');
+      // } else {
+      //   Alert.alert('가입 완료', '이메일 인증 링크를 확인해주세요.');
+      // }
       router.replace('/(auth)/login');
     }
   };
@@ -340,7 +319,7 @@ export default function SignUpScreen() {
                 <TextInput
                   ref={usernameRef}
                   style={styles.input}
-                  placeholder="영문 소문자, 숫자, 밑줄, 점 (2~20자)"
+                  placeholder="영문 소문자, 숫자, 밑줄, 점 (2~15자)"
                   placeholderTextColor={C.mutedLight}
                   value={username}
                   onChangeText={handleUsernameChange}
@@ -356,7 +335,7 @@ export default function SignUpScreen() {
                 usernameStatus === 'available' && { color: '#22c55e' },
               ]}>
                 {usernameStatus === 'idle' && '프로필 URL에 사용됩니다. (예: mouiist.com/artist/myid)'}
-                {usernameStatus === 'invalid' && '영문 소문자, 숫자, 밑줄(_), 점(.)만 가능 (2~20자)'}
+                {usernameStatus === 'invalid' && '영문 소문자, 숫자, 밑줄(_), 점(.)만 가능 (2~15자)'}
                 {usernameStatus === 'checking' && '확인 중...'}
                 {usernameStatus === 'available' && '✓ 사용 가능한 아이디입니다.'}
                 {usernameStatus === 'taken' && '✗ 이미 사용 중인 아이디입니다.'}
@@ -367,12 +346,13 @@ export default function SignUpScreen() {
               label="본명"
               placeholder="실명 입력"
               value={realName}
-              onChangeText={setRealName}
+              onChangeText={(t) => setRealName(t.replace(/[0-9]/g, ''))}
               autoCapitalize="words"
               returnKeyType="next"
               onSubmitEditing={() => phoneRef.current?.focus()}
               inputRef={realNameRef}
-              helperText="본인인증을 위해 꼭 필요하며 외부에는 공개되지 않아요."
+              helperText="꼭 실명을 넣어주세요. 작가인증 시 필요합니다."
+              helperColor={C.gold}
               required
               delay={430}
             />
@@ -433,75 +413,6 @@ export default function SignUpScreen() {
               required
               delay={750}
             />
-
-            {/* 분야 선택 (선택사항, 복수 선택) */}
-            <Animated.View entering={FadeInDown.delay(790).duration(400).springify()}>
-              <Text style={styles.label}>분야</Text>
-              {/*<Text style={styles.inputHint}>나중에 프로필에서도 변경할 수 있어요. (최대 2개)</Text>*/}
-              <View style={styles.chipGrid}>
-                {FIELD_CATEGORIES.map(cat => {
-                  const active = selectedFields.includes(cat.key);
-                  return (
-                    <Pressable
-                      key={cat.key}
-                      onPress={() => {
-                        if (active) {
-                          setSelectedFields(prev => prev.filter(k => k !== cat.key));
-                          const subs = SUB_FIELDS[cat.key] ?? [];
-                          setSelectedSubFields(prev => prev.filter(s => !subs.includes(s)));
-                        } else if (selectedFields.length < 2) {
-                          setSelectedFields(prev => [...prev, cat.key]);
-                        }
-                      }}
-                      style={[
-                        styles.chip,
-                        { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.goldDim : C.inputBg },
-                      ]}
-                    >
-                      <Text style={styles.chipIcon}>{cat.icon}</Text>
-                      <Text style={[styles.chipText, { color: active ? C.gold : C.muted }]}>{cat.key}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </Animated.View>
-
-            {/* 세부 분야 선택 (복수 선택) */}
-            {/* 세부 분야 선택 (분야별 그룹, 각 분야당 최대 2개) */}
-            {selectedFields.length > 0 ? (
-              <Animated.View entering={FadeInDown.duration(300).springify()}>
-                <Text style={styles.label}>세부 분야</Text>
-                {selectedFields.map(field => {
-                  const cat = FIELD_CATEGORIES.find(c => c.key === field);
-                  const subs = SUB_FIELDS[field] ?? [];
-                  const countForField = selectedSubFields.filter(s => subs.includes(s)).length;
-                  return (
-                    <View key={field} style={{ marginBottom: 12 }}>
-                      <Text style={[styles.inputHint, { marginBottom: 6 }]}>{cat?.icon} {field} (최대 2개)</Text>
-                      <View style={styles.chipGrid}>
-                        {subs.map(sub => {
-                          const active = selectedSubFields.includes(sub);
-                          return (
-                            <Pressable
-                              key={`${field}_${sub}`}
-                              onPress={() => setSelectedSubFields(prev =>
-                                active ? prev.filter(s => s !== sub) : countForField < 2 ? [...prev, sub] : prev
-                              )}
-                              style={[
-                                styles.chip,
-                                { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.goldDim : C.inputBg },
-                              ]}
-                            >
-                              <Text style={[styles.chipText, { color: active ? C.gold : C.muted }]}>{sub}</Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  );
-                })}
-              </Animated.View>
-            ) : null}
 
             {error ? (
               <Animated.Text entering={FadeIn.duration(200)} style={styles.error}>
@@ -740,28 +651,6 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
 
-  chipGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 8,
-  },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-  },
-  chipIcon: {
-    fontSize: 14,
-  },
-  chipText: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
 
   footer: {
     marginTop: 'auto',

@@ -198,11 +198,11 @@ async function main() {
   console.log(`=== ${ARTWORKS_DATA.length}개 예술 작품 시드 시작 ===\n`);
 
   // gocoder 유저 ID 조회
-  const profileRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?username=eq.gocoder&select=id`, {
+  const profileRes = await fetch(`${SUPABASE_URL}/rest/v1/profiles?username=eq.gocoder.net&select=id`, {
     headers: { apikey: SUPABASE_SERVICE_KEY, Authorization: `Bearer ${SUPABASE_SERVICE_KEY}` },
   });
   const profiles = await profileRes.json();
-  if (!profiles?.length) throw new Error('gocoder 프로필 없음');
+  if (!profiles?.length) throw new Error('gocoder.net 프로필 없음');
   USER_ID = profiles[0].id;
   console.log(`gocoder ID: ${USER_ID}\n`);
 

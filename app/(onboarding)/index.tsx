@@ -207,7 +207,7 @@ export default function OnboardingScreen() {
     : !!displayName.trim()
       && !!realName.trim()
       && normalizedPhoneNumber.length >= 9
-      && (!needsFieldSelection || selectedFields.length > 0);
+      && (!needsFieldSelection || (selectedFields.length > 0 && selectedSubFields.length > 0));
 
   const btnGlowStyle = useAnimatedStyle(() => ({
     shadowOpacity: 0.15 + btnGlow.value * 0.15,
@@ -356,6 +356,7 @@ export default function OnboardingScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
     <View style={[styles.root, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
+    <View style={styles.innerContainer}>
       {/* 배경 떠다니는 도형들 */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
         <FloatingShape shape="ring" size={50} color={C.gold} opacity={0.10} top="3%" left="0%" duration={6000} delay={0} />
@@ -488,12 +489,12 @@ export default function OnboardingScreen() {
                 placeholder="실명 입력"
                 placeholderTextColor={C.mutedLight}
                 value={realName}
-                onChangeText={setRealName}
+                onChangeText={(t) => setRealName(t.replace(/[0-9]/g, ''))}
                 returnKeyType="next"
                 onSubmitEditing={() => phoneRef.current?.focus()}
                 maxLength={30}
               />
-              <Text style={styles.inputHint}>본인인증을 위해 꼭 필요하며 외부에는 공개되지 않아요</Text>
+              <Text style={[styles.inputHint, { color: C.gold, fontWeight: '700' }]}>꼭 실명을 넣어주세요. 작가인증 시 필요합니다.</Text>
             </View>
 
             <View style={styles.inputGroup}>
@@ -546,7 +547,7 @@ export default function OnboardingScreen() {
                 {/* 세부 분야 선택 (분야별 그룹, 각 분야당 최대 2개) */}
                 {selectedFields.length > 0 && (
                   <>
-                    <Text style={[styles.inputLabel, { marginTop: 16 }]}>세부 분야</Text>
+                    <Text style={[styles.inputLabel, { marginTop: 16 }]}>세부 분야 <Text style={styles.inputRequired}>(필수)</Text></Text>
                     {selectedFields.map(field => {
                       const cat = FIELD_CATEGORIES.find(c => c.key === field);
                       const subs = SUB_FIELDS[field] ?? [];
@@ -645,6 +646,7 @@ export default function OnboardingScreen() {
         </View>
       </View>
     </View>
+    </View>
     </KeyboardAvoidingView>
   );
 }
@@ -653,6 +655,12 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     backgroundColor: C.bg,
+  },
+  innerContainer: {
+    flex: 1,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
     paddingHorizontal: 28,
   },
 

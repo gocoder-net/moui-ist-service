@@ -90,6 +90,24 @@ export function ArtworkViewer({
   const [commentText, setCommentText] = useState('');
   const [showComments, setShowComments] = useState(false);
   const [commentCount, setCommentCount] = useState(0);
+  const [loadedProfile, setLoadedProfile] = useState<Profile | null>(null);
+
+  // artistProfile이 없으면 artwork의 user_id로 자동 로드
+  const displayProfile = artistProfile ?? loadedProfile;
+
+  useEffect(() => {
+    if (artistProfile || !visible) return;
+    const aw = artworks[currentIndex];
+    if (!aw) return;
+    (async () => {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', aw.user_id)
+        .single();
+      if (data) setLoadedProfile(data);
+    })();
+  }, [currentIndex, visible, artworks, artistProfile]);
 
   const loadLikesComments = useCallback(async (artworkId: string) => {
     const [{ count: lc }, { count: cc }] = await Promise.all([
@@ -387,22 +405,22 @@ export function ArtworkViewer({
           pointerEvents="box-none"
         >
           <View style={styles.viewerBottomInner}>
-          {artistProfile && (
+          {displayProfile && (
             <Pressable
               style={styles.viewerArtistRow}
-              onPress={() => { onClose(); }}
+              onPress={() => { onClose(); router.push(`/artist/${displayProfile.username}`); }}
             >
-              {artistProfile.avatar_url ? (
-                <Image source={{ uri: artistProfile.avatar_url }} style={styles.viewerArtistAvatar} />
+              {displayProfile.avatar_url ? (
+                <Image source={{ uri: displayProfile.avatar_url }} style={styles.viewerArtistAvatar} />
               ) : (
                 <View style={[styles.viewerArtistAvatar, { backgroundColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' }]}>
                   <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>
-                    {(artistProfile.name ?? artistProfile.username ?? '?').charAt(0).toUpperCase()}
+                    {(displayProfile.name ?? displayProfile.username ?? '?').charAt(0).toUpperCase()}
                   </Text>
                 </View>
               )}
               <Text style={styles.viewerArtistName}>
-                {artistProfile.name ?? artistProfile.username}
+                {displayProfile.name ?? displayProfile.username}
               </Text>
             </Pressable>
           )}
