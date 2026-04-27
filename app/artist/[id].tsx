@@ -46,9 +46,11 @@ import { sendNotification } from '@/lib/notifications';
 import { WebView } from 'react-native-webview';
 import type { Database } from '@/types/database';
 import { getFormType, META_KEY_LABEL, FORM_META_FIELDS } from '@/constants/artwork-form';
+import { useVideoSettings } from '@/contexts/video-settings-context';
 
 /* ── 임베드 URL 변환 ── */
-function getEmbedUrl(url: string, opts?: { autoplay?: boolean; mute?: boolean }): { embedUrl: string; type: 'youtube' | 'vimeo' | 'soundcloud' } | null {
+type EmbedType = 'youtube' | 'vimeo' | 'soundcloud' | 'instagram';
+function getEmbedUrl(url: string, opts?: { autoplay?: boolean; mute?: boolean }): { embedUrl: string; type: EmbedType } | null {
   if (!url) return null;
   const ap = opts?.autoplay ? 1 : 0;
   const mt = opts?.mute ? 1 : 0;
@@ -62,6 +64,9 @@ function getEmbedUrl(url: string, opts?: { autoplay?: boolean; mute?: boolean })
   if (url.includes('soundcloud.com/')) {
     return { embedUrl: `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&color=%23C8A96E&auto_play=${ap === 1 ? 'true' : 'false'}&show_artwork=true`, type: 'soundcloud' };
   }
+  // Instagram (reel, post, tv)
+  const igMatch = url.match(/instagram\.com\/(?:p|reel|tv)\/([\w-]+)/);
+  if (igMatch) return { embedUrl: `https://www.instagram.com/p/${igMatch[1]}/embed/`, type: 'instagram' };
   return null;
 }
 
@@ -407,6 +412,7 @@ function ArtworkViewer({
   const router = useRouter();
   const { width: screenW, height: screenH } = useWindowDimensions();
   const { user } = useAuth();
+  const videoSettings = useVideoSettings();
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [viewerHovered, setViewerHovered] = useState(false);
   const flatListRef = useRef<FlatList<Artwork>>(null);
@@ -491,6 +497,13 @@ function ArtworkViewer({
     setEmbedExpanded(false);
     setEmbedHidden(false);
   }, [initialIndex]);
+
+  useEffect(() => {
+    if (!visible) {
+      setEmbedExpanded(false);
+      setEmbedHidden(false);
+    }
+  }, [visible]);
 
   useEffect(() => {
     const aw = artworks[currentIndex];
@@ -632,7 +645,7 @@ function ArtworkViewer({
           const meta = ((artwork as any)?.metadata ?? {}) as Record<string, string>;
           const linkUrl = meta?.link;
           if (!linkUrl) return null;
-          const embed = getEmbedUrl(linkUrl, { autoplay: true, mute: true });
+          const embed = getEmbedUrl(linkUrl, { autoplay: videoSettings.autoplay, mute: videoSettings.muted });
           if (!embed) return null;
           return (
             <View style={styles.embedMiniFloat}>
@@ -675,7 +688,7 @@ function ArtworkViewer({
           const embed = getEmbedUrl(linkUrl, { autoplay: true, mute: false });
           if (!embed) return null;
           const embedW = isWebViewer ? viewerFrameWidth : screenW;
-          const embedH = embed.type === 'soundcloud' ? 166 : Math.round(embedW * 9 / 16);
+          const embedH = embed.type === 'soundcloud' ? 166 : embed.type === 'instagram' ? Math.round(embedW * 1.2) : Math.round(embedW * 9 / 16);
           return (
             <View style={[styles.embedOverlay, { top: 0, bottom: 0 }]}>
               <View style={{ width: embedW, height: embedH, maxHeight: viewerImageHeight, borderRadius: 12, overflow: 'hidden' }}>

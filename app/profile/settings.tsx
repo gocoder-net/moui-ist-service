@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
+import { useVideoSettings } from '@/contexts/video-settings-context';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 export default function SettingsScreen() {
@@ -10,6 +11,7 @@ export default function SettingsScreen() {
   const router = useRouter();
             const { signOut, profile, adminMode, setAdminMode } = useAuth();
   const { mode, colors: C, toggleTheme } = useThemeMode();
+  const { autoplay, muted, setAutoplay, setMuted } = useVideoSettings();
   const isAdmin = profile?.username === 'gocoder';
 
   return (
@@ -34,6 +36,29 @@ export default function SettingsScreen() {
           <Switch
             value={mode === 'light'}
             onValueChange={toggleTheme}
+            trackColor={{ false: '#262626', true: C.gold }}
+            thumbColor="#ffffff"
+          />
+        </View>
+      </Animated.View>
+
+      {/* 동영상 */}
+      <Animated.View entering={FadeInDown.delay(150).duration(400).springify()} style={[styles.card, { backgroundColor: C.card }]}>
+        <Text style={[styles.sectionTitle, { color: C.muted }]}>동영상</Text>
+        <View style={styles.row}>
+          <Text style={[styles.rowLabel, { color: C.fg }]}>자동 재생</Text>
+          <Switch
+            value={autoplay}
+            onValueChange={setAutoplay}
+            trackColor={{ false: '#262626', true: C.gold }}
+            thumbColor="#ffffff"
+          />
+        </View>
+        <View style={styles.row}>
+          <Text style={[styles.rowLabel, { color: C.fg }]}>음소거</Text>
+          <Switch
+            value={muted}
+            onValueChange={setMuted}
             trackColor={{ false: '#262626', true: C.gold }}
             thumbColor="#ffffff"
           />

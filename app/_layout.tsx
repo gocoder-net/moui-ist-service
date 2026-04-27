@@ -15,6 +15,7 @@ import Animated, {
 
 import { AuthProvider, useAuth } from '@/contexts/auth-context';
 import { ThemeModeProvider, useThemeMode } from '@/contexts/theme-context';
+import { VideoSettingsProvider } from '@/contexts/video-settings-context';
 
 function RootNavigator() {
   const { session, profile, loading } = useAuth();
@@ -176,7 +177,9 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <ThemeModeProvider>
-        <RootNavigator />
+        <VideoSettingsProvider>
+          <RootNavigator />
+        </VideoSettingsProvider>
       </ThemeModeProvider>
     </AuthProvider>
   );

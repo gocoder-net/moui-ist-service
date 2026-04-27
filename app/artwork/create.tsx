@@ -42,6 +42,7 @@ export default function CreateArtworkScreen() {
 
   // ── 카테고리 선택 ──
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [originalCategory, setOriginalCategory] = useState<string | null>(null);
   const [showFieldPicker, setShowFieldPicker] = useState(false);
   const [pickerField, setPickerField] = useState<string | null>(null);
   const [profileSavedMsg, setProfileSavedMsg] = useState(false);
@@ -77,6 +78,35 @@ export default function CreateArtworkScreen() {
       setSelectedCategory(userSubFields[0]);
     }
   }, [userSubFields, isEditing, selectedCategory]);
+
+  // 편집 시: 원래 분야가 현재 유저 분야에 포함되는지
+  const canEditCategory = !isEditing || !originalCategory || userSubFields.includes(originalCategory);
+
+  // 분야 변경 핸들러 (변경 시 경고)
+  const handleCategoryChange = (newCategory: string) => {
+    if (isEditing && selectedCategory && newCategory !== selectedCategory) {
+      const doChange = () => {
+        setMetadata({});
+        setSelectedCategory(newCategory);
+      };
+      if (Platform.OS === 'web') {
+        if (window.confirm('분야를 변경하면 입력한 세부 정보가 초기화됩니다.\n변경하시겠습니까?')) {
+          doChange();
+        }
+      } else {
+        Alert.alert(
+          '분야 변경',
+          '분야를 변경하면 입력한 세부 정보가 초기화됩니다.\n변경하시겠습니까?',
+          [
+            { text: '취소', style: 'cancel' },
+            { text: '변경', style: 'destructive', onPress: doChange },
+          ],
+        );
+      }
+    } else {
+      setSelectedCategory(newCategory);
+    }
+  };
 
   const formType: FormType = getFormType(selectedCategory);
   // onlyFor 필터: 선택된 세부분야에 해당하는 필드만 표시
@@ -120,6 +150,7 @@ export default function CreateArtworkScreen() {
 
         // category 로드
         const cat = (data as any).category as string | null;
+        setOriginalCategory(cat);
         if (cat) {
           setSelectedCategory(cat);
         }
@@ -376,25 +407,39 @@ export default function CreateArtworkScreen() {
           <Text style={[styles.label, { color: C.fg }]}>분야 <Text style={[styles.required, { color: C.gold }]}>*</Text></Text>
 
           {/* 유저의 세부 분야가 있으면 칩으로 표시 */}
-          {userSubFields.length > 0 ? (
+          {userSubFields.length > 0 || (isEditing && !canEditCategory) ? (
             <View style={styles.categoryChipsWrap}>
+              {/* 편집 시: 원래 분야가 유저 분야에 없으면 잠금 상태로 표시 */}
+              {isEditing && !canEditCategory && originalCategory && !userSubFields.includes(originalCategory) && (
+                <View
+                  style={[
+                    styles.categoryChip,
+                    { borderColor: C.gold, backgroundColor: C.goldDim, opacity: 0.7 },
+                  ]}
+                >
+                  <Text style={[styles.categoryChipText, { color: C.gold }]}>{originalCategory}</Text>
+                </View>
+              )}
               {userSubFields.map((sf) => {
                 const active = selectedCategory === sf;
+                const disabled = !canEditCategory;
                 return (
                   <Pressable
                     key={sf}
                     style={[
                       styles.categoryChip,
                       { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.goldDim : C.card },
+                      disabled && { opacity: 0.4 },
                     ]}
-                    onPress={() => setSelectedCategory(sf)}
+                    onPress={() => !disabled && handleCategoryChange(sf)}
+                    disabled={disabled}
                   >
                     <Text style={[styles.categoryChipText, { color: active ? C.gold : C.muted }]}>{sf}</Text>
                   </Pressable>
                 );
               })}
               {/* 미설정 유저 + 세부분야 4개 미만일 때만 "다른 분야" */}
-              {!hadSubFieldOnEntry.current && canAddMore && (
+              {!hadSubFieldOnEntry.current && canAddMore && canEditCategory && (
                 <Pressable
                   style={[styles.categoryChip, { borderColor: C.border, backgroundColor: C.card, borderStyle: 'dashed' }]}
                   onPress={() => setShowFieldPicker(true)}
@@ -421,9 +466,16 @@ export default function CreateArtworkScreen() {
           )}
 
           {/* 분야 미선택 시 빨간 안내 */}
-          {!selectedCategory && (
+          {!selectedCategory && canEditCategory && (
             <Text style={styles.fieldWarning}>
               분야를 선택해야 작품을 등록할 수 있습니다.
+            </Text>
+          )}
+
+          {/* 분야 변경 불가 안내 */}
+          {isEditing && !canEditCategory && (
+            <Text style={styles.fieldWarning}>
+              현재 작가 분야에 포함되지 않은 작품은 분야를 변경할 수 없습니다.
             </Text>
           )}
 

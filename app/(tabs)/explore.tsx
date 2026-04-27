@@ -70,6 +70,7 @@ type FeedItem = {
   aspect?: number; // width/height ratio for masonry
   tags?: string[];
   exhibition_num?: number; // 3D exhibition number for direct entry
+  category?: string;
 };
 
 /* ── 배경 떠다니는 도형 ── */
@@ -281,7 +282,7 @@ export default function ExploreScreen() {
     // 1. Artworks (최신 30개)
     const { data: aw } = await supabase
       .from('artworks')
-      .select('id, title, image_url, user_id, year, medium, tags, width_cm, height_cm')
+      .select('id, title, image_url, user_id, year, medium, tags, width_cm, height_cm, category')
       .order('created_at', { ascending: false })
       .limit(30);
     // Per-user artwork index map
@@ -305,6 +306,7 @@ export default function ExploreScreen() {
         artwork_index: idx,
         tags: a.tags ?? [],
         aspect: Math.max(0.6, Math.min(1.6, w / h)),
+        category: (a as any).category ?? undefined,
       });
     });
 
@@ -758,11 +760,15 @@ export default function ExploreScreen() {
                           style={[styles.masonryImage, { aspectRatio: item.aspect ?? 1 }]}
                           resizeMode="cover"
                         />
-                        {item.type !== 'artwork' && (
+                        {item.type !== 'artwork' ? (
                           <View style={styles.masonryTypeBadge}>
                             <Text style={styles.masonryTypeLabel}>{item.type === 'exhibition' ? '전시관' : '아카이브'}</Text>
                           </View>
-                        )}
+                        ) : item.category ? (
+                          <View style={styles.masonryCategoryBadge}>
+                            <Text style={styles.masonryCategoryLabel}>{item.category}</Text>
+                          </View>
+                        ) : null}
                       </View>
                       <View style={styles.masonryInfo}>
                         <View style={styles.masonryArtistRow}>
@@ -809,11 +815,15 @@ export default function ExploreScreen() {
                           style={[styles.masonryImage, { aspectRatio: item.aspect ?? 1 }]}
                           resizeMode="cover"
                         />
-                        {item.type !== 'artwork' && (
+                        {item.type !== 'artwork' ? (
                           <View style={styles.masonryTypeBadge}>
                             <Text style={styles.masonryTypeLabel}>{item.type === 'exhibition' ? '전시관' : '아카이브'}</Text>
                           </View>
-                        )}
+                        ) : item.category ? (
+                          <View style={styles.masonryCategoryBadge}>
+                            <Text style={styles.masonryCategoryLabel}>{item.category}</Text>
+                          </View>
+                        ) : null}
                       </View>
                       <View style={styles.masonryInfo}>
                         <View style={styles.masonryArtistRow}>
@@ -1176,6 +1186,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#C8A96E',
+    letterSpacing: 0.5,
+  },
+  masonryCategoryBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  masonryCategoryLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fff',
     letterSpacing: 0.5,
   },
   masonryInfo: {

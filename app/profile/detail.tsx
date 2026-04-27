@@ -154,11 +154,22 @@ export default function ProfileDetailScreen() {
   const avatarUrl = profile?.avatar_url;
   const realNameLocked = !!profile?.real_name?.trim();
 
+  const [fieldLimitMsg, setFieldLimitMsg] = useState('');
+  const [subFieldLimitMsg, setSubFieldLimitMsg] = useState('');
+
   /* 분야 카테고리 토글 (최대 2개) — 해제해도 세부분야 유지 */
   const toggleField = (key: string) => {
     setSelectedFields(prev => {
-      if (prev.includes(key)) return prev.filter(k => k !== key);
-      if (prev.length >= 2) return prev;
+      if (prev.includes(key)) {
+        setFieldLimitMsg('');
+        setSubFieldLimitMsg('');
+        return prev.filter(k => k !== key);
+      }
+      if (prev.length >= 2) {
+        setFieldLimitMsg('상위 분야는 최대 2개까지 선택할 수 있습니다. 기존 분야를 해제해주세요.');
+        return prev;
+      }
+      setFieldLimitMsg('');
       return [...prev, key];
     });
   };
@@ -755,6 +766,9 @@ export default function ProfileDetailScreen() {
                   );
                 })}
               </View>
+              {fieldLimitMsg !== '' && (
+                <Text style={{ color: '#e74c3c', fontSize: 12, marginTop: 4, marginLeft: 4 }}>{fieldLimitMsg}</Text>
+              )}
               {/* 세부 분야 선택 (분야별 그룹, 각 분야당 최대 2개) */}
               {selectedFields.length > 0 ? (
                 <>
@@ -772,9 +786,19 @@ export default function ProfileDetailScreen() {
                             return (
                               <Pressable
                                 key={`${field}_${sub}`}
-                                onPress={() => setSelectedSubFields(prev =>
-                                  active ? prev.filter(s => s !== sub) : countForField < 2 ? [...prev, sub] : prev
-                                )}
+                                onPress={() => {
+                                  if (active) {
+                                    setSelectedSubFields(prev => prev.filter(s => s !== sub));
+                                    setSubFieldLimitMsg('');
+                                  } else if (countForField >= 2) {
+                                    setSubFieldLimitMsg(`${field} 분야는 세부분야를 최대 2개까지 선택할 수 있습니다.`);
+                                  } else if (selectedSubFields.length >= 4) {
+                                    setSubFieldLimitMsg('세부 분야는 총 최대 4개까지 선택할 수 있습니다. 기존 세부 분야를 해제해주세요.');
+                                  } else {
+                                    setSelectedSubFields(prev => [...prev, sub]);
+                                    setSubFieldLimitMsg('');
+                                  }
+                                }}
                                 style={[
                                   styles.chip,
                                   { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.gold + '22' : C.bg },
@@ -788,6 +812,9 @@ export default function ProfileDetailScreen() {
                       </View>
                     );
                   })}
+                  {subFieldLimitMsg !== '' && (
+                    <Text style={{ color: '#e74c3c', fontSize: 12, marginTop: 4, marginLeft: 4 }}>{subFieldLimitMsg}</Text>
+                  )}
                 </>
               ) : null}
 
