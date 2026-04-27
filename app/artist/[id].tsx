@@ -45,7 +45,7 @@ import { spendPoints } from '@/lib/points';
 import { sendNotification } from '@/lib/notifications';
 import { WebView } from 'react-native-webview';
 import type { Database } from '@/types/database';
-import { getFormType, META_KEY_LABEL, FORM_META_FIELDS } from '@/constants/artwork-form';
+import { getFormType, META_KEY_LABEL, FORM_META_FIELDS, SUB_FIELDS } from '@/constants/artwork-form';
 import { useVideoSettings } from '@/contexts/video-settings-context';
 
 /* ── 임베드 URL 변환 ── */
@@ -321,6 +321,11 @@ function ArtworkCard({
             style={{ width: '100%', height: imgH }}
             resizeMode="contain"
           />
+          {(artwork as any).category && (
+            <View style={styles.artCardCategoryBadge}>
+              <Text style={styles.artCardCategoryLabel}>{(artwork as any).category}</Text>
+            </View>
+          )}
         </View>
       </Pressable>
       <View style={styles.artInfoRow}>
@@ -909,6 +914,7 @@ export default function ArtistPortfolioScreen() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [artworks, setArtworks] = useState<Artwork[]>([]);
   const [artworksTotalCount, setArtworksTotalCount] = useState(0);
+  const [allCategories, setAllCategories] = useState<string[]>([]);
   const [hasMoreArtworks, setHasMoreArtworks] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const hasMoreRef = useRef(false);
@@ -919,6 +925,7 @@ export default function ArtistPortfolioScreen() {
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string[]>([]);
   const [activeTab, setActiveTab] = useState<'works' | 'collections' | 'exhibitions'>(
     tab === 'exhibitions' ? 'exhibitions' : tab === 'collections' ? 'collections' : 'works',
   );
@@ -1046,15 +1053,22 @@ export default function ArtistPortfolioScreen() {
 
   const loadData = async (uid: string) => {
     setLoading(true);
-    const [profileRes, artworksRes, followCountRes, exhibitionsRes, mouiRes] = await Promise.all([
+    const [profileRes, artworksRes, followCountRes, exhibitionsRes, mouiRes, allCatsRes] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', uid).single(),
       supabase.from('artworks').select('*', { count: 'exact' }).eq('user_id', uid).order('created_at', { ascending: false }).range(0, ARTWORK_PAGE_SIZE - 1),
       supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', uid),
       supabase.from('exhibitions').select('*').eq('user_id', uid).eq('is_published', true).order('created_at', { ascending: false }),
       (supabase as any).from('moui_posts').select('id', { count: 'exact', head: true }).eq('user_id', uid).eq('status', 'open'),
+      supabase.from('artworks').select('category').eq('user_id', uid),
     ]);
 
     if (profileRes.data) setProfile(profileRes.data);
+    // 모든 카테고리 추출
+    if (allCatsRes.data) {
+      const cats = [...new Set(allCatsRes.data.map((r: any) => r.category).filter(Boolean))] as string[];
+      setAllCategories(cats);
+      setSelectedCategoryFilter(cats);
+    }
     const totalArtworks = artworksRes.count ?? 0;
     setArtworksTotalCount(totalArtworks);
     if (artworksRes.data) {
@@ -1489,23 +1503,94 @@ export default function ArtistPortfolioScreen() {
 
                 {/* ── Right: Fields + Buttons ── */}
                 <View style={styles.heroRight}>
-                  <View style={styles.heroFieldRow}>
-                    {fieldItems.length > 0 ? (
-                      fieldItems.map((field) => (
-                        <View key={field} style={[styles.heroFieldChip, { borderColor: 'rgba(200,169,110,0.28)' }]}>
-                          <Text style={styles.heroFieldEmoji}>{FIELD_ICON_MAP[field] ?? '🎯'}</Text>
-                          <Text style={[styles.heroFieldChipText, { color: C.gold }]}>{field}</Text>
-                        </View>
-                      ))
-                    ) : (
-                      <View style={[styles.heroFieldChip, { borderColor: C.border }]}>
-                        <Text style={styles.heroFieldEmoji}>{USER_TYPE_EMOJI[profile.user_type] ?? '👀'}</Text>
-                        <Text style={[styles.heroFieldChipText, { color: C.muted }]}>
-                          {USER_TYPE_LABELS[profile.user_type] ?? profile.user_type}
-                        </Text>
+                  {(() => {
+                    // 모든 분야에 속하지 않는 고아 카테고리 계산
+                    const allMapped = new Set(fieldItems.flatMap(f => SUB_FIELDS[f] ?? []));
+                    const orphanCats = allCategories.filter(c => !allMapped.has(c));
+                    return (
+                      <View style={styles.heroFieldRow}>
+                        {fieldItems.length > 0 ? (
+                          <>
+                            {fieldItems.map((field) => {
+                              const subsOfField = (SUB_FIELDS[field] ?? []).filter(s => allCategories.includes(s));
+                              const allSelected = subsOfField.length > 0 && subsOfField.every(s => selectedCategoryFilter.includes(s));
+                              return (
+                                <Pressable
+                                  key={field}
+                                  style={[styles.heroFieldChip, { borderColor: allSelected ? C.gold : 'rgba(200,169,110,0.28)', backgroundColor: allSelected ? 'rgba(200,169,110,0.18)' : 'rgba(200,169,110,0.1)' }]}
+                                  onPress={() => {
+                                    if (subsOfField.length === 0) return;
+                                    setSelectedCategoryFilter(prev => {
+                                      if (allSelected) return prev.filter(c => !subsOfField.includes(c));
+                                      return [...new Set([...prev, ...subsOfField])];
+                                    });
+                                    setActiveTab('works');
+                                  }}
+                                >
+                                  <Text style={styles.heroFieldEmoji}>{FIELD_ICON_MAP[field] ?? '🎯'}</Text>
+                                  <Text style={[styles.heroFieldChipText, { color: C.gold }]}>{field}</Text>
+                                </Pressable>
+                              );
+                            })}
+                            {orphanCats.length > 0 && (() => {
+                              const allOrphanSelected = orphanCats.every(c => selectedCategoryFilter.includes(c));
+                              return (
+                                <Pressable
+                                  key="__etc"
+                                  style={[styles.heroFieldChip, { borderColor: allOrphanSelected ? C.gold : 'rgba(200,169,110,0.28)', backgroundColor: allOrphanSelected ? 'rgba(200,169,110,0.18)' : 'rgba(200,169,110,0.1)' }]}
+                                  onPress={() => {
+                                    setSelectedCategoryFilter(prev => {
+                                      if (allOrphanSelected) return prev.filter(c => !orphanCats.includes(c));
+                                      return [...new Set([...prev, ...orphanCats])];
+                                    });
+                                    setActiveTab('works');
+                                  }}
+                                >
+                                  <Text style={styles.heroFieldEmoji}>📌</Text>
+                                  <Text style={[styles.heroFieldChipText, { color: C.gold }]}>기타</Text>
+                                </Pressable>
+                              );
+                            })()}
+                          </>
+                        ) : (
+                          <View style={[styles.heroFieldChip, { borderColor: C.border }]}>
+                            <Text style={styles.heroFieldEmoji}>{USER_TYPE_EMOJI[profile.user_type] ?? '👀'}</Text>
+                            <Text style={[styles.heroFieldChipText, { color: C.muted }]}>
+                              {USER_TYPE_LABELS[profile.user_type] ?? profile.user_type}
+                            </Text>
+                          </View>
+                        )}
                       </View>
-                    )}
-                  </View>
+                    );
+                  })()}
+                  {/* 세부 분야 필터 칩 */}
+                  {allCategories.length > 1 && (
+                    <View style={styles.heroFieldRow}>
+                      {allCategories.map((cat) => {
+                        const isActive = selectedCategoryFilter.includes(cat);
+                        return (
+                          <Pressable
+                            key={cat}
+                            style={[
+                              styles.heroFieldChip,
+                              {
+                                borderColor: isActive ? C.gold : C.border,
+                                backgroundColor: isActive ? 'rgba(200,169,110,0.18)' : 'transparent',
+                              },
+                            ]}
+                            onPress={() => {
+                              setSelectedCategoryFilter(prev =>
+                                prev.includes(cat) ? prev.filter(c => c !== cat) : [...prev, cat]
+                              );
+                              setActiveTab('works');
+                            }}
+                          >
+                            <Text style={[styles.heroFieldChipText, { color: isActive ? C.gold : C.muted }]}>{cat}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
                   {snsEntries.length > 0 && (
                     <View style={styles.heroSnsRow}>
                       {snsEntries.map(([key, url]) => {
@@ -1709,9 +1794,13 @@ export default function ArtistPortfolioScreen() {
             )}
             {(() => {
               const selectedCol = selectedCollectionId ? collections.find(c => c.id === selectedCollectionId) : null;
-              const displayArtworks = selectedCol ? selectedCol.artworks : artworks;
+              const baseArtworks = selectedCol ? selectedCol.artworks : artworks;
+              // 카테고리 목록 추출
+              const displayArtworks = selectedCategoryFilter.length > 0
+                ? baseArtworks.filter(a => selectedCategoryFilter.includes((a as any).category))
+                : baseArtworks;
               const sectionTitle = selectedCol ? selectedCol.title.toUpperCase() : 'WORKS';
-              return displayArtworks.length > 0 ? (
+              return baseArtworks.length > 0 ? (
                 <View style={[styles.gallerySection, { maxWidth: MAX_CONTENT_W, alignSelf: 'center', width: '100%' }]}>
                   <Text style={[styles.sectionLabel, { color: C.muted }]}>{sectionTitle}</Text>
                   <View style={[styles.sectionLabelLine, { backgroundColor: C.gold }]} />
@@ -2474,6 +2563,21 @@ const styles = StyleSheet.create({
   artCard: {
     borderRadius: 12,
     overflow: 'hidden',
+  },
+  artCardCategoryBadge: {
+    position: 'absolute',
+    top: 6,
+    left: 6,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  artCardCategoryLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.5,
   },
   artInfoRow: {
     flexDirection: 'row',
