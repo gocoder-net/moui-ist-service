@@ -19,6 +19,7 @@ export type Database = {
           phone_number: string | null;
           bio: string | null;
           field: string | null;
+          sub_field: string | null;
           sns_links: Json;
           avatar_url: string | null;
           region: string | null;
@@ -35,6 +36,7 @@ export type Database = {
           phone_number?: string | null;
           bio?: string | null;
           field?: string | null;
+          sub_field?: string | null;
           sns_links?: Json;
           avatar_url?: string | null;
           region?: string | null;
@@ -48,6 +50,7 @@ export type Database = {
           phone_number?: string | null;
           bio?: string | null;
           field?: string | null;
+          sub_field?: string | null;
           sns_links?: Json;
           avatar_url?: string | null;
           region?: string | null;

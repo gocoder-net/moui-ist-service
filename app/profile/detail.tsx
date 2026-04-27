@@ -31,6 +31,17 @@ const FIELD_CATEGORIES = [
   { key: '공연', icon: '🎭', keywords: ['무용가', '배우', '퍼포먼스 아티스트', '댄서', '안무가', '연극', '뮤지컬', '무용', '퍼포먼스', '행위예술'] },
 ] as const;
 
+const SUB_FIELDS: Record<string, string[]> = {
+  '글': ['소설', '시', '에세이', '웹소설', '극본', '평론', '번역', '칼럼', '기타'],
+  '그림': ['회화', '일러스트', '웹툰/만화', '캘리그래피', '판화', '그래픽디자인', '기타'],
+  '영상': ['영화', '애니메이션', '다큐멘터리', '뮤직비디오', '숏폼', '기타'],
+  '소리': ['작곡', '연주', '보컬', '프로듀싱', '사운드아트', 'DJ', '기타'],
+  '사진': ['순수사진', '상업사진', '다큐멘터리사진', '기타'],
+  '입체/공간': ['조각', '도예/세라믹', '설치미술', '건축', '공예', '기타'],
+  '디지털/인터랙티브': ['미디어아트', '게임', 'AI아트', '제너레이티브', '웹아트', '기타'],
+  '공연': ['연극', '무용', '뮤지컬', '퍼포먼스', '기타'],
+};
+
 function detectFieldFromInput(input: string): { category: string; icon: string } | null {
   const trimmed = input.trim().toLowerCase();
   if (!trimmed || trimmed.length < 2) return null;
@@ -115,6 +126,7 @@ export default function ProfileDetailScreen() {
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [fieldInput, setFieldInput] = useState('');
   const [fieldMessage, setFieldMessage] = useState('');
+  const [selectedSubFields, setSelectedSubFields] = useState<string[]>([]);
   // 지역
   const [regionProvince, setRegionProvince] = useState('');
   const [regionDistrict, setRegionDistrict] = useState('');
@@ -142,22 +154,61 @@ export default function ProfileDetailScreen() {
   const avatarUrl = profile?.avatar_url;
   const realNameLocked = !!profile?.real_name?.trim();
 
-  /* 분야 카테고리 토글 */
+  /* 분야 카테고리 토글 (최대 2개) */
   const toggleField = (key: string) => {
-    setSelectedFields(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    );
+    setSelectedFields(prev => {
+      if (prev.includes(key)) {
+        const subs = SUB_FIELDS[key] ?? [];
+        setSelectedSubFields(p => p.filter(s => !subs.includes(s)));
+        return prev.filter(k => k !== key);
+      }
+      if (prev.length >= 2) return prev;
+      return [...prev, key];
+    });
   };
 
-  /* 세부 분야 입력 → 자동 감지 */
+  /* 세부 분야 입력 → 자동 감지 (대분야 + 세부분야) */
   const handleFieldInput = (text: string) => {
     setFieldInput(text);
+    const trimmed = text.trim().toLowerCase();
+    if (!trimmed || trimmed.length < 2) { setFieldMessage(''); return; }
+
+    // 1. 대분야 매칭
     const match = detectFieldFromInput(text);
     if (match) {
-      setFieldMessage(`작가님은 ${match.icon} ${match.category} 작가님이네요!`);
-      if (!selectedFields.includes(match.category)) {
-        setSelectedFields(prev => [...prev, match.category]);
+      if (!selectedFields.includes(match.category) && selectedFields.length < 2) {
+        setSelectedFields(prev => prev.length < 2 ? [...prev, match.category] : prev);
       }
+    }
+
+    // 2. 세부분야 매칭
+    let subMatch: { field: string; sub: string; icon: string } | null = null;
+    for (const [field, subs] of Object.entries(SUB_FIELDS)) {
+      for (const sub of subs) {
+        if (sub === '기타') continue;
+        if (sub.toLowerCase().includes(trimmed) || trimmed.includes(sub.toLowerCase())) {
+          const cat = FIELD_CATEGORIES.find(c => c.key === field);
+          subMatch = { field, sub, icon: cat?.icon ?? '🎯' };
+          break;
+        }
+      }
+      if (subMatch) break;
+    }
+
+    if (subMatch) {
+      if (!selectedFields.includes(subMatch.field) && selectedFields.length < 2) {
+        setSelectedFields(prev => prev.length < 2 ? [...prev, subMatch!.field] : prev);
+      }
+      if (!selectedSubFields.includes(subMatch.sub)) {
+        const fieldSubs = SUB_FIELDS[subMatch.field] ?? [];
+        setSelectedSubFields(prev => {
+          const countForField = prev.filter(s => fieldSubs.includes(s)).length;
+          return countForField < 2 ? [...prev, subMatch!.sub] : prev;
+        });
+      }
+      setFieldMessage(`${subMatch.icon} ${subMatch.field} → ${subMatch.sub}`);
+    } else if (match) {
+      setFieldMessage(`작가님은 ${match.icon} ${match.category} 작가님이네요!`);
     } else {
       setFieldMessage('');
     }
@@ -329,11 +380,13 @@ export default function ProfileDetailScreen() {
     setSaving(true);
     const snsLinks = buildSnsLinks();
     const fieldValue = selectedFields.length > 0 ? selectedFields.join(', ') : null;
+    const subFieldValue = selectedSubFields.length > 0 ? selectedSubFields.join(', ') : null;
     const regionValue = regionProvince && regionDistrict ? `${regionProvince} ${regionDistrict}` : null;
     const updatePayload: Record<string, any> = {
       name: name || null,
       bio: bio || null,
       field: fieldValue,
+      sub_field: subFieldValue,
       region: regionValue,
       sns_links: snsLinks,
     };
@@ -356,6 +409,8 @@ export default function ProfileDetailScreen() {
     setSelectedFields(parsed);
     setFieldInput('');
     setFieldMessage('');
+    const existingSubField = (profile as any)?.sub_field ?? '';
+    setSelectedSubFields(existingSubField.split(',').map((s: string) => s.trim()).filter(Boolean));
     // 지역 파싱
     const regionParsed = parseRegion((profile as any)?.region);
     setRegionProvince(regionParsed?.province ?? '');
@@ -512,6 +567,14 @@ export default function ProfileDetailScreen() {
                           <View key={trimmed} style={[styles.fieldTag, { backgroundColor: C.gold + '22', borderColor: C.gold }]}>
                             <Text style={{ fontSize: 11 }}>{cat?.icon ?? '🎯'}</Text>
                             <Text style={[styles.fieldTagText, { color: C.gold }]}>{trimmed}</Text>
+                          </View>
+                        );
+                      })}
+                      {(profile as any)?.sub_field && (profile as any).sub_field.split(',').map((sf: string) => {
+                        const trimmedSf = sf.trim();
+                        return (
+                          <View key={trimmedSf} style={[styles.fieldTag, { backgroundColor: C.border, borderColor: C.muted + '44' }]}>
+                            <Text style={[styles.fieldTagText, { color: C.fg }]}>{trimmedSf}</Text>
                           </View>
                         );
                       })}
@@ -689,6 +752,42 @@ export default function ProfileDetailScreen() {
                   );
                 })}
               </View>
+              {/* 세부 분야 선택 (분야별 그룹, 각 분야당 최대 2개) */}
+              {selectedFields.length > 0 ? (
+                <>
+                  <Text style={[styles.fieldLabel, { color: C.muted, marginTop: 16 }]}>세부 분야</Text>
+                  {selectedFields.map(field => {
+                    const cat = FIELD_CATEGORIES.find(c => c.key === field);
+                    const subs = SUB_FIELDS[field] ?? [];
+                    const countForField = selectedSubFields.filter(s => subs.includes(s)).length;
+                    return (
+                      <View key={field} style={{ marginBottom: 12 }}>
+                        <Text style={[styles.fieldHelp, { color: C.mutedLight, marginBottom: 6 }]}>{cat?.icon} {field} (최대 2개)</Text>
+                        <View style={styles.chipGrid}>
+                          {subs.map(sub => {
+                            const active = selectedSubFields.includes(sub);
+                            return (
+                              <Pressable
+                                key={`${field}_${sub}`}
+                                onPress={() => setSelectedSubFields(prev =>
+                                  active ? prev.filter(s => s !== sub) : countForField < 2 ? [...prev, sub] : prev
+                                )}
+                                style={[
+                                  styles.chip,
+                                  { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.gold + '22' : C.bg },
+                                ]}
+                              >
+                                <Text style={[styles.chipText, { color: active ? C.gold : C.muted }]}>{sub}</Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    );
+                  })}
+                </>
+              ) : null}
+
               <Text style={[styles.fieldLabel, { color: C.muted, marginTop: 16 }]}>세부 분야 입력 (자동 분류)</Text>
               <TextInput
                 style={[styles.input, { backgroundColor: C.bg, borderColor: C.border, color: C.fg }]}

@@ -19,7 +19,7 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, realName: string, displayName: string, phoneNumber: string, username: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, realName: string, displayName: string, phoneNumber: string, username: string, field?: string, subField?: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -102,7 +102,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, realName: string, displayName: string, phoneNumber: string, username: string) => {
+  const signUp = async (email: string, password: string, realName: string, displayName: string, phoneNumber: string, username: string, field?: string, subField?: string) => {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -117,11 +117,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     if (error) return { error: error.message };
 
-    // Update profile with user-chosen username
+    // Update profile with user-chosen username + field info
     if (data.user) {
+      const updatePayload: Record<string, any> = { username: username.trim() };
+      if (field) updatePayload.field = field;
+      if (subField) updatePayload.sub_field = subField;
       await supabase
         .from("profiles")
-        .update({ username: username.trim() })
+        .update(updatePayload)
         .eq("id", data.user.id);
     }
 

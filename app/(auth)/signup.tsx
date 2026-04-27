@@ -201,6 +201,29 @@ const diamondStyles = StyleSheet.create({
 
 const normalizePhoneNumber = (value: string) => value.replace(/\D/g, '').slice(0, 11);
 
+/* ── 분야 & 세부분야 데이터 ── */
+const FIELD_CATEGORIES = [
+  { key: '글', icon: '✍️' },
+  { key: '그림', icon: '🎨' },
+  { key: '영상', icon: '🎬' },
+  { key: '소리', icon: '🎵' },
+  { key: '사진', icon: '📷' },
+  { key: '입체/공간', icon: '🗿' },
+  { key: '디지털/인터랙티브', icon: '💻' },
+  { key: '공연', icon: '🎭' },
+] as const;
+
+const SUB_FIELDS: Record<string, string[]> = {
+  '글': ['소설', '시', '에세이', '웹소설', '극본', '평론', '번역', '칼럼', '기타'],
+  '그림': ['회화', '일러스트', '웹툰/만화', '캘리그래피', '판화', '그래픽디자인', '기타'],
+  '영상': ['영화', '애니메이션', '다큐멘터리', '뮤직비디오', '숏폼', '기타'],
+  '소리': ['작곡', '연주', '보컬', '프로듀싱', '사운드아트', 'DJ', '기타'],
+  '사진': ['순수사진', '상업사진', '다큐멘터리사진', '기타'],
+  '입체/공간': ['조각', '도예/세라믹', '설치미술', '건축', '공예', '기타'],
+  '디지털/인터랙티브': ['미디어아트', '게임', 'AI아트', '제너레이티브', '웹아트', '기타'],
+  '공연': ['연극', '무용', '뮤지컬', '퍼포먼스', '기타'],
+};
+
 /* ── 인풋 포커스 애니메이션 ── */
 function AnimatedInput({
   label,
@@ -288,6 +311,8 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  const [selectedSubFields, setSelectedSubFields] = useState<string[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -374,6 +399,8 @@ export default function SignUpScreen() {
       displayName.trim(),
       normalizedPhoneNumber,
       username.trim(),
+      selectedFields.length > 0 ? selectedFields.join(', ') : undefined,
+      selectedSubFields.length > 0 ? selectedSubFields.join(', ') : undefined,
     );
     setLoading(false);
 
@@ -550,6 +577,75 @@ export default function SignUpScreen() {
               required
               delay={750}
             />
+
+            {/* 분야 선택 (선택사항, 복수 선택) */}
+            <Animated.View entering={FadeInDown.delay(790).duration(400).springify()}>
+              <Text style={styles.label}>분야</Text>
+              <Text style={styles.inputHint}>나중에 프로필에서도 변경할 수 있어요. (최대 2개)</Text>
+              <View style={styles.chipGrid}>
+                {FIELD_CATEGORIES.map(cat => {
+                  const active = selectedFields.includes(cat.key);
+                  return (
+                    <Pressable
+                      key={cat.key}
+                      onPress={() => {
+                        if (active) {
+                          setSelectedFields(prev => prev.filter(k => k !== cat.key));
+                          const subs = SUB_FIELDS[cat.key] ?? [];
+                          setSelectedSubFields(prev => prev.filter(s => !subs.includes(s)));
+                        } else if (selectedFields.length < 2) {
+                          setSelectedFields(prev => [...prev, cat.key]);
+                        }
+                      }}
+                      style={[
+                        styles.chip,
+                        { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.goldDim : C.inputBg },
+                      ]}
+                    >
+                      <Text style={styles.chipIcon}>{cat.icon}</Text>
+                      <Text style={[styles.chipText, { color: active ? C.gold : C.muted }]}>{cat.key}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Animated.View>
+
+            {/* 세부 분야 선택 (복수 선택) */}
+            {/* 세부 분야 선택 (분야별 그룹, 각 분야당 최대 2개) */}
+            {selectedFields.length > 0 ? (
+              <Animated.View entering={FadeInDown.duration(300).springify()}>
+                <Text style={styles.label}>세부 분야</Text>
+                {selectedFields.map(field => {
+                  const cat = FIELD_CATEGORIES.find(c => c.key === field);
+                  const subs = SUB_FIELDS[field] ?? [];
+                  const countForField = selectedSubFields.filter(s => subs.includes(s)).length;
+                  return (
+                    <View key={field} style={{ marginBottom: 12 }}>
+                      <Text style={[styles.inputHint, { marginBottom: 6 }]}>{cat?.icon} {field} (최대 2개)</Text>
+                      <View style={styles.chipGrid}>
+                        {subs.map(sub => {
+                          const active = selectedSubFields.includes(sub);
+                          return (
+                            <Pressable
+                              key={`${field}_${sub}`}
+                              onPress={() => setSelectedSubFields(prev =>
+                                active ? prev.filter(s => s !== sub) : countForField < 2 ? [...prev, sub] : prev
+                              )}
+                              style={[
+                                styles.chip,
+                                { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.goldDim : C.inputBg },
+                              ]}
+                            >
+                              <Text style={[styles.chipText, { color: active ? C.gold : C.muted }]}>{sub}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  );
+                })}
+              </Animated.View>
+            ) : null}
 
             {error ? (
               <Animated.Text entering={FadeIn.duration(200)} style={styles.error}>
@@ -739,6 +835,29 @@ const styles = StyleSheet.create({
     color: '#000000',
     fontSize: 18,
     fontWeight: '300',
+  },
+
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  chipIcon: {
+    fontSize: 14,
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
 
   footer: {
