@@ -384,7 +384,7 @@ export default function HomeScreen() {
           <QuickCard
             icon="🏛️" title="전시관 만들기" desc="나만의 가상 전시 공간을 만드세요"
             delay={380} done={hasExhibition} C={C}
-            onPress={() => router.push('/exhibition/create')}
+            onPress={() => router.push('/3dexhibition/create')}
           />
           <QuickCard
             icon="📍" title="내 위치 설정하기" desc="활동 지역을 설정하세요"

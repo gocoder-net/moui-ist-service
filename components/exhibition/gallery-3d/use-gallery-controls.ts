@@ -18,10 +18,11 @@ type Params = {
   artworkMeshesRef: React.MutableRefObject<THREE.Mesh[]>;
   canvasSize: React.MutableRefObject<{ width: number; height: number }>;
   onArtworkTap?: (placementId: string) => void;
+  onTourViewStart?: (index: number) => void;
 };
 
 export default function useGalleryControls({
-  cameraRef, dims, artworkMeshesRef, canvasSize, onArtworkTap,
+  cameraRef, dims, artworkMeshesRef, canvasSize, onArtworkTap, onTourViewStart,
 }: Params) {
   const yawRef = useRef(0);       // 0 = facing north (-Z)
   const pitchRef = useRef(0);
@@ -31,7 +32,7 @@ export default function useGalleryControls({
   const lookRef = useRef({ x: 0, y: 0 });
   const speedMultRef = useRef(0.5);   // default level 2 (= SPEED_MULTS[1])
   const lookSpeedRef = useRef(0.2);   // default level 1 (= SPEED_MULTS[0])
-  const autoNavRef = useRef<{ targetYaw: number; targetX: number; targetZ: number } | null>(null);
+  const autoNavRef = useRef<{ targetYaw: number; targetX: number; targetZ: number; targetPitch?: number } | null>(null);
   const autoTourRef = useRef<TourState | null>(null);
   const tourPaceRef = useRef(0.5);  // pace multiplier, default level 1 (TOUR_PACES[0])
   const touchStartRef = useRef({ x: 0, y: 0, locX: 0, locY: 0, time: 0 });
@@ -142,7 +143,12 @@ export default function useGalleryControls({
       while (yawDiff > Math.PI) yawDiff -= 2 * Math.PI;
       while (yawDiff < -Math.PI) yawDiff += 2 * Math.PI;
       yawRef.current += yawDiff * 0.08;
-      pitchRef.current *= 0.9; // level out pitch
+      // pitch: 타겟이 있으면 그쪽으로, 없으면 수평으로
+      if (nav.targetPitch !== undefined) {
+        pitchRef.current += (nav.targetPitch - pitchRef.current) * 0.08;
+      } else {
+        pitchRef.current *= 0.9;
+      }
 
       // Smooth position
       const dx = nav.targetX - camera.position.x;
@@ -205,6 +211,7 @@ export default function useGalleryControls({
         if (dist < 0.1) {
           tour.phase = 'view';
           tour.phaseStart = Date.now();
+          onTourViewStart?.(tour.index);
         }
       } else {
         // Viewing — settle yaw & pitch onto artwork
@@ -214,7 +221,7 @@ export default function useGalleryControls({
         if (Math.abs(yawDiff) > 0.005) yawRef.current += yawDiff * 0.1;
         pitchRef.current += (wp.pitch - pitchRef.current) * 0.1;
 
-        const viewMs = 3000 / pace;
+        const viewMs = 1000 / pace; // 상세뷰 콜백이 처리하므로 빠르게 넘김
         if (Date.now() - tour.phaseStart > viewMs) {
           tour.index = (tour.index + 1) % tour.waypoints.length;
           tour.phase = 'walk';
@@ -286,6 +293,7 @@ export default function useGalleryControls({
     stopTour,
     setTourPace,
     autoTourRef,
+    autoNavRef,
     navigateToWall,
     navigateTo,
     updateCamera,

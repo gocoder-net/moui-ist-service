@@ -1262,6 +1262,22 @@ export default function ArtistPortfolioScreen() {
         <View style={{ height: 80 }} />
       </Animated.ScrollView>
 
+      {/* 탭별 플로팅 버튼 (본인만) */}
+      {isOwner && (
+        <Pressable
+          style={({ pressed }) => [styles.fab, { backgroundColor: C.gold }, pressed && { opacity: 0.8 }]}
+          onPress={() => {
+            if (activeTab === 'works') router.push('/artwork/create');
+            else if (activeTab === 'collections') router.push('/collection/create');
+            else if (activeTab === 'exhibitions') router.push('/3dexhibition/create');
+          }}
+        >
+          <Text style={styles.fabText}>
+            {activeTab === 'works' ? '+ 작품 올리기' : activeTab === 'collections' ? '+ 아카이브 만들기' : '+ 3D 전시관 만들기'}
+          </Text>
+        </Pressable>
+      )}
+
       {/* Bottom tab bar */}
       <BottomTabBar />
 
@@ -1821,6 +1837,26 @@ const styles = StyleSheet.create({
   },
 
   /* Footer */
+  fab: {
+    position: 'absolute',
+    bottom: 70,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 10,
+  },
+  fabText: {
+    color: '#000',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   footer: {
     alignItems: 'center',
     paddingVertical: 48,

@@ -72,7 +72,9 @@ export default function GalleryScene({
   const mp3Url = isYoutubeBgm ? undefined : (bgmUrl || undefined);
   const bgmPlayer = useAudioPlayer(mp3Url);
   const [bgmMuted, setBgmMuted] = useState(false);
+  const [ytVisible, setYtVisible] = useState(true); // 기본 켜짐
   const [ytExpanded, setYtExpanded] = useState(false);
+  const [artListOpen, setArtListOpen] = useState(false);
 
   // Artwork detail overlay state
   const [selectedPlacement, setSelectedPlacement] = useState<Placement3D | null>(null);
@@ -88,12 +90,33 @@ export default function GalleryScene({
     }
   }, [placements]);
 
+  // 자동관람 중 작품 앞 도착 → 상세뷰 열기 → 5초 후 닫기
+  const handleTourViewStart = useCallback((index: number) => {
+    const sorted = [...placements].sort((a, b) => {
+      const wi = ['north', 'east', 'south', 'west'].indexOf(a.wall) - ['north', 'east', 'south', 'west'].indexOf(b.wall);
+      return wi !== 0 ? wi : a.position_x - b.position_x;
+    });
+    const placement = sorted[index];
+    if (!placement || selectedPlacement) return;
+    pausedRef.current = true;
+    setSelectedPlacement(placement);
+    setViewAngle('front');
+    // 5초 후 상세뷰 닫기 → 바로 다음 이동
+    if (autoViewTimerRef.current) clearTimeout(autoViewTimerRef.current);
+    autoViewTimerRef.current = setTimeout(() => {
+      setSelectedPlacement(null);
+      setViewAngle('front');
+      pausedRef.current = false;
+    }, 5000);
+  }, [placements, selectedPlacement]);
+
   const controls = useGalleryControls({
     cameraRef,
     dims,
     artworkMeshesRef,
     canvasSize: canvasSizeRef,
     onArtworkTap: handleArtworkTap,
+    onTourViewStart: handleTourViewStart,
   });
   const wasTouringRef = useRef(false);
 
@@ -137,6 +160,44 @@ export default function GalleryScene({
       }
     });
   }, [placements, dims]);
+
+  // 작품 목록에서 선택 → 카메라 이동 → 상세뷰 열기
+  const goToArtwork = useCallback((placement: typeof placements[0]) => {
+    controls.stopTour();
+    setAutoTour(false);
+
+    // 해당 작품 앞 카메라 위치 계산
+    const EYE_Y = 1.6;
+    const hw = dims.widthM / 2;
+    const hd = dims.depthM / 2;
+    const margin = 0.3;
+    const maxDim = Math.max(placement.width_cm, placement.height_cm) / 100;
+    const vd = Math.min(Math.max(maxDim * 1.5, 1.5), 4.0);
+    const artY = placement.position_y / 100;
+    const pitch = Math.atan2(artY - EYE_Y, vd);
+    const nsLen = dims.widthM * 100;
+    const ewLen = dims.depthM * 100;
+
+    let x = 0, z = 0, yaw = 0;
+    switch (placement.wall) {
+      case 'north': { x = (placement.position_x / nsLen - 0.5) * dims.widthM; z = -hd + vd; yaw = 0; break; }
+      case 'east':  { z = (placement.position_x / ewLen - 0.5) * dims.depthM; x = hw - vd; yaw = -Math.PI / 2; break; }
+      case 'south': { x = (0.5 - placement.position_x / nsLen) * dims.widthM; z = hd - vd; yaw = Math.PI; break; }
+      case 'west':  { z = (0.5 - placement.position_x / ewLen) * dims.depthM; x = -hw + vd; yaw = Math.PI / 2; break; }
+    }
+    x = Math.min(Math.max(x, -hw + margin), hw - margin);
+    z = Math.min(Math.max(z, -hd + margin), hd - margin);
+
+    controls.autoNavRef.current = { targetYaw: yaw, targetX: x, targetZ: z, targetPitch: pitch };
+    setTimeout(() => {
+      pausedRef.current = true;
+      setSelectedPlacement(placement);
+      setViewAngle('front');
+    }, 800);
+  }, [placements, dims, controls]);
+
+  // ── 자동관람 + 상세뷰 모드 ──
+  const autoViewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Pause camera & reset inputs when viewing artwork detail
   useEffect(() => {
@@ -248,11 +309,18 @@ export default function GalleryScene({
     bgmPlayer.volume = 0.5;
   }, [bgmUrl, isYoutubeBgm, bgmPlayer]);
 
-  // BGM (MP3 only): play when intro ends
+  // 작품 상세의 YouTube 여부
+  const artHasYoutube = !!(selectedPlacement && (selectedPlacement.artwork as any)?.metadata?.link?.match?.(/youtu/));
+
+  // BGM (MP3 only): play when intro ends, pause when art YouTube is open
   useEffect(() => {
     if (!bgmUrl || isYoutubeBgm || introPhase !== null) return;
-    bgmPlayer.play();
-  }, [bgmUrl, isYoutubeBgm, introPhase, bgmPlayer]);
+    if (artHasYoutube) {
+      bgmPlayer.pause();
+    } else {
+      bgmPlayer.play();
+    }
+  }, [bgmUrl, isYoutubeBgm, introPhase, bgmPlayer, artHasYoutube]);
 
   // BGM (MP3 only): toggle mute
   useEffect(() => {
@@ -341,7 +409,7 @@ export default function GalleryScene({
         <View style={styles.hud}>
           {/* Top bar: auto tour (left) — compass (center) — exit (right) */}
           <View style={styles.hudTopBar}>
-            <View style={styles.hudTopCol}>
+            <View style={{ flexDirection: 'row', gap: 6 }}>
               <Pressable
                 style={[styles.tourBtn, autoTour && styles.tourBtnActive]}
                 onPress={() => {
@@ -351,23 +419,24 @@ export default function GalleryScene({
                   } else {
                     controls.stopTour();
                     setAutoTour(false);
+                    setSelectedPlacement(null);
+                    if (autoViewTimerRef.current) clearTimeout(autoViewTimerRef.current);
                   }
                 }}
               >
                 <Text style={styles.hudBtnIcon}>👀</Text>
                 <Text style={[styles.hudBtnText, autoTour && { color: C.gold }]}>
-                  {autoTour ? '관람 중' : '자동 관람'}
+                  {autoTour ? '관람중' : '자동'}
                 </Text>
               </Pressable>
-              {autoTour && (
-                <View style={styles.tourSpeedFloat}>
-                  <SpeedControl
-                    onChange={controls.setTourPace}
-                    label="속도"
-                    defaultLevel={0}
-                    speeds={TOUR_PACES}
-                  />
-                </View>
+              {placements.length > 0 && (
+                <Pressable
+                  style={[styles.tourBtn, artListOpen && styles.tourBtnActive]}
+                  onPress={() => setArtListOpen((v) => !v)}
+                >
+                  <Text style={styles.hudBtnIcon}>🖼</Text>
+                  <Text style={[styles.hudBtnText, artListOpen && { color: C.gold }]}>작품</Text>
+                </Pressable>
               )}
             </View>
 
@@ -399,13 +468,11 @@ export default function GalleryScene({
               )}
               {isYoutubeBgm && (
                 <Pressable
-                  style={[styles.exitBtn, ytExpanded && styles.tourBtnActive]}
-                  onPress={() => setYtExpanded((v) => !v)}
+                  style={[styles.exitBtn, ytVisible && styles.tourBtnActive]}
+                  onPress={() => { setYtVisible((v) => !v); if (ytVisible) setYtExpanded(false); }}
                 >
                   <Text style={styles.hudBtnIcon}>▶</Text>
-                  <Text style={[styles.hudBtnText, ytExpanded && { color: C.gold }]}>
-                    {ytExpanded ? '영상 닫기' : '영상'}
-                  </Text>
+                  <Text style={[styles.hudBtnText, ytVisible && { color: C.gold }]}>영상</Text>
                 </Pressable>
               )}
               <Pressable style={styles.exitBtn} onPress={onClose}>
@@ -417,6 +484,43 @@ export default function GalleryScene({
 
           <Text style={styles.dirLabel}>{WALL_LABELS[currentDir]}</Text>
           <Text style={styles.dirSub}>작품 {artCountOnWall}점</Text>
+          {autoTour && (
+            <View style={{ alignSelf: 'center', marginTop: 4 }}>
+              <SpeedControl
+                onChange={controls.setTourPace}
+                label="관람 속도"
+                defaultLevel={0}
+                speeds={TOUR_PACES}
+              />
+            </View>
+          )}
+
+          {/* 작품 목록 슬라이드 */}
+          {artListOpen && placements.length > 0 && (
+            <View style={{ width: '100%', overflow: 'hidden' }}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.artListSlide}
+              contentContainerStyle={{ gap: 8, paddingHorizontal: 8 }}
+            >
+              {placements.map((p) => (
+                <Pressable
+                  key={p.id}
+                  style={({ pressed }) => [styles.artListItem, pressed && { opacity: 0.7 }]}
+                  onPress={() => goToArtwork(p)}
+                >
+                  <Image
+                    source={{ uri: p.artwork.image_url }}
+                    style={styles.artListThumb}
+                    contentFit="cover"
+                  />
+                  <Text style={styles.artListTitle} numberOfLines={1}>{p.artwork.title}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            </View>
+          )}
 
           <View style={styles.hudBottom}>
             <Joystick setJoystick={controls.setJoystick} label="이동" />
@@ -429,25 +533,33 @@ export default function GalleryScene({
         </View>
       )}
 
-      {/* YouTube 미니 플레이어 */}
-      {isYoutubeBgm && youtubeVideoId && introPhase === null && !selectedPlacement && (
-        <View style={[
-          styles.ytPlayer,
-          ytExpanded ? styles.ytPlayerExpanded : styles.ytPlayerMini,
-        ]}>
-          <Pressable
-            style={styles.ytToggleBtn}
-            onPress={() => setYtExpanded((v) => !v)}
-          >
-            <Text style={styles.ytToggleText}>{ytExpanded ? '▼ 축소' : '▲ 확대'}</Text>
-          </Pressable>
-          <WebView
-            source={{ uri: `https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&loop=1&playlist=${youtubeVideoId}&playsinline=1&rel=0` }}
-            style={{ flex: 1, borderRadius: 8 }}
-            allowsInlineMediaPlayback
-            mediaPlaybackRequiresUserAction={false}
-            javaScriptEnabled
-          />
+      {/* YouTube 플레이어 — 버튼 클릭 시 미니로 표시, 확대 가능 */}
+      {isYoutubeBgm && youtubeVideoId && ytVisible && introPhase === null && !((detailInfo?.art as any)?.metadata?.link?.match?.(/youtu/)) && (
+        <View style={ytExpanded ? styles.ytPlayerExpanded : styles.ytPlayerMini}>
+          <View style={styles.ytBtnRow}>
+            <Pressable style={styles.ytExpandBtn} onPress={() => setYtExpanded((v) => !v)}>
+              <Text style={styles.ytBtnText}>{ytExpanded ? '축소' : '확대'}</Text>
+            </Pressable>
+            <Pressable style={styles.ytCloseBtn} onPress={() => { setYtVisible(false); setYtExpanded(false); }}>
+              <Text style={styles.ytBtnText}>✕</Text>
+            </Pressable>
+          </View>
+          {Platform.OS === 'web' ? (
+            <iframe
+              src={`https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&loop=1&playlist=${youtubeVideoId}&playsinline=1&rel=0`}
+              style={{ flex: 1, border: 'none', borderRadius: 8, width: '100%', height: '100%' }}
+              allow="autoplay; encrypted-media"
+              allowFullScreen
+            />
+          ) : (
+            <WebView
+              source={{ uri: `https://www.youtube.com/embed/${youtubeVideoId}?autoplay=1&loop=1&playlist=${youtubeVideoId}&playsinline=1&rel=0` }}
+              style={{ flex: 1, borderRadius: 8 }}
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              javaScriptEnabled
+            />
+          )}
         </View>
       )}
 
@@ -550,6 +662,34 @@ export default function GalleryScene({
                   </Text>
                 </>
               )}
+              {/* 작품 YouTube 영상 */}
+              {(() => {
+                const meta = (detailInfo.art as any).metadata;
+                const link = meta?.link as string | undefined;
+                if (!link) return null;
+                const m = link.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+                if (!m) return null;
+                const vid = m[1];
+                return (
+                  <View style={styles.artYtPlayer}>
+                    {Platform.OS === 'web' ? (
+                      <iframe
+                        src={`https://www.youtube.com/embed/${vid}?autoplay=1&playsinline=1&rel=0`}
+                        style={{ width: '100%', height: '100%', border: 'none', borderRadius: 8 }}
+                        allow="autoplay; encrypted-media"
+                        allowFullScreen
+                      />
+                    ) : (
+                      <WebView
+                        source={{ uri: `https://www.youtube.com/embed/${vid}?autoplay=1&playsinline=1&rel=0` }}
+                        style={{ flex: 1, borderRadius: 8 }}
+                        allowsInlineMediaPlayback
+                        javaScriptEnabled
+                      />
+                    )}
+                  </View>
+                );
+              })()}
             </View>
           </ScrollView>
 
@@ -915,39 +1055,91 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: C.bg },
   canvasArea: { flex: 1, position: 'relative' },
 
-  // YouTube 미니 플레이어
-  ytPlayer: {
+  // YouTube 플레이어
+  ytPlayerMini: {
     position: 'absolute',
     zIndex: 50,
+    top: 12,
+    left: 12,
+    width: 140,
+    height: 100,
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: '#000',
+    borderWidth: 1,
+    borderColor: 'rgba(200,169,110,0.3)',
+  },
+  ytPlayerExpanded: {
+    position: 'absolute',
+    zIndex: 50,
+    top: 12,
+    left: 12,
+    right: 12,
+    height: 240,
     borderRadius: 12,
     overflow: 'hidden',
     backgroundColor: '#000',
     borderWidth: 1,
     borderColor: 'rgba(200,169,110,0.3)',
   },
-  ytPlayerMini: {
-    bottom: 140,
-    right: 12,
-    width: 180,
-    height: 110,
+  ytBtnRow: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    zIndex: 10,
+    flexDirection: 'row',
+    gap: 4,
   },
-  ytPlayerExpanded: {
-    bottom: 80,
-    right: 12,
-    left: 12,
-    height: 240,
+  ytExpandBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
   },
-  ytToggleBtn: {
-    paddingVertical: 4,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.8)',
+  ytCloseBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+    backgroundColor: 'rgba(0,0,0,0.7)',
   },
-  ytToggleText: {
+  ytBtnText: {
     fontSize: 10,
     fontWeight: '700',
     color: '#C8A96E',
-    letterSpacing: 1,
+  },
+  // 작품 목록 슬라이드
+  artListSlide: {
+    maxHeight: 100,
+    marginBottom: 8,
+    flexGrow: 0,
+  },
+  artListItem: {
+    width: 70,
+    alignItems: 'center',
+    gap: 4,
+  },
+  artListThumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(200,169,110,0.3)',
+  },
+  artListTitle: {
+    fontSize: 9,
+    fontWeight: '600',
+    color: '#ccc',
+    textAlign: 'center',
+    width: 64,
+  },
+
+  // 작품 상세 내 YouTube 영상
+  artYtPlayer: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginTop: 12,
   },
 
   // HUD

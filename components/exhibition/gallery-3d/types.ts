@@ -31,6 +31,7 @@ export type Placement3D = {
     image_bottom_url?: string | null;
     image_left_url?: string | null;
     image_right_url?: string | null;
+    metadata?: Record<string, any> | null;
   };
 };
 

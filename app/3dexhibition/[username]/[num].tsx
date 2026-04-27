@@ -3,7 +3,7 @@ import { View, Text, ActivityIndicator, StyleSheet, Pressable } from 'react-nati
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
-import { ExhibitionViewerContent } from '@/app/exhibition/[id]';
+import { ExhibitionViewerContent } from '@/app/3dexhibition/[id]';
 
 const C = { bg: '#000000', gold: '#C8A96E', muted: '#a8a8a8' };
 

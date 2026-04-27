@@ -509,7 +509,7 @@ export function ExhibitionViewerContent({ exhibitionId }: { exhibitionId: string
     if (ex) setExhibition(ex as any);
 
     const { data: arts } = await supabase.from('exhibition_artworks')
-      .select('*, artwork:artworks(id, title, year, medium, width_cm, height_cm, edition, description, image_url, image_top_url, image_bottom_url, image_left_url, image_right_url)')
+      .select('*, artwork:artworks(id, title, year, medium, width_cm, height_cm, edition, description, image_url, image_top_url, image_bottom_url, image_left_url, image_right_url, metadata)')
       .eq('exhibition_id', exhibitionId).order('created_at');
     if (arts) setPlacements(arts as any);
     setLoading(false);

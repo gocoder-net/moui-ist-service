@@ -10,7 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { r2Upload, r2Delete } from '@/lib/r2';
 import { spendPoints } from '@/lib/points';
 import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
+// DocumentPicker 제거됨 (MP3 → YouTube 전환)
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
@@ -66,13 +66,12 @@ export default function CreateExhibitionScreen() {
   const [wallSurfaceMode, setWallSurfaceMode] = useState<'color' | 'image'>('color');
   const [bgmLocalUri, setBgmLocalUri] = useState<string | null>(null);
   const [bgmFileName, setBgmFileName] = useState<string | null>(null);
-  const [bgmMode, setBgmMode] = useState<'mp3' | 'youtube'>('mp3');
   const [bgmYoutubeUrl, setBgmYoutubeUrl] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [editLoading, setEditLoading] = useState(!!editId);
 
   // 포트폴리오 작품 선택
-  type PortfolioArtwork = { id: string; title: string; image_url: string; width_cm: number | null; height_cm: number | null; year: number | null; medium: string | null; edition: string | null; description: string | null };
+  type PortfolioArtwork = { id: string; title: string; image_url: string; width_cm: number | null; height_cm: number | null; year: number | null; medium: string | null; edition: string | null; description: string | null; category?: string | null; metadata?: Record<string, any> | null; tags?: string[] | null };
   const [portfolioArtworks, setPortfolioArtworks] = useState<PortfolioArtwork[]>([]);
   const [portfolioPickerVisible, setPortfolioPickerVisible] = useState(false);
   const [pendingPlacement, setPendingPlacement] = useState<{ wall: Wall; posXcm: number; posYcm: number } | null>(null);
@@ -81,7 +80,7 @@ export default function CreateExhibitionScreen() {
     if (!user) return;
     supabase
       .from('artworks')
-      .select('id, title, image_url, width_cm, height_cm, year, medium, edition, description')
+      .select('id, title, image_url, width_cm, height_cm, year, medium, edition, description, category, metadata, tags')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
       .then(({ data }) => { if (data) setPortfolioArtworks(data); });
@@ -116,7 +115,6 @@ export default function CreateExhibitionScreen() {
         if (ex.poster_image_url) setPosterUri(ex.poster_image_url);
         if (ex.bgm_url) {
           if (ex.bgm_url.includes('youtube.com') || ex.bgm_url.includes('youtu.be')) {
-            setBgmMode('youtube');
             setBgmYoutubeUrl(ex.bgm_url);
           } else {
             setBgmLocalUri(ex.bgm_url);
@@ -340,22 +338,13 @@ export default function CreateExhibitionScreen() {
         posterImageUrl = isExistingUrl(posterUri) ? posterUri : await uploadImage(posterUri);
       }
 
-      // Upload BGM if present (MP3 or YouTube URL)
+      // BGM: YouTube URL
       let bgmUrl: string | null = null;
-      if (bgmMode === 'youtube' && bgmYoutubeUrl.trim()) {
+      if (bgmYoutubeUrl.trim()) {
         bgmUrl = bgmYoutubeUrl.trim();
-      } else if (bgmLocalUri) {
-        if (isExistingUrl(bgmLocalUri)) {
-          bgmUrl = bgmLocalUri;
-        } else {
-          const bgmFn = `${user.id}/${Date.now()}_${Math.random().toString(36).slice(2)}.mp3`;
-          const bgmResponse = await fetch(bgmLocalUri);
-          const bgmBlob = await bgmResponse.blob();
-          const { url: bgmUploadedUrl, error: bgmErr } = await r2Upload('bgm', bgmFn, bgmBlob, 'audio/mpeg');
-          if (!bgmErr && bgmUploadedUrl) {
-            bgmUrl = bgmUploadedUrl;
-          }
-        }
+      } else if (bgmLocalUri && isExistingUrl(bgmLocalUri)) {
+        // 기존 MP3 URL 유지 (수정 모드에서 이전에 MP3로 등록한 경우)
+        bgmUrl = bgmLocalUri;
       }
 
       // Upload wall images
@@ -458,7 +447,7 @@ export default function CreateExhibitionScreen() {
 
       if (!isEditMode) await refreshProfile();
       setLoading(false);
-      router.replace(`/exhibition/${exhibitionId}`);
+      router.replace(`/3dexhibition/${exhibitionId}`);
     } catch (e: any) {
       setLoading(false);
       Alert.alert('오류', e?.message || `전시관 ${isEditMode ? '수정' : '생성'} 중 오류가 발생했습니다.`);
@@ -547,66 +536,21 @@ export default function CreateExhibitionScreen() {
               </Pressable>
             )}
 
-            <Text style={[styles.label, { marginTop: 20 }]}>배경음악 (선택)</Text>
-            <Text style={styles.hint}>전시관 3D 뷰어에서 재생됩니다</Text>
-
-            {/* MP3 / YouTube 토글 */}
-            <View style={styles.surfaceToggleRow}>
-              <Pressable
-                style={[styles.surfaceToggleBtn, bgmMode === 'mp3' && styles.surfaceToggleBtnActive]}
-                onPress={() => setBgmMode('mp3')}>
-                <Text style={[styles.surfaceToggleText, bgmMode === 'mp3' && styles.surfaceToggleTextActive]}>MP3 파일</Text>
+            <Text style={[styles.label, { marginTop: 20 }]}>배경 영상 (선택)</Text>
+            <Text style={styles.hint}>전시관 3D 뷰어에서 YouTube 영상이 재생됩니다</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="YouTube URL 붙여넣기"
+              placeholderTextColor={C.mutedLight}
+              value={bgmYoutubeUrl}
+              onChangeText={setBgmYoutubeUrl}
+              autoCapitalize="none"
+              keyboardType="url"
+            />
+            {bgmYoutubeUrl.trim() && (
+              <Pressable onPress={() => setBgmYoutubeUrl('')} style={{ alignSelf: 'flex-end', marginTop: 4 }}>
+                <Text style={{ fontSize: 11, color: C.muted }}>삭제</Text>
               </Pressable>
-              <Pressable
-                style={[styles.surfaceToggleBtn, bgmMode === 'youtube' && styles.surfaceToggleBtnActive]}
-                onPress={() => setBgmMode('youtube')}>
-                <Text style={[styles.surfaceToggleText, bgmMode === 'youtube' && styles.surfaceToggleTextActive]}>YouTube</Text>
-              </Pressable>
-            </View>
-
-            {bgmMode === 'mp3' ? (
-              bgmLocalUri ? (
-                <View style={styles.bgmRow}>
-                  <View style={styles.bgmInfo}>
-                    <Text style={styles.bgmIcon}>♪</Text>
-                    <Text style={styles.bgmFileName} numberOfLines={1}>{bgmFileName}</Text>
-                  </View>
-                  <Pressable onPress={() => { setBgmLocalUri(null); setBgmFileName(null); }}>
-                    <Text style={{ fontSize: 11, color: C.muted }}>삭제</Text>
-                  </Pressable>
-                </View>
-              ) : (
-                <Pressable
-                  style={styles.bgmPicker}
-                  onPress={async () => {
-                    const result = await DocumentPicker.getDocumentAsync({ type: 'audio/mpeg' });
-                    if (!result.canceled && result.assets[0]) {
-                      setBgmLocalUri(result.assets[0].uri);
-                      setBgmFileName(result.assets[0].name);
-                    }
-                  }}
-                >
-                  <Text style={{ fontSize: 22, color: C.mutedLight }}>♪</Text>
-                  <Text style={{ fontSize: 11, color: C.muted }}>MP3 파일 선택</Text>
-                </Pressable>
-              )
-            ) : (
-              <View style={{ gap: 8 }}>
-                <TextInput
-                  style={styles.input}
-                  placeholder="YouTube URL 붙여넣기"
-                  placeholderTextColor={C.mutedLight}
-                  value={bgmYoutubeUrl}
-                  onChangeText={setBgmYoutubeUrl}
-                  autoCapitalize="none"
-                  keyboardType="url"
-                />
-                {bgmYoutubeUrl.trim() && (
-                  <Pressable onPress={() => setBgmYoutubeUrl('')} style={{ alignSelf: 'flex-end' }}>
-                    <Text style={{ fontSize: 11, color: C.muted }}>삭제</Text>
-                  </Pressable>
-                )}
-              </View>
             )}
 
             <Pressable style={styles.nextBtn} onPress={() => {
@@ -977,58 +921,8 @@ export default function CreateExhibitionScreen() {
 
                         {isSelected && (
                           <View style={styles.sizeSection}>
-                            {/* ── 작품 정보 ── */}
-                            <Text style={[styles.label, { marginTop: 4, marginBottom: 2 }]}>작품 정보</Text>
-
-                            <View style={styles.fieldRow}>
-                              <Text style={styles.fieldLabel}>제작 연도</Text>
-                              <TextInput style={styles.fieldInput}
-                                placeholder="예: 2024" placeholderTextColor={C.mutedLight}
-                                keyboardType="number-pad" maxLength={4}
-                                value={art.year ? String(art.year) : ''}
-                                onChangeText={(t) => setArtworks(prev => prev.map(a =>
-                                  a.localId === art.localId ? { ...a, year: t ? parseInt(t) || undefined : undefined } : a))}
-                              />
-                            </View>
-
-                            <View style={styles.fieldRow}>
-                              <Text style={styles.fieldLabel}>재료/기법</Text>
-                              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
-                                <View style={{ flexDirection: 'row', gap: 6 }}>
-                                  {MEDIUM_OPTIONS.map(m => (
-                                    <Pressable key={m}
-                                      style={[styles.mediumChip, art.medium === m && styles.mediumChipSel]}
-                                      onPress={() => setArtworks(prev => prev.map(a =>
-                                        a.localId === art.localId ? { ...a, medium: art.medium === m ? undefined : m } : a))}>
-                                      <Text style={[styles.mediumChipText, art.medium === m && styles.mediumChipTextSel]}>{m}</Text>
-                                    </Pressable>
-                                  ))}
-                                </View>
-                              </ScrollView>
-                            </View>
-
-                            <View style={styles.fieldRow}>
-                              <Text style={styles.fieldLabel}>에디션 (판화 등)</Text>
-                              <TextInput style={styles.fieldInput}
-                                placeholder="예: 1/10, AP" placeholderTextColor={C.mutedLight}
-                                value={art.edition || ''}
-                                onChangeText={(t) => setArtworks(prev => prev.map(a =>
-                                  a.localId === art.localId ? { ...a, edition: t || undefined } : a))}
-                              />
-                            </View>
-
-                            <View style={styles.fieldRow}>
-                              <Text style={styles.fieldLabel}>작품 설명</Text>
-                              <TextInput style={[styles.fieldInput, { minHeight: 50, textAlignVertical: 'top' }]}
-                                placeholder="작품에 대한 설명" placeholderTextColor={C.mutedLight}
-                                multiline value={art.description || ''}
-                                onChangeText={(t) => setArtworks(prev => prev.map(a =>
-                                  a.localId === art.localId ? { ...a, description: t || undefined } : a))}
-                              />
-                            </View>
-
-                            {/* ── 전시 크기 (벽면 배치) ── */}
-                            <Text style={[styles.label, { marginTop: 14, marginBottom: 2 }]}>전시 크기 · 위치</Text>
+                            {/* ── 전시 크기 (벽면 배치) — 항상 표시 ── */}
+                            <Text style={[styles.label, { marginTop: 4, marginBottom: 2 }]}>전시 크기 · 위치</Text>
 
                             {[
                               { label: '가로', key: 'widthCm' as const, min: 10, max: 300 },
@@ -1061,22 +955,73 @@ export default function CreateExhibitionScreen() {
                             </View>
 
                             {/* ── 다중 각도 ── */}
-                            <Text style={[styles.label, { marginTop: 14, marginBottom: 6 }]}>다른 각도 사진 (선택)</Text>
-                            <View style={styles.angleRow}>
-                              {(['top', 'bottom', 'left', 'right'] as const).map(angle => {
-                                const key = `${angle}Uri` as keyof PlacedArtwork;
-                                const has = !!art[key];
-                                const labels = { top: '위', bottom: '아래', left: '좌', right: '우' };
-                                return (
-                                  <Pressable key={angle} style={[styles.angleBox, has && styles.angleBoxFilled]}
-                                    onPress={() => pickAngleImage(angle)}>
-                                    {has ? <Image source={{ uri: art[key] as string }} style={styles.angleImg} contentFit="cover" />
-                                      : <Text style={styles.anglePlus}>+</Text>}
-                                    <Text style={styles.angleLabel}>{labels[angle]}</Text>
-                                  </Pressable>
-                                );
-                              })}
-                            </View>
+                            {/* ── 작품 정보 (접기/펼치기) ── */}
+                            <Pressable
+                              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, paddingVertical: 8, borderTopWidth: 1, borderTopColor: C.border }}
+                              onPress={() => setArtworks(prev => prev.map(a =>
+                                a.localId === art.localId ? { ...a, _infoOpen: !(a as any)._infoOpen } : a))}
+                            >
+                              <Text style={[styles.label, { marginTop: 0, marginBottom: 0 }]}>작품 정보</Text>
+                              <Text style={{ fontSize: 12, color: C.muted }}>{(art as any)._infoOpen ? '▲ 접기' : '▼ 펼치기'}</Text>
+                            </Pressable>
+
+                            {(art as any)._infoOpen && (() => {
+                              const info: { label: string; value: string }[] = [];
+                              if (art.year) info.push({ label: '제작 연도', value: String(art.year) });
+                              if (art.medium) info.push({ label: '재료/기법', value: art.medium });
+                              if (art.edition) info.push({ label: '에디션', value: art.edition });
+                              if (art.description) info.push({ label: '설명', value: art.description });
+                              // 포트폴리오에서 가져온 작품의 메타데이터 표시
+                              if (art.existingArtworkId) {
+                                const pa = portfolioArtworks.find(p => p.id === art.existingArtworkId) as any;
+                                if (pa?.category) info.push({ label: '분야', value: pa.category });
+                                if (pa?.metadata) {
+                                  const meta = pa.metadata as Record<string, string>;
+                                  if (meta.genre) info.push({ label: '장르', value: meta.genre });
+                                  if (meta.duration) info.push({ label: '러닝타임', value: meta.duration });
+                                  if (meta.role) info.push({ label: '역할', value: meta.role });
+                                  if (meta.venue) info.push({ label: '공연장', value: meta.venue });
+                                  if (meta.instruments) info.push({ label: '악기/도구', value: meta.instruments });
+                                  if (meta.publisher) info.push({ label: '출판사', value: meta.publisher });
+                                  if (meta.page_count) info.push({ label: '분량', value: meta.page_count });
+                                  if (meta.technique) info.push({ label: '기법', value: meta.technique });
+                                  if (meta.link) info.push({ label: '링크', value: meta.link });
+                                }
+                                if (pa?.tags?.length > 0) info.push({ label: '태그', value: pa.tags.join(', ') });
+                              }
+                              return (
+                                <View style={{ gap: 8 }}>
+                                  {info.length > 0 ? info.map((item, i) => (
+                                    <View key={i} style={styles.fieldRow}>
+                                      <Text style={styles.fieldLabel}>{item.label}</Text>
+                                      <Text style={[styles.fieldInput, { paddingVertical: 10, color: C.fg }]}>{item.value}</Text>
+                                    </View>
+                                  )) : (
+                                    <Text style={{ fontSize: 12, color: C.muted, fontStyle: 'italic', paddingVertical: 8 }}>
+                                      등록된 작품 정보가 없습니다
+                                    </Text>
+                                  )}
+
+                                  {/* 다른 각도 사진 */}
+                                  <Text style={[styles.label, { marginTop: 6, marginBottom: 6 }]}>다른 각도 사진 (선택)</Text>
+                                  <View style={styles.angleRow}>
+                                    {(['top', 'bottom', 'left', 'right'] as const).map(angle => {
+                                      const key = `${angle}Uri` as keyof PlacedArtwork;
+                                      const has = !!art[key];
+                                      const labels = { top: '위', bottom: '아래', left: '좌', right: '우' };
+                                      return (
+                                        <Pressable key={angle} style={[styles.angleBox, has && styles.angleBoxFilled]}
+                                          onPress={() => pickAngleImage(angle)}>
+                                          {has ? <Image source={{ uri: art[key] as string }} style={styles.angleImg} contentFit="cover" />
+                                            : <Text style={styles.anglePlus}>+</Text>}
+                                          <Text style={styles.angleLabel}>{labels[angle]}</Text>
+                                        </Pressable>
+                                      );
+                                    })}
+                                  </View>
+                                </View>
+                              );
+                            })()}
                           </View>
                         )}
                       </View>

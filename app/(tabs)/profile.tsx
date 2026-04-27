@@ -691,7 +691,7 @@ export default function ProfileScreen() {
                 )}
                 <Pressable
                   style={({ pressed }) => [s.exNewBtn, { borderColor: C.gold }, pressed && { opacity: 0.7 }]}
-                  onPress={() => router.push('/exhibition/create')}
+                  onPress={() => router.push('/3dexhibition/create')}
                 >
                   <Text style={[s.exNewBtnText, { color: C.gold }]}>+ 새 전시관</Text>
                 </Pressable>
@@ -725,10 +725,10 @@ export default function ProfileScreen() {
                       if (num && profile?.username) {
                         router.push(`/3dexhibition/${profile.username}/${num}`);
                       } else {
-                        router.push(`/exhibition/${item.id}`);
+                        router.push(`/3dexhibition/${item.id}`);
                       }
                     }}
-                    onEdit={() => router.push(`/exhibition/create?editId=${item.id}`)}
+                    onEdit={() => router.push(`/3dexhibition/create?editId=${item.id}`)}
                     onDelete={() => handleDelete(item.id)}
                   />
                 ))}
