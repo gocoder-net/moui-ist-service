@@ -7,13 +7,17 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://xtcyfuizbdegshaujfof.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_WN9dxPYrr5Vfwq4a_9svlA_1xIK5w1Z"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_WN9dxPYrr5Vfwq4a_9svlA_1xIK5w1Z",
+        "EXPO_PUBLIC_R2_WORKER_URL": "https://moui-ist-r2.gocoder-net.workers.dev",
+        "EXPO_PUBLIC_R2_API_TOKEN": "moui-r2-secret-2026"
       }
     },
     "production": {
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://xtcyfuizbdegshaujfof.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_WN9dxPYrr5Vfwq4a_9svlA_1xIK5w1Z"
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_WN9dxPYrr5Vfwq4a_9svlA_1xIK5w1Z",
+        "EXPO_PUBLIC_R2_WORKER_URL": "https://moui-ist-r2.gocoder-net.workers.dev",
+        "EXPO_PUBLIC_R2_API_TOKEN": "moui-r2-secret-2026"
       }
     }
   }
