@@ -27,7 +27,10 @@ import Animated, {
   FadeInDown,
   interpolateColor,
 } from 'react-native-reanimated';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { useAuth } from '@/contexts/auth-context';
+import { supabase } from '@/lib/supabase';
 import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
 import { FloatingShape } from '@/components/ui/FloatingShape';
 
@@ -130,6 +133,50 @@ export default function LoginScreen() {
     shadowOpacity: 0.15 + btnGlow.value * 0.15,
     shadowRadius: 12 + btnGlow.value * 8,
   }));
+
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError('');
+    try {
+      if (Platform.OS === 'web') {
+        // 웹: 페이지 리디렉션 방식
+        const { error: oauthError } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: {
+            redirectTo: window.location.origin,
+          },
+        });
+        if (oauthError) setError('Google 로그인에 실패했습니다.');
+      } else {
+        // 네이티브: 브라우저 팝업 방식
+        const redirectTo = Linking.createURL('/');
+        const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo, skipBrowserRedirect: true },
+        });
+        if (oauthError || !data.url) {
+          setError('Google 로그인 준비에 실패했습니다.');
+          setGoogleLoading(false);
+          return;
+        }
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        if (result.type === 'success' && result.url) {
+          const params = new URLSearchParams(new URL(result.url).hash.substring(1));
+          const accessToken = params.get('access_token');
+          const refreshToken = params.get('refresh_token');
+          if (accessToken && refreshToken) {
+            await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+          }
+        }
+      }
+    } catch (err: any) {
+      setError(`Google 로그인 오류: ${err?.message ?? '알 수 없는 오류'}`);
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
@@ -273,7 +320,28 @@ export default function LoginScreen() {
               </Pressable>
             </Animated.View>
 
-            <Animated.View entering={FadeIn.delay(650).duration(300)}>
+            {/* 구분선 */}
+            <Animated.View entering={FadeIn.delay(600).duration(300)} style={styles.orDivider}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>또는</Text>
+              <View style={styles.orLine} />
+            </Animated.View>
+
+            {/* Google 로그인 */}
+            <Animated.View entering={FadeInDown.delay(650).duration(400).springify()}>
+              <Pressable
+                onPress={handleGoogleLogin}
+                disabled={googleLoading}
+                style={({ pressed }) => [styles.googleBtn, pressed && { opacity: 0.8 }, googleLoading && { opacity: 0.6 }]}
+              >
+                <Text style={styles.googleIcon}>G</Text>
+                <Text style={styles.googleBtnText}>
+                  {googleLoading ? 'Google 로그인 중...' : 'Google로 로그인'}
+                </Text>
+              </Pressable>
+            </Animated.View>
+
+            <Animated.View entering={FadeIn.delay(750).duration(300)}>
               <Pressable
                 onPress={() =>
                   Alert.alert(
@@ -441,6 +509,44 @@ const styles = StyleSheet.create({
     fontWeight: '300',
   },
 
+  orDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: C.border,
+  },
+  orText: {
+    fontSize: 12,
+    color: C.muted,
+    fontWeight: '600',
+  },
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    backgroundColor: C.inputBg,
+  },
+  googleIcon: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#4285F4',
+  },
+  googleBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: C.fg,
+    letterSpacing: 0.5,
+  },
   forgotText: {
     fontSize: 13,
     color: C.gold,

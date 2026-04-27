@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -25,6 +26,8 @@ import Animated, {
   FadeInDown,
   interpolateColor,
 } from 'react-native-reanimated';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
 import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
@@ -251,6 +254,14 @@ export default function SignUpScreen() {
 
     if (result.error) {
       setError(result.error);
+    } else {
+      // 가입 성공 — 이메일 인증 안내
+      if (Platform.OS === 'web') {
+        window.alert('가입이 완료되었습니다!\n이메일 인증 링크를 확인해주세요.');
+      } else {
+        Alert.alert('가입 완료', '이메일 인증 링크를 확인해주세요.');
+      }
+      router.replace('/(auth)/login');
     }
   };
 
@@ -426,7 +437,7 @@ export default function SignUpScreen() {
             {/* 분야 선택 (선택사항, 복수 선택) */}
             <Animated.View entering={FadeInDown.delay(790).duration(400).springify()}>
               <Text style={styles.label}>분야</Text>
-              <Text style={styles.inputHint}>나중에 프로필에서도 변경할 수 있어요. (최대 2개)</Text>
+              {/*<Text style={styles.inputHint}>나중에 프로필에서도 변경할 수 있어요. (최대 2개)</Text>*/}
               <View style={styles.chipGrid}>
                 {FIELD_CATEGORIES.map(cat => {
                   const active = selectedFields.includes(cat.key);
@@ -520,10 +531,57 @@ export default function SignUpScreen() {
                 </Animated.View>
               </Pressable>
             </Animated.View>
+
+            {/* 구분선 */}
+            <Animated.View entering={FadeIn.delay(900).duration(300)} style={styles.orDivider}>
+              <View style={styles.orLine} />
+              <Text style={styles.orText}>또는</Text>
+              <View style={styles.orLine} />
+            </Animated.View>
+
+            {/* Google 회원가입 */}
+            <Animated.View entering={FadeInDown.delay(950).duration(400).springify()}>
+              <Pressable
+                onPress={async () => {
+                  setError('');
+                  try {
+                    if (Platform.OS === 'web') {
+                      const { error: oauthError } = await supabase.auth.signInWithOAuth({
+                        provider: 'google',
+                        options: { redirectTo: window.location.origin },
+                      });
+                      if (oauthError) setError('Google 로그인에 실패했습니다.');
+                    } else {
+                      const redirectTo = Linking.createURL('/');
+                      const { data, error: oauthError } = await supabase.auth.signInWithOAuth({
+                        provider: 'google',
+                        options: { redirectTo, skipBrowserRedirect: true },
+                      });
+                      if (oauthError || !data.url) { setError('Google 로그인 준비에 실패했습니다.'); return; }
+                      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+                      if (result.type === 'success' && result.url) {
+                        const params = new URLSearchParams(new URL(result.url).hash.substring(1));
+                        const accessToken = params.get('access_token');
+                        const refreshToken = params.get('refresh_token');
+                        if (accessToken && refreshToken) {
+                          await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+                        }
+                      }
+                    }
+                  } catch (err: any) {
+                    setError(`Google 오류: ${err?.message ?? '알 수 없는 오류'}`);
+                  }
+                }}
+                style={({ pressed }) => [styles.googleBtn, pressed && { opacity: 0.8 }]}
+              >
+                <Text style={styles.googleIcon}>G</Text>
+                <Text style={styles.googleBtnText}>Google로 시작하기</Text>
+              </Pressable>
+            </Animated.View>
           </View>
 
           {/* 하단 */}
-          <Animated.View entering={FadeIn.delay(950).duration(400)} style={styles.footer}>
+          <Animated.View entering={FadeIn.delay(1050).duration(400)} style={styles.footer}>
             <View style={styles.footerRow}>
               <Text style={styles.footerText}>이미 계정이 있으신가요?</Text>
               <Pressable onPress={() => router.replace('/(auth)/login')} hitSlop={8}>
@@ -724,5 +782,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: C.gold,
+  },
+  orDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: C.border,
+  },
+  orText: {
+    fontSize: 12,
+    color: C.muted,
+    fontWeight: '600',
+  },
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 16,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    backgroundColor: C.inputBg,
+  },
+  googleIcon: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#4285F4',
+  },
+  googleBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: C.fg,
+    letterSpacing: 0.5,
   },
 });
