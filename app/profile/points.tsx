@@ -8,6 +8,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { Icon } from '@/components/ui/Icon';
 
 type PointEntry = {
   id: string;
@@ -19,10 +20,10 @@ type PointEntry = {
 };
 
 const TYPE_ICON: Record<string, string> = {
-  mission: '🎯',
-  reward: '🎁',
-  purchase: '💰',
-  spend: '🛒',
+  mission: 'crosshair',
+  reward: 'gift',
+  purchase: 'coins',
+  spend: 'shopping-cart',
 };
 
 export default function PointsHistoryScreen() {
@@ -58,7 +59,7 @@ export default function PointsHistoryScreen() {
       <Animated.View entering={FadeInDown.delay(index * 50).duration(300)}>
         <View style={[styles.historyItem, { backgroundColor: C.card }]}>
           <View style={[styles.historyIconWrap, { backgroundColor: C.bg }]}>
-            <Text style={styles.historyIcon}>{TYPE_ICON[item.type] ?? '💎'}</Text>
+            <Icon name={TYPE_ICON[item.type] ?? 'diamond'} size={18} color={C.gold} />
           </View>
           <View style={styles.historyInfo}>
             <Text style={[styles.historyDesc, { color: C.fg }]}>{item.description}</Text>
@@ -103,7 +104,7 @@ export default function PointsHistoryScreen() {
         </View>
       ) : history.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <Text style={styles.emptyIcon}>💎</Text>
+          <Icon name="diamond" size={40} color={C.gold} />
           <Text style={[styles.emptyText, { color: C.muted }]}>아직 포인트 내역이 없습니다</Text>
         </View>
       ) : (

@@ -31,6 +31,7 @@ import Animated, {
 import { supabase } from '@/lib/supabase';
 import { r2ThumbUrl } from '@/lib/r2';
 import { USER_TYPE_LABELS } from '@/constants/user';
+import { Icon } from '@/components/ui/Icon';
 import { SpinningDiamond } from '@/components/ui/SpinningDiamond';
 import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
 import { FloatingShape } from '@/components/ui/FloatingShape';
@@ -436,9 +437,7 @@ export default function ExploreScreen() {
                   resizeMode="cover"
                 />
               ) : (
-                <Text style={styles.artistAvatarText}>
-                  {item.user_type === 'creator' ? '🎨' : '✏️'}
-                </Text>
+                <Icon name={item.user_type === 'creator' ? 'palette' : 'pencil-simple'} size={15} color={C.gold} />
               )}
             </View>
 
@@ -555,7 +554,7 @@ export default function ExploreScreen() {
       {/* 검색 바 */}
       <Animated.View entering={FadeInDown.delay(260).duration(400).springify()} style={styles.searchWrap}>
         <View style={[styles.searchBar, { borderColor: C.border, backgroundColor: C.card }]}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Icon name="magnifying-glass" size={13} color={C.muted} />
           <TextInput
             style={[styles.searchInput, { color: C.fg }]}
             placeholder="작품을 검색해보세요."
@@ -566,7 +565,7 @@ export default function ExploreScreen() {
           />
           {search.length > 0 && (
             <Pressable onPress={() => setSearch('')}>
-              <Text style={{ color: C.muted, fontSize: 16 }}>✕</Text>
+              <Icon name="x" type="ui" size={16} color={C.muted} />
             </Pressable>
           )}
         </View>
@@ -578,7 +577,7 @@ export default function ExploreScreen() {
                 style={[styles.tagChip, { backgroundColor: C.danger + '20', borderColor: C.danger }]}
                 onPress={() => setSelectedTags(new Set())}
               >
-                <Text style={[styles.tagChipText, { color: C.danger }]}>✕</Text>
+                <Icon name="x" type="ui" size={11} color={C.danger} />
               </Pressable>
             )}
             {trendingTags.map(tag => {

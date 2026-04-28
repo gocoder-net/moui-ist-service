@@ -24,6 +24,7 @@ import {
   FIELD_CATEGORIES,
   SUB_FIELDS,
 } from '@/constants/artwork-form';
+import { Icon } from '@/components/ui/Icon';
 import { showAlert } from '@/lib/utils';
 
 export default function CreateArtworkScreen() {
@@ -566,7 +567,7 @@ export default function CreateArtworkScreen() {
               <Image source={{ uri: imageUri }} style={styles.imagePreview} contentFit="contain" />
             ) : (
               <View style={styles.imagePlaceholder}>
-                <Text style={styles.imagePlaceholderIcon}>🖼️</Text>
+                <Icon name="frame-corners" size={40} color={C.muted} />
                 <Text style={[styles.imagePlaceholderText, { color: C.muted }]}>탭하여 이미지 선택</Text>
               </View>
             )}
@@ -960,9 +961,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 10,
-  },
-  imagePlaceholderIcon: {
-    fontSize: 40,
   },
   imagePlaceholderText: {
     fontSize: 13,

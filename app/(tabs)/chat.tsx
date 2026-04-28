@@ -18,6 +18,7 @@ import { supabase } from '@/lib/supabase';
 import { r2Delete, r2ExtractPath } from '@/lib/r2';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
+import { Icon } from '@/components/ui/Icon';
 
 type ChatProfile = {
   id: string;
@@ -294,17 +295,23 @@ export default function ChatScreen() {
     return null;
   };
 
-  const FIELD_EMOJI: Record<string, string> = { 글: '✍️', 그림: '🎨', 영상: '🎬', 소리: '🎵', 사진: '📷' };
+  const FIELD_ICON: Record<string, string> = { 글: 'pencil-line', 그림: 'palette', 영상: 'film-strip', 소리: 'music-notes', 사진: 'camera' };
   const ProfileMeta = ({ profile }: { profile?: ChatProfile | null }) => {
     if (!profile) return null;
-    const parts: string[] = [];
-    if (profile.field) {
-      const fields = profile.field.split(',').map(f => f.trim()).filter(Boolean);
-      const withEmoji = fields.map(f => `${FIELD_EMOJI[f] ?? '🎯'} ${f}`).join(', ');
-      parts.push(withEmoji);
-    }
-    if (parts.length === 0) return null;
-    return <Text style={[styles.cardMeta, { color: C.mutedLight }]} numberOfLines={1}>{parts.join(' · ')}</Text>;
+    if (!profile.field) return null;
+    const fields = profile.field.split(',').map(f => f.trim()).filter(Boolean);
+    if (fields.length === 0) return null;
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
+        {fields.map((f, i) => (
+          <View key={f} style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+            {i > 0 && <Text style={[styles.cardMeta, { color: C.mutedLight }]}>, </Text>}
+            <Icon name={FIELD_ICON[f] ?? 'crosshair'} size={12} color={C.mutedLight} />
+            <Text style={[styles.cardMeta, { color: C.mutedLight }]}>{f}</Text>
+          </View>
+        ))}
+      </View>
+    );
   };
 
   const Avatar = ({ profile }: { profile?: ChatProfile | null }) => (
@@ -312,7 +319,9 @@ export default function ChatScreen() {
       <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
     ) : (
       <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: C.goldDim }]}>
-        <Text style={{ fontSize: 18 }}>{profile?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+        {profile?.user_type === 'creator'
+          ? <Icon name="palette" size={18} color={C.gold} />
+          : <Icon name="pencil-simple" size={18} color={C.gold} />}
       </View>
     )
   );
@@ -340,7 +349,7 @@ export default function ChatScreen() {
       ) : isEmpty ? (
         <View style={styles.center}>
           <Animated.View entering={FadeInDown.delay(200).duration(500).springify()} style={styles.emptyWrap}>
-            <Text style={styles.emptyIcon}>💬</Text>
+            <Icon name="chat-circle" size={48} color={C.muted} />
             <Text style={[styles.emptyTitle, { color: C.fg }]}>아직 채팅이 없어요</Text>
             <Text style={[styles.emptyDesc, { color: C.muted }]}>
               탐색모의에서 작가를 찾아{'\n'}채팅을 걸어보세요
@@ -373,7 +382,7 @@ export default function ChatScreen() {
                 >
                   <View style={styles.cardRow}>
                     <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: C.goldDim }]}>
-                      <Text style={{ fontSize: 18 }}>🤝</Text>
+                      <Icon name="handshake" size={18} color={C.gold} />
                     </View>
                     <View style={styles.cardInfo}>
                       <View style={styles.nameRow}>
@@ -570,7 +579,6 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   emptyIcon: {
-    fontSize: 48,
     marginBottom: 8,
   },
   emptyTitle: {

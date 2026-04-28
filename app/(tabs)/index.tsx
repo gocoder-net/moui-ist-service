@@ -30,6 +30,7 @@ import Animated, {
 import { timeAgo, getTodayString, getYesterday } from '@/lib/utils';
 import { FloatingShape } from '@/components/ui/FloatingShape';
 import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
+import { Icon } from '@/components/ui/Icon';
 
 /* ── 퀵 액션 카드 (보상 표시 포함) ── */
 function QuickCard({
@@ -43,7 +44,9 @@ function QuickCard({
         style={({ pressed }) => [styles.quickCard, { borderColor: C.border, backgroundColor: C.card }, pressed && { opacity: 0.7, transform: [{ scale: 0.97 }] }, done && { opacity: 0.7, borderColor: 'rgba(200,169,110,0.25)' }]}
         onPress={onPress}
       >
-        <Text style={[styles.quickIcon, done && { opacity: 0.4 }]}>{icon}</Text>
+        <View style={done ? { opacity: 0.4 } : undefined}>
+          <Icon name={icon} size={28} />
+        </View>
         <View style={{ flex: 1 }}>
           <Text style={[styles.quickTitle, { color: C.fg }, done && { textDecorationLine: 'line-through', color: C.muted }]}>{title}</Text>
           <Text style={[styles.quickDesc, { color: C.muted }, done && { opacity: 0.4 }]}>{desc}</Text>
@@ -132,7 +135,7 @@ export default function HomeScreen() {
       });
       await refreshProfile();
       setRegionRewardClaimed(true);
-      const msg = `📍 활동 지역 설정 완료! ${REWARD}모의를 받았습니다!`;
+      const msg = `활동 지역 설정 완료! ${REWARD}모의를 받았습니다!`;
       Platform.OS === 'web' ? window.alert(msg) : Alert.alert('보상 지급', msg);
     }
   }, [user]);
@@ -248,7 +251,7 @@ export default function HomeScreen() {
     await refreshProfile();
     setWelcomeClaimed(true);
     setClaimingWelcome(false);
-    const msg = `🎉 모의스트로 임명되었습니다! ${REWARD}모의를 받았습니다!`;
+    const msg = `모의스트로 임명되었습니다! ${REWARD}모의를 받았습니다!`;
     Platform.OS === 'web' ? window.alert(msg) : Alert.alert('환영합니다!', msg);
   };
 
@@ -332,8 +335,8 @@ export default function HomeScreen() {
     setCheckingIn(false);
 
     const msg = nextDay === 7
-      ? `🎉 7일 연속 출석! ${reward}모의를 받았습니다!`
-      : `✅ ${nextDay}일차 출석! ${reward}모의를 받았습니다.`;
+      ? `7일 연속 출석! ${reward}모의를 받았습니다!`
+      : `${nextDay}일차 출석! ${reward}모의를 받았습니다.`;
     Platform.OS === 'web' ? window.alert(msg) : Alert.alert('출석 완료', msg);
   };
 
@@ -377,22 +380,22 @@ export default function HomeScreen() {
 
         <View style={styles.quickGrid}>
           <QuickCard
-            icon="🎨" title="작품 업로드" desc="포트폴리오에 작품을 등록하세요"
+            icon="palette" title="작품 업로드" desc="포트폴리오에 작품을 등록하세요"
             delay={300} done={hasArtwork} C={C}
             onPress={() => router.push('/artwork/create')}
           />
           <QuickCard
-            icon="🏛️" title="전시관 만들기" desc="나만의 가상 전시 공간을 만드세요"
+            icon="bank" title="전시관 만들기" desc="나만의 가상 전시 공간을 만드세요"
             delay={380} done={hasExhibition} C={C}
             onPress={() => router.push('/3dexhibition/create')}
           />
           <QuickCard
-            icon="📍" title="내 위치 설정하기" desc="활동 지역을 설정하세요"
+            icon="map-pin" title="내 위치 설정하기" desc="활동 지역을 설정하세요"
             delay={460} done={hasRegion} C={C}
             onPress={() => router.push('/profile/detail?focus=region')}
           />
           <QuickCard
-            icon="🎨" title="화면 모드 선택" desc="다크/라이트 모드를 선택하세요"
+            icon="palette" title="화면 모드 선택" desc="다크/라이트 모드를 선택하세요"
             delay={540} done={hasThemeSet} C={C}
             reward={500}
             onPress={async () => {
@@ -430,7 +433,11 @@ export default function HomeScreen() {
                     <Image source={{ uri: n.from_avatar }} style={styles.notifPreviewAvatar} resizeMode="cover" />
                   ) : (
                     <View style={[styles.notifPreviewAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
-                      <Text style={{ fontSize: 10 }}>{n.type === 'like' ? '◆' : n.type === 'comment' ? '💬' : '🔔'}</Text>
+                      {n.type === 'like' ? (
+                        <Text style={{ fontSize: 10 }}>◆</Text>
+                      ) : (
+                        <Icon name={n.type === 'comment' ? 'chat-circle' : 'bell'} size={10} color={C.muted} />
+                      )}
                     </View>
                   )}
                   <Text style={[styles.notifPreviewText, { color: C.fg }]} numberOfLines={1}>{n.title}</Text>
@@ -526,7 +533,7 @@ export default function HomeScreen() {
                       <Image source={{ uri: item.avatar_url }} style={styles.artistFeedAvatar} resizeMode="cover" />
                     ) : (
                       <View style={[styles.artistFeedAvatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={{ fontSize: 18, color: C.fg }}>🎨</Text>
+                        <Icon name="palette" size={18} color={C.gold} />
                       </View>
                     )}
                     <Text style={[styles.artistFeedName, { color: C.fg }]} numberOfLines={1}>{item.name ?? item.username}</Text>

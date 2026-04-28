@@ -12,6 +12,7 @@ import { r2Upload } from '@/lib/r2';
 import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { Icon } from '@/components/ui/Icon';
 import { showAlert } from '@/lib/utils';
 
 export default function VerificationScreen() {
@@ -112,7 +113,7 @@ export default function VerificationScreen() {
               <Image source={{ uri: imageUri }} style={s.previewImage} contentFit="contain" />
             ) : (
               <View style={s.placeholder}>
-                <Text style={[s.placeholderIcon]}>📷</Text>
+                <Icon name="camera" size={32} color={C.muted} />
                 <Text style={[s.placeholderText, { color: C.muted }]}>탭하여 이미지 선택</Text>
               </View>
             )}
@@ -197,7 +198,6 @@ const s = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  placeholderIcon: { fontSize: 36 },
   placeholderText: { fontSize: 14, fontWeight: '600' },
   submitBtn: {
     height: 50,

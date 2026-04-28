@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
 import { r2Upload, r2Delete, r2ExtractPath } from '@/lib/r2';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Icon } from '@/components/ui/Icon';
 import * as ImagePicker from 'expo-image-picker';
 
 type Message = {
@@ -334,7 +335,7 @@ export default function ChatRoomScreen() {
       <Image source={{ uri: profile.avatar_url }} style={styles.msgAvatar} />
     ) : (
       <View style={[styles.msgAvatar, styles.msgAvatarFallback, { backgroundColor: C.goldDim }]}>
-        <Text style={{ fontSize: 14 }}>{profile?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+        <Icon name={profile?.user_type === 'creator' ? 'palette' : 'pencil-simple'} size={14} color={C.gold} />
       </View>
     );
 
@@ -376,7 +377,7 @@ export default function ChatRoomScreen() {
             <Image source={{ uri: otherUser.avatar_url }} style={styles.headerAvatar} />
           ) : (
             <View style={[styles.headerAvatar, styles.headerAvatarFallback, { backgroundColor: C.goldDim }]}>
-              <Text style={{ fontSize: 14 }}>{otherUser?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+              <Icon name={otherUser?.user_type === 'creator' ? 'palette' : 'pencil-simple'} size={18} color={C.gold} />
             </View>
           )}
           <View style={styles.headerTextWrap}>

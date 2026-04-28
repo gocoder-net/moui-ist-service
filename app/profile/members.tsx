@@ -11,6 +11,7 @@ import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import { r2List, r2Delete } from '@/lib/r2';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { Icon } from '@/components/ui/Icon';
 
 type Member = {
   id: string;
@@ -188,7 +189,7 @@ export default function MembersScreen() {
         {/* 검색 */}
         <Animated.View entering={FadeInDown.delay(100).duration(300)} style={{ paddingHorizontal: 16, marginBottom: 8 }}>
           <View style={[styles.searchBar, { backgroundColor: C.card, borderColor: search ? C.gold + '88' : C.border }]}>
-            <Text style={{ color: C.muted, marginRight: 6 }}>🔍</Text>
+            <Icon name="magnifying-glass" size={16} color={C.muted} style={{ marginRight: 6 }} />
             <TextInput
               value={search}
               onChangeText={setSearch}
@@ -217,7 +218,7 @@ export default function MembersScreen() {
                     <Image source={{ uri: m.avatar_url }} style={styles.avatar} />
                   ) : (
                     <View style={[styles.avatar, { backgroundColor: C.border, justifyContent: 'center', alignItems: 'center' }]}>
-                      <Text style={{ fontSize: 16 }}>👤</Text>
+                      <Icon name="user" size={20} color={C.muted} />
                     </View>
                   )}
                   {/* 정보 */}
@@ -242,11 +243,24 @@ export default function MembersScreen() {
                       </Text>
                     )}
                     <View style={styles.metaRow}>
-                      {m.region && <Text style={[styles.meta, { color: C.mutedLight }]}>📍 {m.region}</Text>}
-                      {m.field && <Text style={[styles.meta, { color: C.mutedLight }]}>🎨 {m.field}</Text>}
+                      {m.region && (
+                        <View style={styles.metaItem}>
+                          <Icon name="map-pin" size={12} color={C.mutedLight} />
+                          <Text style={[styles.meta, { color: C.mutedLight }]}>{m.region}</Text>
+                        </View>
+                      )}
+                      {m.field && (
+                        <View style={styles.metaItem}>
+                          <Icon name="palette" size={12} color={C.mutedLight} />
+                          <Text style={[styles.meta, { color: C.mutedLight }]}>{m.field}</Text>
+                        </View>
+                      )}
                     </View>
                     <View style={styles.metaRow}>
-                      <Text style={[styles.meta, { color: C.mutedLight }]}>💰 {m.points.toLocaleString()} MOUI</Text>
+                      <View style={styles.metaItem}>
+                        <Icon name="coins" size={12} color={C.mutedLight} />
+                        <Text style={[styles.meta, { color: C.mutedLight }]}>{m.points.toLocaleString()} MOUI</Text>
+                      </View>
                       <Text style={[styles.meta, { color: C.mutedLight }]}>가입 {formatDate(m.created_at)}</Text>
                     </View>
                   </View>
@@ -333,15 +347,17 @@ export default function MembersScreen() {
                   <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
                     <Pressable
                       onPress={() => setEditVerified(true)}
-                      style={[styles.typeChip, { borderColor: editVerified ? '#22c55e' : C.border, backgroundColor: editVerified ? '#22c55e22' : C.card }]}
+                      style={[styles.typeChip, { borderColor: editVerified ? '#22c55e' : C.border, backgroundColor: editVerified ? '#22c55e22' : C.card, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                     >
-                      <Text style={{ color: editVerified ? '#22c55e' : C.muted, fontSize: 11, fontWeight: '700' }}>✅ 인증</Text>
+                      <Icon name="check-circle" size={14} color={editVerified ? '#22c55e' : C.muted} />
+                      <Text style={{ color: editVerified ? '#22c55e' : C.muted, fontSize: 11, fontWeight: '700' }}>인증</Text>
                     </Pressable>
                     <Pressable
                       onPress={() => setEditVerified(false)}
-                      style={[styles.typeChip, { borderColor: !editVerified ? C.danger : C.border, backgroundColor: !editVerified ? C.danger + '18' : C.card }]}
+                      style={[styles.typeChip, { borderColor: !editVerified ? C.danger : C.border, backgroundColor: !editVerified ? C.danger + '18' : C.card, flexDirection: 'row', alignItems: 'center', gap: 4 }]}
                     >
-                      <Text style={{ color: !editVerified ? C.danger : C.muted, fontSize: 11, fontWeight: '700' }}>❌ 인증 전</Text>
+                      <Icon name="x-circle" size={14} color={!editVerified ? C.danger : C.muted} />
+                      <Text style={{ color: !editVerified ? C.danger : C.muted, fontSize: 11, fontWeight: '700' }}>인증 전</Text>
                     </Pressable>
                   </View>
                 </>
@@ -469,6 +485,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 10,
     flexWrap: 'wrap',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
   },
   meta: {
     fontSize: 11,

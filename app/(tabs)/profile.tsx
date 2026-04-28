@@ -17,8 +17,9 @@ import { supabase } from '@/lib/supabase';
 import { r2Delete, r2ExtractPath, r2ThumbUrl } from '@/lib/r2';
 import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
 import { showConfirm } from '@/lib/utils';
-import { USER_TYPE_LABELS, USER_TYPE_EMOJI } from '@/constants/user';
+import { USER_TYPE_LABELS, USER_TYPE_ICON } from '@/constants/user';
 import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
+import { Icon } from '@/components/ui/Icon';
 import Animated, {
   FadeIn,
   FadeInDown,
@@ -54,7 +55,7 @@ type ArtworkCollection = {
   artwork_count: number;
 };
 
-const ROOM_EMOJI: Record<string, string> = { small: '🏠', medium: '🏛️', large: '🏰' };
+const ROOM_ICON: Record<string, string> = { small: 'house', medium: 'bank', large: 'castle-turret' };
 const ROOM_LABEL: Record<string, string> = { small: '소형', medium: '중형', large: '대형' };
 
 
@@ -68,12 +69,12 @@ function ExhibitionCard({ item, onPress, onEdit, onDelete, C }: { item: Exhibiti
             <Image source={{ uri: r2ThumbUrl(item.poster_image_url) }} style={s.exPoster} contentFit="cover" />
           ) : (
             <View style={[s.exPosterPlaceholder, { backgroundColor: C.bg }]}>
-              <Text style={s.exPosterEmoji}>{ROOM_EMOJI[item.room_type] ?? '🏛️'}</Text>
+              <Icon name={ROOM_ICON[item.room_type] ?? 'bank'} size={40} />
             </View>
           )}
           <View style={s.exBadgeRow}>
             <View style={[s.exBadge, s.exThumbMarkBadge, { borderColor: 'rgba(200,169,110,0.45)' }]}>
-              <Text style={s.exThumbMarkEmoji}>🏛️</Text>
+              <Icon name="bank" size={12} />
             </View>
             <View style={s.exBadge}>
               <Text style={[s.exBadgeText, { color: C.muted }]}>{ROOM_LABEL[item.room_type] ?? item.room_type}</Text>
@@ -122,7 +123,7 @@ function ArtworkPreviewCard({
           <Image source={{ uri: r2ThumbUrl(item.image_url) }} style={s.exPoster} contentFit="cover" />
           <View style={s.exBadgeRow}>
             <View style={[s.exBadge, s.exThumbMarkBadge, { borderColor: 'rgba(200,169,110,0.45)' }]}>
-              <Text style={s.exThumbMarkEmoji}>🖼️</Text>
+              <Icon name="frame-corners" size={12} />
             </View>
           </View>
         </View>
@@ -150,7 +151,6 @@ export default function ProfileScreen() {
   const { colors: C } = useThemeMode();
 
   const userType = profile?.user_type ?? 'audience';
-  const emoji = USER_TYPE_EMOJI[userType];
   const label = USER_TYPE_LABELS[userType];
   const avatarUrl = profile?.avatar_url;
   const verified = (profile as any)?.verified;
@@ -386,7 +386,7 @@ export default function ProfileScreen() {
               onPress={() => router.push('/notifications')}
               style={({ pressed }) => [s.bellBtn, pressed && { opacity: 0.6 }]}
             >
-              <Text style={{ fontSize: 16 }}>🔔</Text>
+              <Icon name="bell" size={16} />
               {unreadCount > 0 && (
                 <View style={s.bellBadge}>
                   <Text style={s.bellBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text>
@@ -397,7 +397,7 @@ export default function ProfileScreen() {
               onPress={() => router.push('/profile/settings')}
               style={({ pressed }) => [s.settingsBtn, pressed && { opacity: 0.6 }]}
             >
-              <Text style={[s.settingsIcon, { color: C.muted }]}>⚙</Text>
+              <Icon name="gear-six" size={24} color={C.muted} />
             </Pressable>
           </View>
         </Animated.View>
@@ -412,7 +412,7 @@ export default function ProfileScreen() {
               {avatarUrl ? (
                 <Image source={{ uri: avatarUrl }} style={s.avatarImage} contentFit="cover" />
               ) : (
-                <Text style={s.avatarEmoji}>{emoji}</Text>
+                <Icon name="camera" size={28} />
               )}
             </View>
             <View style={s.profileInfo}>
@@ -466,7 +466,7 @@ export default function ProfileScreen() {
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.verificationCard, { backgroundColor: C.card }]}>
             {verificationStatus === 'pending' ? (
               <View style={s.verificationRow}>
-                <Text style={s.verificationIcon}>🔍</Text>
+                <Icon name="magnifying-glass" size={20} />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.verificationLabel, { color: C.muted }]}>작가 인증</Text>
                   <Text style={[s.verificationValue, { color: C.fg }]}>심사 중</Text>
@@ -477,7 +477,7 @@ export default function ProfileScreen() {
               </View>
             ) : (
               <View style={s.verificationRow}>
-                <Text style={s.verificationIcon}>✅</Text>
+                <Icon name="check-circle" size={12} color="#22c55e" />
                 <View style={{ flex: 1 }}>
                   <Text style={[s.verificationLabel, { color: C.muted }]}>작가 인증</Text>
                   <Text style={[s.verificationValue, { color: C.fg }]}>
@@ -500,7 +500,7 @@ export default function ProfileScreen() {
         {/* 내 위치 */}
         <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.locationCard, { backgroundColor: C.card }]}>
           <View style={s.locationRow}>
-            <Text style={s.locationIcon}>📍</Text>
+            <Icon name="map-pin" size={20} />
             <View style={{ flex: 1 }}>
               <Text style={[s.locationLabel, { color: C.muted }]}>내 위치</Text>
               <Text style={[s.locationValue, { color: C.fg }]}>
@@ -520,7 +520,10 @@ export default function ProfileScreen() {
         {user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
             <View style={s.exSectionHeader}>
-              <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>🎨 나의 작품</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon name="palette" size={14} color={C.muted} />
+                <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>나의 작품</Text>
+              </View>
               <View style={s.exHeaderRight}>
                 {Platform.OS === 'web' && recentArtworks.length > 1 && (
                   <View style={s.exScrollBtns}>
@@ -552,7 +555,7 @@ export default function ProfileScreen() {
               style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
               onPress={() => router.push(`/artist/${profile?.username ?? user.id}`)}
             >
-              <Text style={s.menuIcon}>🖼️</Text>
+              <View style={s.menuIconWrap}><Icon name="frame-corners" size={18} /></View>
               <Text style={[s.menuLabel, { color: C.fg }]}>내 작품 보기</Text>
               <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
             </Pressable>
@@ -585,7 +588,10 @@ export default function ProfileScreen() {
         {user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
             <View style={s.exSectionHeader}>
-              <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>📂 나의 아카이브</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon name="folder" size={14} color={C.muted} />
+                <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>나의 아카이브</Text>
+              </View>
               <View style={s.exHeaderRight}>
                 {Platform.OS === 'web' && collections.length > 1 && (
                   <View style={s.exScrollBtns}>
@@ -617,7 +623,7 @@ export default function ProfileScreen() {
               style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
               onPress={() => router.push(`/artist/${profile?.username ?? user.id}?tab=collections`)}
             >
-              <Text style={s.menuIcon}>📂</Text>
+              <View style={s.menuIconWrap}><Icon name="folder" size={18} /></View>
               <Text style={[s.menuLabel, { color: C.fg }]}>내 아카이브 보기</Text>
               <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
             </Pressable>
@@ -637,7 +643,7 @@ export default function ProfileScreen() {
                       <Image source={{ uri: r2ThumbUrl(col.cover_image_url) }} style={s.collectionCover} contentFit="cover" />
                     ) : (
                       <View style={[s.collectionCoverEmpty, { backgroundColor: C.bg }]}>
-                        <Text style={{ fontSize: 28 }}>📂</Text>
+                        <Icon name="folder" size={28} />
                       </View>
                     )}
                     <View style={s.collectionInfo}>
@@ -669,7 +675,10 @@ export default function ProfileScreen() {
         {user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
             <View style={s.exSectionHeader}>
-              <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>🏛️ 내 전시관</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon name="bank" size={14} color={C.muted} />
+                <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>내 전시관</Text>
+              </View>
               <View style={s.exHeaderRight}>
                 {Platform.OS === 'web' && exhibitions.length > 1 && (
                   <View style={s.exScrollBtns}>
@@ -701,7 +710,7 @@ export default function ProfileScreen() {
               style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
               onPress={() => router.push(`/artist/${profile?.username ?? user?.id}?tab=exhibitions`)}
             >
-              <Text style={s.menuIcon}>🎫</Text>
+              <View style={s.menuIconWrap}><Icon name="ticket" size={18} /></View>
               <Text style={[s.menuLabel, { color: C.fg }]}>내 전시관 보기</Text>
               <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
             </Pressable>
@@ -741,7 +750,10 @@ export default function ProfileScreen() {
         {user?.id && (
           <Animated.View entering={FadeInDown.delay(nextDelay()).duration(400).springify()} style={[s.exSection, { backgroundColor: C.card }]}>
             <View style={s.exSectionHeader}>
-              <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>🤝 내 모임</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon name="handshake" size={14} color={C.muted} />
+                <Text style={[s.sectionHeader, { color: C.muted, paddingLeft: 0, paddingTop: 0, paddingBottom: 0 }]}>내 모임</Text>
+              </View>
               <Pressable
                 style={({ pressed }) => [s.exNewBtn, { borderColor: C.gold }, pressed && { opacity: 0.7 }]}
                 onPress={() => router.push('/moui/create')}
@@ -753,7 +765,7 @@ export default function ProfileScreen() {
               style={({ pressed }) => [s.menuRow, pressed && { opacity: 0.7 }]}
               onPress={() => router.push('/(tabs)/moui?user=' + (profile?.username ?? '') as any)}
             >
-              <Text style={s.menuIcon}>📋</Text>
+              <View style={s.menuIconWrap}><Icon name="clipboard-text" size={18} /></View>
               <Text style={[s.menuLabel, { color: C.fg }]}>내가 만든 모임</Text>
               <Text style={[s.mouiCount, { color: C.gold }]}>{myMouiCount}</Text>
               <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
@@ -766,7 +778,7 @@ export default function ProfileScreen() {
                 // 참여중 필터는 로그인 후 필터 패널에서 선택
               }}
             >
-              <Text style={s.menuIcon}>🙋</Text>
+              <View style={s.menuIconWrap}><Icon name="hand-waving" size={18} /></View>
               <Text style={[s.menuLabel, { color: C.fg }]}>참여중인 모임</Text>
               <Text style={[s.mouiCount, { color: C.gold }]}>{joinedMouiCount}</Text>
               <Text style={[s.menuArrow, { color: C.muted }]}>›</Text>
@@ -1048,6 +1060,11 @@ const s = StyleSheet.create({
     fontSize: 18,
     width: 32,
     textAlign: 'center',
+  },
+  menuIconWrap: {
+    width: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   menuLabel: {
     flex: 1,

@@ -34,6 +34,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
 import { FloatingShape } from '@/components/ui/FloatingShape';
+import { Icon } from '@/components/ui/Icon';
 
 const C = {
   bg: '#000000',
@@ -51,14 +52,14 @@ const C = {
 type UserType = 'creator' | 'aspiring' | 'audience';
 
 const FIELD_CATEGORIES = [
-  { key: '글', icon: '✍️', keywords: ['소설가', '시인', '에세이스트', '극작가', '평론가', '작가', '글작가', '문학', '수필가', '번역가', '칼럼니스트', '소설', '시', '에세이', '극본', '평론'] },
-  { key: '그림', icon: '🎨', keywords: ['화가', '일러스트레이터', '만화가', '캘리그래퍼', '그래픽 디자이너', '회화', '수채화', '유화', '드로잉', '일러스트', '만화', '캘리그래피', '판화'] },
-  { key: '영상', icon: '🎬', keywords: ['영화감독', '영상작가', '애니메이터', 'VJ', '영상감독', '시네마토그래퍼', 'PD', '영화', '애니메이션', '다큐멘터리', '뮤직비디오'] },
-  { key: '소리', icon: '🎵', keywords: ['작곡가', '연주자', '사운드 아티스트', 'DJ', '뮤지션', '음악가', '성악가', '래퍼', '프로듀서', '작곡', '연주', '보컬', '싱어송라이터'] },
-  { key: '사진', icon: '📷', keywords: ['사진작가', '포토그래퍼', '사진가', '사진'] },
-  { key: '입체/공간', icon: '🗿', keywords: ['조각가', '도예가', '설치미술가', '건축가', '공예가', '금속공예', '목공예', '세라믹', '조각', '도자기', '설치미술', '건축', '도예', '텍스타일'] },
-  { key: '디지털/인터랙티브', icon: '💻', keywords: ['미디어 아티스트', '게임 디자이너', 'AI 아티스트', 'NFT', '코딩 아티스트', '인터랙티브', '뉴미디어', '디지털 아트', '제너레이티브', '웹 아트'] },
-  { key: '공연', icon: '🎭', keywords: ['무용가', '배우', '퍼포먼스 아티스트', '댄서', '안무가', '연극', '뮤지컬', '무용', '퍼포먼스', '행위예술'] },
+  { key: '글', icon: 'pencil-line', keywords: ['소설가', '시인', '에세이스트', '극작가', '평론가', '작가', '글작가', '문학', '수필가', '번역가', '칼럼니스트', '소설', '시', '에세이', '극본', '평론'] },
+  { key: '그림', icon: 'palette', keywords: ['화가', '일러스트레이터', '만화가', '캘리그래퍼', '그래픽 디자이너', '회화', '수채화', '유화', '드로잉', '일러스트', '만화', '캘리그래피', '판화'] },
+  { key: '영상', icon: 'film-strip', keywords: ['영화감독', '영상작가', '애니메이터', 'VJ', '영상감독', '시네마토그래퍼', 'PD', '영화', '애니메이션', '다큐멘터리', '뮤직비디오'] },
+  { key: '소리', icon: 'music-notes', keywords: ['작곡가', '연주자', '사운드 아티스트', 'DJ', '뮤지션', '음악가', '성악가', '래퍼', '프로듀서', '작곡', '연주', '보컬', '싱어송라이터'] },
+  { key: '사진', icon: 'camera', keywords: ['사진작가', '포토그래퍼', '사진가', '사진'] },
+  { key: '입체/공간', icon: 'cube', keywords: ['조각가', '도예가', '설치미술가', '건축가', '공예가', '금속공예', '목공예', '세라믹', '조각', '도자기', '설치미술', '건축', '도예', '텍스타일'] },
+  { key: '디지털/인터랙티브', icon: 'desktop', keywords: ['미디어 아티스트', '게임 디자이너', 'AI 아티스트', 'NFT', '코딩 아티스트', '인터랙티브', '뉴미디어', '디지털 아트', '제너레이티브', '웹 아트'] },
+  { key: '공연', icon: 'mask-happy', keywords: ['무용가', '배우', '퍼포먼스 아티스트', '댄서', '안무가', '연극', '뮤지컬', '무용', '퍼포먼스', '행위예술'] },
 ] as const;
 
 const SUB_FIELDS: Record<string, string[]> = {
@@ -89,14 +90,14 @@ const normalizePhoneNumber = (value: string) => value.replace(/\D/g, '').slice(0
 
 /* ── 선택 카드 ── */
 function SelectionCard({
-  emoji,
+  icon,
   title,
   desc,
   selected,
   onPress,
   delay: enterDelay,
 }: {
-  emoji: string;
+  icon: string;
   title: string;
   desc: string;
   selected: boolean;
@@ -130,7 +131,7 @@ function SelectionCard({
     <Animated.View entering={FadeInDown.delay(enterDelay).duration(400).springify()}>
       <Pressable onPress={onPress}>
         <Animated.View style={[styles.card, cardAnim]}>
-          <Text style={styles.cardEmoji}>{emoji}</Text>
+          <Icon name={icon} size={32} color={C.gold} />
           <View style={styles.cardContent}>
             <Animated.Text style={[styles.cardTitle, titleAnim]}>{title}</Animated.Text>
             <Text style={styles.cardDesc}>{desc}</Text>
@@ -255,7 +256,7 @@ export default function OnboardingScreen() {
       for (const sub of subs) {
         if (sub.toLowerCase().includes(trimmed) || trimmed.includes(sub.toLowerCase())) {
           const cat = FIELD_CATEGORIES.find(c => c.key === field);
-          subMatch = { field, sub, icon: cat?.icon ?? '🎯' };
+          subMatch = { field, sub, icon: cat?.icon ?? 'crosshair' };
           break;
         }
       }
@@ -273,12 +274,12 @@ export default function OnboardingScreen() {
           return countForField < 2 && prev.length < 4 ? [...prev, subMatch!.sub] : prev;
         });
       }
-      setFieldMessage(`${subMatch.icon} ${subMatch.field} → ${subMatch.sub}`);
+      setFieldMessage(`${subMatch.field} → ${subMatch.sub}`);
     } else if (match) {
       setFieldMessage(
         selected === 'aspiring'
-          ? `${match.icon} ${match.category} 분야에 관심이 있으시군요!`
-          : `작가님은 ${match.icon} ${match.category} 작가님이네요!`
+          ? `${match.category} 분야에 관심이 있으시군요!`
+          : `작가님은 ${match.category} 작가님이네요!`
       );
     } else {
       setFieldMessage('');
@@ -404,7 +405,7 @@ export default function OnboardingScreen() {
           {/* 선택 카드 */}
           <View style={styles.cards}>
             <SelectionCard
-              emoji="🎨"
+              icon="palette"
               title="작가"
               desc="작품을 올리고 소통해요"
               selected={selected === 'creator'}
@@ -412,7 +413,7 @@ export default function OnboardingScreen() {
               delay={400}
             />
             <SelectionCard
-              emoji="✏️"
+              icon="pencil-simple"
               title="지망생"
               desc="창작을 배우고 성장해 나가요"
               selected={selected === 'aspiring'}
@@ -420,7 +421,7 @@ export default function OnboardingScreen() {
               delay={500}
             />
             <SelectionCard
-              emoji="👀"
+              icon="eye"
               title="일반"
               desc="작품을 감상하고 작가를 응원해요"
               selected={selected === 'audience'}
@@ -452,7 +453,7 @@ export default function OnboardingScreen() {
                   <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
                 ) : (
                   <View style={[styles.avatarImage, styles.avatarPlaceholder]}>
-                    <Text style={{ fontSize: 32 }}>📷</Text>
+                    <Icon name="camera" size={32} color={C.muted} />
                   </View>
                 )}
                 <View style={styles.avatarEditBadge}>
@@ -529,7 +530,7 @@ export default function OnboardingScreen() {
                           selectedField && styles.chipSelected,
                         ]}
                       >
-                        <Text style={styles.chipIcon}>{cat.icon}</Text>
+                        <Icon name={cat.icon} size={16} color={selectedField ? C.gold : C.muted} />
                         <Text style={[styles.chipText, selectedField && styles.chipTextSelected]}>{cat.key}</Text>
                       </Pressable>
                     );
@@ -554,7 +555,10 @@ export default function OnboardingScreen() {
                       const countForField = selectedSubFields.filter(s => subs.includes(s)).length;
                       return (
                         <View key={field} style={{ marginBottom: 12 }}>
-                          <Text style={{ fontSize: 12, color: C.mutedLight, marginBottom: 6 }}>{cat?.icon} {field} (최대 2개)</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                            <Icon name={cat?.icon ?? 'crosshair'} size={12} color={C.mutedLight} />
+                            <Text style={{ fontSize: 12, color: C.mutedLight }}>{field} (최대 2개)</Text>
+                          </View>
                           <View style={styles.chipGrid}>
                             {subs.map(sub => {
                               const active = selectedSubFields.includes(sub);

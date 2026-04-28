@@ -17,18 +17,19 @@ import { getCreatorVerificationStatusText, getCreatorVerificationResetLabel } fr
 import { REGIONS, PROVINCE_LIST, parseRegion } from '@/constants/regions';
 import { spendPoints } from '@/lib/points';
 import { detectSnsType } from '@/lib/utils';
-import { USER_TYPE_LABELS, USER_TYPE_EMOJI } from '@/constants/user';
+import { USER_TYPE_LABELS, USER_TYPE_ICON } from '@/constants/user';
+import { Icon } from '@/components/ui/Icon';
 
 /* 분야 카테고리 */
 const FIELD_CATEGORIES = [
-  { key: '글', icon: '✍️', keywords: ['소설가', '시인', '에세이스트', '극작가', '평론가', '작가', '글작가', '문학', '수필가', '번역가', '칼럼니스트', '소설', '시', '에세이', '극본', '평론'] },
-  { key: '그림', icon: '🎨', keywords: ['화가', '일러스트레이터', '만화가', '캘리그래퍼', '그래픽 디자이너', '회화', '수채화', '유화', '드로잉', '일러스트', '만화', '캘리그래피', '판화'] },
-  { key: '영상', icon: '🎬', keywords: ['영화감독', '영상작가', '애니메이터', 'VJ', '영상감독', '시네마토그래퍼', 'PD', '영화', '애니메이션', '다큐멘터리', '뮤직비디오'] },
-  { key: '소리', icon: '🎵', keywords: ['작곡가', '연주자', '사운드 아티스트', 'DJ', '뮤지션', '음악가', '성악가', '래퍼', '프로듀서', '작곡', '연주', '보컬', '싱어송라이터'] },
-  { key: '사진', icon: '📷', keywords: ['사진작가', '포토그래퍼', '사진가', '사진'] },
-  { key: '입체/공간', icon: '🗿', keywords: ['조각가', '도예가', '설치미술가', '건축가', '공예가', '금속공예', '목공예', '세라믹', '조각', '도자기', '설치미술', '건축', '도예', '텍스타일'] },
-  { key: '디지털/인터랙티브', icon: '💻', keywords: ['미디어 아티스트', 'AI 아티스트', 'NFT', '코딩 아티스트', '인터랙티브', '뉴미디어', '디지털 아트', '제너레이티브', '웹 아트'] },
-  { key: '공연', icon: '🎭', keywords: ['무용가', '배우', '퍼포먼스 아티스트', '댄서', '안무가', '연극', '뮤지컬', '무용', '퍼포먼스', '행위예술'] },
+  { key: '글', icon: 'pencil-line', keywords: ['소설가', '시인', '에세이스트', '극작가', '평론가', '작가', '글작가', '문학', '수필가', '번역가', '칼럼니스트', '소설', '시', '에세이', '극본', '평론'] },
+  { key: '그림', icon: 'palette', keywords: ['화가', '일러스트레이터', '만화가', '캘리그래퍼', '그래픽 디자이너', '회화', '수채화', '유화', '드로잉', '일러스트', '만화', '캘리그래피', '판화'] },
+  { key: '영상', icon: 'film-strip', keywords: ['영화감독', '영상작가', '애니메이터', 'VJ', '영상감독', '시네마토그래퍼', 'PD', '영화', '애니메이션', '다큐멘터리', '뮤직비디오'] },
+  { key: '소리', icon: 'music-notes', keywords: ['작곡가', '연주자', '사운드 아티스트', 'DJ', '뮤지션', '음악가', '성악가', '래퍼', '프로듀서', '작곡', '연주', '보컬', '싱어송라이터'] },
+  { key: '사진', icon: 'camera', keywords: ['사진작가', '포토그래퍼', '사진가', '사진'] },
+  { key: '입체/공간', icon: 'cube', keywords: ['조각가', '도예가', '설치미술가', '건축가', '공예가', '금속공예', '목공예', '세라믹', '조각', '도자기', '설치미술', '건축', '도예', '텍스타일'] },
+  { key: '디지털/인터랙티브', icon: 'desktop', keywords: ['미디어 아티스트', 'AI 아티스트', 'NFT', '코딩 아티스트', '인터랙티브', '뉴미디어', '디지털 아트', '제너레이티브', '웹 아트'] },
+  { key: '공연', icon: 'mask-happy', keywords: ['무용가', '배우', '퍼포먼스 아티스트', '댄서', '안무가', '연극', '뮤지컬', '무용', '퍼포먼스', '행위예술'] },
 ] as const;
 
 const SUB_FIELDS: Record<string, string[]> = {
@@ -101,7 +102,7 @@ export default function ProfileDetailScreen() {
   }, [params.focus]);
 
   const userType = profile?.user_type ?? 'audience';
-  const emoji = USER_TYPE_EMOJI[userType];
+  const userTypeIcon = USER_TYPE_ICON[userType];
   const label = USER_TYPE_LABELS[userType];
   const avatarUrl = profile?.avatar_url;
   const realNameLocked = !!profile?.real_name?.trim();
@@ -147,7 +148,7 @@ export default function ProfileDetailScreen() {
         if (sub === '기타') continue;
         if (sub.toLowerCase().includes(trimmed) || trimmed.includes(sub.toLowerCase())) {
           const cat = FIELD_CATEGORIES.find(c => c.key === field);
-          subMatch = { field, sub, icon: cat?.icon ?? '🎯' };
+          subMatch = { field, sub, icon: cat?.icon ?? 'crosshair' };
           break;
         }
       }
@@ -165,9 +166,9 @@ export default function ProfileDetailScreen() {
           return countForField < 2 ? [...prev, subMatch!.sub] : prev;
         });
       }
-      setFieldMessage(`${subMatch.icon} ${subMatch.field} → ${subMatch.sub}`);
+      setFieldMessage(`${subMatch.field} → ${subMatch.sub}`);
     } else if (match) {
-      setFieldMessage(`작가님은 ${match.icon} ${match.category} 작가님이네요!`);
+      setFieldMessage(`작가님은 ${match.category} 작가님이네요!`);
     } else {
       setFieldMessage('');
     }
@@ -468,7 +469,7 @@ export default function ProfileDetailScreen() {
                     {avatarUrl ? (
                       <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
                     ) : (
-                      <Text style={styles.avatarEmoji}>{emoji}</Text>
+                      <Icon name={userTypeIcon} size={28} color={C.muted} />
                     )}
                     {uploadingAvatar && (
                       <View style={styles.avatarOverlay}>
@@ -477,7 +478,7 @@ export default function ProfileDetailScreen() {
                     )}
                   </View>
                   <View style={[styles.cameraIcon, { backgroundColor: C.gold }]}>
-                    <Text style={{ fontSize: 10 }}>📷</Text>
+                    <Icon name="camera" size={10} color={C.bg} />
                   </View>
                 </Pressable>
                 <View style={styles.profileInfo}>
@@ -505,25 +506,25 @@ export default function ProfileDetailScreen() {
               {/* 정보 행들 */}
               <View style={styles.infoList}>
                 <View style={styles.infoRow}>
-                  <Text style={styles.infoIcon}>📧</Text>
+                  <View style={styles.infoIcon}><Icon name="envelope-simple" size={16} color={C.muted} /></View>
                   <Text style={[styles.infoText, { color: C.fg }]}>{user?.email}</Text>
                 </View>
                 {createdDate && (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoIcon}>📅</Text>
+                    <View style={styles.infoIcon}><Icon name="calendar-blank" size={16} color={C.muted} /></View>
                     <Text style={[styles.infoText, { color: C.fg }]}>{createdDate} 가입</Text>
                   </View>
                 )}
                 {profile?.field && (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoIcon}>🎯</Text>
+                    <View style={styles.infoIcon}><Icon name="crosshair" size={16} color={C.muted} /></View>
                     <View style={styles.fieldTagRow}>
                       {profile.field.split(',').map((f: string) => {
                         const trimmed = f.trim();
                         const cat = FIELD_CATEGORIES.find(c => c.key === trimmed);
                         return (
                           <View key={trimmed} style={[styles.fieldTag, { backgroundColor: C.gold + '22', borderColor: C.gold }]}>
-                            <Text style={{ fontSize: 11 }}>{cat?.icon ?? '🎯'}</Text>
+                            <Icon name={cat?.icon ?? 'crosshair'} size={11} color={C.gold} />
                             <Text style={[styles.fieldTagText, { color: C.gold }]}>{trimmed}</Text>
                           </View>
                         );
@@ -541,13 +542,13 @@ export default function ProfileDetailScreen() {
                 )}
                 {(profile as any)?.region && (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoIcon}>📍</Text>
+                    <View style={styles.infoIcon}><Icon name="map-pin" size={16} color={C.muted} /></View>
                     <Text style={[styles.infoText, { color: C.fg }]}>{(profile as any).region}</Text>
                   </View>
                 )}
                 {profile?.real_name && (
                   <View style={styles.infoRow}>
-                    <Text style={styles.infoIcon}>👤</Text>
+                    <View style={styles.infoIcon}><Icon name="user" size={16} color={C.muted} /></View>
                     <Text style={[styles.infoText, { color: C.fg }]}>{profile.real_name}</Text>
                   </View>
                 )}
@@ -584,7 +585,7 @@ export default function ProfileDetailScreen() {
                         changingType && !selected && { opacity: 0.4 },
                       ]}
                     >
-                      <Text style={styles.typeChangeEmoji}>{USER_TYPE_EMOJI[t]}</Text>
+                      <Icon name={USER_TYPE_ICON[t]} size={20} color={selected ? C.gold : C.muted} />
                       <Text style={[styles.typeChangeLabel, { color: selected ? C.gold : C.fg }]}>
                         {USER_TYPE_LABELS[t]}
                       </Text>
@@ -613,7 +614,7 @@ export default function ProfileDetailScreen() {
                   const detected = detectSnsType(url);
                   return (
                     <View key={key} style={styles.snsRow}>
-                      <Text style={styles.snsIcon}>{detected.icon}</Text>
+                      <Icon name={detected.icon} type={detected.iconType} size={16} color={C.muted} />
                       <Text style={[styles.snsLabel, { color: C.muted }]}>{detected.label}</Text>
                       <Text style={[styles.snsUrl, { color: C.fg }]} numberOfLines={1}>{url}</Text>
                     </View>
@@ -634,7 +635,7 @@ export default function ProfileDetailScreen() {
                     {avatarUrl ? (
                       <Image source={{ uri: avatarUrl }} style={styles.editAvatarImage} contentFit="cover" />
                     ) : (
-                      <Text style={styles.editAvatarEmoji}>{emoji}</Text>
+                      <Icon name={userTypeIcon} size={36} color={C.muted} />
                     )}
                     {uploadingAvatar && (
                       <View style={styles.avatarOverlay}>
@@ -647,7 +648,10 @@ export default function ProfileDetailScreen() {
                   onPress={pickAvatar}
                   style={({ pressed }) => [styles.changeAvatarBtn, { borderColor: C.border }, pressed && { opacity: 0.7 }]}
                 >
-                  <Text style={[styles.changeAvatarText, { color: C.fg }]}>📷 사진 변경</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Icon name="camera" size={13} color={C.fg} />
+                    <Text style={[styles.changeAvatarText, { color: C.fg }]}>사진 변경</Text>
+                  </View>
                 </Pressable>
               </View>
             </Animated.View>
@@ -661,8 +665,9 @@ export default function ProfileDetailScreen() {
               <View style={styles.fieldLabelRow}>
                 <Text style={[styles.fieldLabel, styles.fieldLabelCompact, { color: C.muted }]}>본명 (필수)</Text>
                 {realNameLocked && (
-                  <View style={[styles.readonlyBadge, { backgroundColor: C.bg, borderColor: C.border }]}>
-                    <Text style={[styles.readonlyBadgeText, { color: C.muted }]}>🔒 수정 불가</Text>
+                  <View style={[styles.readonlyBadge, { backgroundColor: C.bg, borderColor: C.border, flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                    <Icon name="lock" size={11} color={C.muted} />
+                    <Text style={[styles.readonlyBadgeText, { color: C.muted }]}>수정 불가</Text>
                   </View>
                 )}
               </View>
@@ -704,7 +709,7 @@ export default function ProfileDetailScreen() {
                         { borderColor: selected ? C.gold : C.border, backgroundColor: selected ? C.gold + '22' : C.bg },
                       ]}
                     >
-                      <Text style={styles.chipIcon}>{cat.icon}</Text>
+                      <Icon name={cat.icon} size={16} color={selected ? C.gold : C.muted} />
                       <Text style={[styles.chipText, { color: selected ? C.gold : C.muted }]}>{cat.key}</Text>
                     </Pressable>
                   );
@@ -723,7 +728,10 @@ export default function ProfileDetailScreen() {
                     const countForField = selectedSubFields.filter(s => subs.includes(s)).length;
                     return (
                       <View key={field} style={{ marginBottom: 12 }}>
-                        <Text style={[styles.fieldHelp, { color: C.mutedLight, marginBottom: 6 }]}>{cat?.icon} {field} (최대 2개)</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                          {cat && <Icon name={cat.icon} size={12} color={C.mutedLight} />}
+                          <Text style={[styles.fieldHelp, { color: C.mutedLight, marginTop: 0 }]}>{field} (최대 2개)</Text>
+                        </View>
                         <View style={styles.chipGrid}>
                           {subs.map(sub => {
                             const active = selectedSubFields.includes(sub);
@@ -778,7 +786,10 @@ export default function ProfileDetailScreen() {
                 onLayout={(e) => { regionYRef.current = e.nativeEvent.layout.y + 200; }}
                 style={regionHighlight ? [styles.regionHighlight, { borderColor: C.gold }] : undefined}
               >
-              <Text style={[styles.fieldLabel, { color: regionHighlight ? C.gold : C.muted, fontWeight: regionHighlight ? '900' : '700' }]}>📍 활동 지역</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6, marginTop: 12 }}>
+                <Icon name="map-pin" size={12} color={regionHighlight ? C.gold : C.muted} />
+                <Text style={[styles.fieldLabel, { color: regionHighlight ? C.gold : C.muted, fontWeight: regionHighlight ? '900' : '700', marginBottom: 0, marginTop: 0 }]}>활동 지역</Text>
+              </View>
               {/* 시/도 선택 */}
               <Pressable
                 onPress={() => { setShowProvincePicker(!showProvincePicker); setShowDistrictPicker(false); }}
@@ -838,7 +849,10 @@ export default function ProfileDetailScreen() {
 
               {regionProvince && regionDistrict ? (
                 <View style={styles.regionPreview}>
-                  <Text style={[styles.regionPreviewText, { color: C.gold }]}>📍 {regionProvince} {regionDistrict}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Icon name="map-pin" size={13} color={C.gold} />
+                    <Text style={[styles.regionPreviewText, { color: C.gold }]}>{regionProvince} {regionDistrict}</Text>
+                  </View>
                   <Pressable onPress={() => { setRegionProvince(''); setRegionDistrict(''); }}>
                     <Text style={{ color: C.mutedLight, fontSize: 12 }}>초기화</Text>
                   </Pressable>
@@ -893,7 +907,7 @@ export default function ProfileDetailScreen() {
                     const detected = detectSnsType(url);
                     return (
                       <View key={`${url}-${index}`} style={[styles.linkItem, { backgroundColor: C.bg, borderColor: C.border }]}>
-                        <Text style={styles.linkItemIcon}>{detected.icon}</Text>
+                        <Icon name={detected.icon} type={detected.iconType} size={16} color={C.muted} />
                         <View style={styles.linkItemInfo}>
                           <Text style={[styles.linkItemLabel, { color: C.muted }]}>{detected.label}</Text>
                           <Text style={[styles.linkItemUrl, { color: C.fg }]} numberOfLines={1}>{url}</Text>
@@ -1004,7 +1018,6 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
   },
-  avatarEmoji: { fontSize: 28 },
   avatarOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -1075,7 +1088,6 @@ const styles = StyleSheet.create({
     height: 72,
     borderRadius: 36,
   },
-  editAvatarEmoji: { fontSize: 36 },
   changeAvatarBtn: {
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -1098,9 +1110,9 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   infoIcon: {
-    fontSize: 16,
     width: 24,
-    textAlign: 'center',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   infoText: {
     fontSize: 14,
@@ -1132,7 +1144,6 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     gap: 10,
   },
-  snsIcon: { fontSize: 16 },
   snsLabel: {
     fontSize: 13,
     fontWeight: '600',
@@ -1176,9 +1187,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 12,
     borderWidth: 1,
-  },
-  linkItemIcon: {
-    fontSize: 16,
   },
   linkItemInfo: {
     flex: 1,
@@ -1314,9 +1322,6 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
   },
-  chipIcon: {
-    fontSize: 14,
-  },
   chipText: {
     fontSize: 13,
     fontWeight: '700',
@@ -1341,9 +1346,6 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1.5,
     gap: 4,
-  },
-  typeChangeEmoji: {
-    fontSize: 20,
   },
   typeChangeLabel: {
     fontSize: 13,

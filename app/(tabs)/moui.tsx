@@ -15,6 +15,7 @@ import { parseRegion } from '@/constants/regions';
 import { MOUI_CATEGORIES, TARGET_OPTIONS, FIELD_OPTIONS } from '@/constants/moui';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { showAlert, formatRegionLabel, formatRecruitPeriod, formatMeetingDate } from '@/lib/utils';
+import { Icon } from '@/components/ui/Icon';
 
 type MouiParticipant = {
   user_id: string;
@@ -178,22 +179,27 @@ export default function MouiScreen() {
   }, [posts, user]);
 
   const activeFilterTags = useMemo(() => {
-    const tags: { label: string; clear: () => void }[] = [];
+    const tags: { label: string; icon?: string; clear: () => void }[] = [];
     for (const key of selectedCategories) {
       const cat = MOUI_CATEGORIES.find(c => c.key === key);
-      if (cat) tags.push({ label: `${cat.icon} ${cat.label}`, clear: () => setSelectedCategories(prev => { const next = new Set(prev); next.delete(key); return next; }) });
+      if (cat) tags.push({ label: cat.label, icon: cat.icon, clear: () => setSelectedCategories(prev => { const next = new Set(prev); next.delete(key); return next; }) });
     }
     if (selectedField) {
       const fo = FIELD_OPTIONS.find(o => o.key === selectedField);
-      if (fo) tags.push({ label: `${fo.icon} ${fo.key}`, clear: () => setSelectedField(null) });
+      if (fo) tags.push({ label: fo.key, icon: fo.icon, clear: () => setSelectedField(null) });
     }
     if (selectedTarget) {
       const t = TARGET_OPTIONS.find(o => o.key === selectedTarget);
-      if (t) tags.push({ label: t.label, clear: () => setSelectedTarget(null) });
+      if (t) tags.push({ label: t.label, icon: t.icon, clear: () => setSelectedTarget(null) });
     }
     if (selectedDistance) {
-      const distMap: Record<string, string> = { near: '📍 근처', close: '🚶 가까운', far: '🚀 먼' };
-      tags.push({ label: distMap[selectedDistance], clear: () => setSelectedDistance(null) });
+      const distMap: Record<string, { label: string; icon: string }> = {
+        near: { label: '근처', icon: 'map-pin' },
+        close: { label: '가까운', icon: 'person-simple-walk' },
+        far: { label: '먼', icon: 'rocket' },
+      };
+      const d = distMap[selectedDistance];
+      tags.push({ label: d.label, icon: d.icon, clear: () => setSelectedDistance(null) });
     }
     return tags;
   }, [selectedCategories, selectedDistance, selectedField, selectedTarget]);
@@ -280,14 +286,14 @@ export default function MouiScreen() {
       }
     }
 
-    if (selectedDistance === 'near') return near.length > 0 ? [{ title: '📍 근처 모임', data: near }] : [];
-    if (selectedDistance === 'close') return close.length > 0 ? [{ title: '🚶 가까운 모임', data: close }] : [];
-    if (selectedDistance === 'far') return far.length > 0 ? [{ title: '🚀 먼 모임', data: far }] : [];
+    if (selectedDistance === 'near') return near.length > 0 ? [{ title: '근처 모임', icon: 'map-pin', data: near }] : [];
+    if (selectedDistance === 'close') return close.length > 0 ? [{ title: '가까운 모임', icon: 'person-simple-walk', data: close }] : [];
+    if (selectedDistance === 'far') return far.length > 0 ? [{ title: '먼 모임', icon: 'rocket', data: far }] : [];
 
-    const result: { title: string; data: MouiPost[] }[] = [];
-    if (near.length > 0) result.push({ title: '📍 근처 모임', data: near });
-    if (close.length > 0) result.push({ title: '🚶 가까운 모임', data: close });
-    if (far.length > 0) result.push({ title: '🚀 먼 모임', data: far });
+    const result: { title: string; icon?: string; data: MouiPost[] }[] = [];
+    if (near.length > 0) result.push({ title: '근처 모임', icon: 'map-pin', data: near });
+    if (close.length > 0) result.push({ title: '가까운 모임', icon: 'person-simple-walk', data: close });
+    if (far.length > 0) result.push({ title: '먼 모임', icon: 'rocket', data: far });
     return result;
   }, [posts, myDistrict, myProvince, selectedCategories, selectedDistance, selectedField, selectedTarget, user, searchQuery, activeTab]);
 
@@ -334,8 +340,9 @@ export default function MouiScreen() {
             {item.category && (() => {
               const cat = MOUI_CATEGORIES.find(c => c.key === item.category);
               return cat ? (
-                <View style={[styles.categorChipSmall, { backgroundColor: C.gold + '22', borderColor: C.gold + '55' }]}>
-                  <Text style={[styles.categorChipSmallText, { color: C.gold }]}>{cat.icon} {cat.label}</Text>
+                <View style={[styles.categorChipSmall, { backgroundColor: C.gold + '22', borderColor: C.gold + '55', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                  <Icon name={cat.icon} size={14} color={C.gold} />
+                  <Text style={[styles.categorChipSmallText, { color: C.gold }]}>{cat.label}</Text>
                 </View>
               ) : <View />;
             })()}
@@ -367,7 +374,9 @@ export default function MouiScreen() {
                 {author?.avatar_url ? (
                   <Image source={{ uri: author.avatar_url }} style={styles.postAvatarImg} contentFit="cover" />
                 ) : (
-                  <Text style={styles.postAvatarEmoji}>{author?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+                  author?.user_type === 'creator'
+                    ? <Icon name="palette" size={18} color={C.gold} />
+                    : <Icon name="pencil-simple" size={18} color={C.gold} />
                 )}
               </View>
               <Text style={[styles.postAuthorMetaName, { color: C.muted }]}>{authorName}</Text>
@@ -451,15 +460,17 @@ export default function MouiScreen() {
                 <Text style={[styles.infoLabel, { color: C.muted }]}>분야</Text>
                 <View style={[styles.postTagRow, { flex: 1 }]}>
                   {item.fields.trim() === '전체' ? (
-                    <View style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                      <Text style={[styles.postTagText, { color: C.gold }]}>🌐 전체 분야</Text>
+                    <View style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                      <Icon name="globe" size={14} color={C.gold} />
+                      <Text style={[styles.postTagText, { color: C.gold }]}>전체 분야</Text>
                     </View>
                   ) : (
                     item.fields.split(',').map(f => {
                       const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
                       return (
-                        <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                          <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
+                        <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                          {fo && <Icon name={fo.icon} size={14} color={C.gold} />}
+                          <Text style={[styles.postTagText, { color: C.gold }]}>{f.trim()}</Text>
                         </View>
                       );
                     })
@@ -474,8 +485,9 @@ export default function MouiScreen() {
                   {targetKeys.map(key => {
                     const t = TARGET_OPTIONS.find(o => o.key === key);
                     return t ? (
-                      <View key={key} style={[styles.postTag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22' }]}>
-                        <Text style={[styles.postTagText, { color: C.fg, opacity: 0.82 }]}>{t.icon} {t.label}</Text>
+                      <View key={key} style={[styles.postTag, { backgroundColor: C.fg + '0A', borderColor: C.fg + '22', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                        <Icon name={t.icon} size={14} color={C.fg} style={{ opacity: 0.82 }} />
+                        <Text style={[styles.postTagText, { color: C.fg, opacity: 0.82 }]}>{t.label}</Text>
                       </View>
                     ) : null;
                   })}
@@ -505,7 +517,9 @@ export default function MouiScreen() {
                             {pt.profiles?.avatar_url ? (
                               <Image source={{ uri: pt.profiles.avatar_url }} style={styles.participantAvatarImg} contentFit="cover" />
                             ) : (
-                              <Text style={{ fontSize: 10 }}>{pt.profiles?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+                              pt.profiles?.user_type === 'creator'
+                                ? <Icon name="palette" size={10} color={C.gold} />
+                                : <Icon name="pencil-simple" size={10} color={C.gold} />
                             )}
                           </View>
                           <Text style={[styles.participantName, { color: C.fg }]} numberOfLines={1}>
@@ -643,15 +657,18 @@ export default function MouiScreen() {
               pressed && { opacity: 0.75 },
             ]}
           >
-            <Text
-              numberOfLines={1}
-              style={[
-                styles.regionChipText,
-                { color: activityRegion ? C.gold : C.muted },
-              ]}
-            >
-              {activityRegion ? `📍 ${activityRegion}` : '📍 위치 설정'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Icon name="map-pin" size={14} color={activityRegion ? C.gold : C.muted} />
+              <Text
+                numberOfLines={1}
+                style={[
+                  styles.regionChipText,
+                  { color: activityRegion ? C.gold : C.muted },
+                ]}
+              >
+                {activityRegion ?? '위치 설정'}
+              </Text>
+            </View>
           </Pressable>
           <View style={{ flex: 1 }} />
           {/* 돋보기 */}
@@ -798,7 +815,10 @@ export default function MouiScreen() {
                       })}
                       style={[styles.filterChip, { backgroundColor: active ? C.gold : C.bg, borderColor: active ? C.gold : C.border }]}
                     >
-                      <Text style={[styles.filterChipText, { color: active ? C.bg : C.muted }]}>{cat.icon} {cat.label}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Icon name={cat.icon} size={14} color={active ? C.bg : C.muted} />
+                        <Text style={[styles.filterChipText, { color: active ? C.bg : C.muted }]}>{cat.label}</Text>
+                      </View>
                     </Pressable>
                   );
                 })}
@@ -811,10 +831,10 @@ export default function MouiScreen() {
                 <Text style={[styles.filterSectionLabel, { color: C.muted }]}>거리</Text>
                 <View style={styles.filterChipRow}>
                   {([
-                    { key: null, label: '전체' },
-                    { key: 'near', label: '📍 근처' },
-                    { key: 'close', label: '🚶 가까운' },
-                    { key: 'far', label: '🚀 먼' },
+                    { key: null, label: '전체', icon: undefined },
+                    { key: 'near', label: '근처', icon: 'map-pin' },
+                    { key: 'close', label: '가까운', icon: 'person-simple-walk' },
+                    { key: 'far', label: '먼', icon: 'rocket' },
                   ] as const).map(d => {
                     const active = selectedDistance === d.key;
                     return (
@@ -823,7 +843,10 @@ export default function MouiScreen() {
                         onPress={() => setSelectedDistance(d.key)}
                         style={[styles.filterChip, { backgroundColor: active ? C.gold + '18' : C.bg, borderColor: active ? C.gold : C.border }]}
                       >
-                        <Text style={[styles.filterChipText, { color: active ? C.gold : C.muted }]}>{d.label}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          {d.icon && <Icon name={d.icon} size={14} color={active ? C.gold : C.muted} />}
+                          <Text style={[styles.filterChipText, { color: active ? C.gold : C.muted }]}>{d.label}</Text>
+                        </View>
                       </Pressable>
                     );
                   })}
@@ -842,7 +865,10 @@ export default function MouiScreen() {
                     onPress={tag.clear}
                     style={[styles.activeFilterTag, { backgroundColor: C.gold + '18', borderColor: C.gold + '44' }]}
                   >
-                    <Text style={[styles.activeFilterTagText, { color: C.gold }]}>{tag.label} ✕</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      {tag.icon && <Icon name={tag.icon} size={12} color={C.gold} />}
+                      <Text style={[styles.activeFilterTagText, { color: C.gold }]}>{tag.label} ✕</Text>
+                    </View>
                   </Pressable>
                 ))}
               </View>
@@ -871,7 +897,10 @@ export default function MouiScreen() {
                 onPress={tag.clear}
                 style={[styles.activeFilterTag, { backgroundColor: C.gold + '18', borderColor: C.gold + '44' }]}
               >
-                <Text style={[styles.activeFilterTagText, { color: C.gold }]}>{tag.label} ✕</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  {tag.icon && <Icon name={tag.icon} size={12} color={C.gold} />}
+                  <Text style={[styles.activeFilterTagText, { color: C.gold }]}>{tag.label} ✕</Text>
+                </View>
               </Pressable>
             ))}
           </View>
@@ -888,7 +917,7 @@ export default function MouiScreen() {
         </View>
       ) : sections.length === 0 ? (
         <View style={styles.center}>
-          <Text style={{ fontSize: 48, marginBottom: 12 }}>🤝</Text>
+          <View style={{ marginBottom: 12 }}><Icon name="handshake" size={48} color={C.muted} /></View>
           <Text style={[styles.emptyTitle, { color: C.fg }]}>아직 모임이 없어요</Text>
           <Text style={[styles.emptyDesc, { color: C.muted }]}>첫 번째 모의를 작당해보세요!</Text>
         </View>
@@ -897,9 +926,12 @@ export default function MouiScreen() {
           sections={sections}
           keyExtractor={item => item.id}
           renderItem={renderPost}
-          renderSectionHeader={({ section: { title } }) => (
+          renderSectionHeader={({ section }) => (
             <View style={styles.sectionHeader}>
-              <Text style={[styles.sectionHeaderText, { color: C.fg }]}>{title}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                {section.icon && <Icon name={section.icon} size={16} color={C.fg} />}
+                <Text style={[styles.sectionHeaderText, { color: C.fg }]}>{section.title}</Text>
+              </View>
             </View>
           )}
           contentContainerStyle={styles.list}

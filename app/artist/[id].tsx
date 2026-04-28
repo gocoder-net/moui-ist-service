@@ -22,7 +22,8 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
 import { useThemeMode } from '@/contexts/theme-context';
 import { timeAgo, detectSnsType } from '@/lib/utils';
-import { USER_TYPE_LABELS, USER_TYPE_EMOJI, FIELD_ICON_MAP } from '@/constants/user';
+import { USER_TYPE_LABELS, USER_TYPE_ICON, FIELD_ICON_MAP } from '@/constants/user';
+import { Icon } from '@/components/ui/Icon';
 import { SpinningDiamond } from '@/components/ui/SpinningDiamond';
 import { LikeDiamondButton } from '@/components/ui/LikeDiamondButton';
 import { AnimatedCounter } from '@/components/ui/AnimatedCounter';
@@ -579,7 +580,7 @@ export default function ArtistPortfolioScreen() {
 
   const isOwner = user?.id === resolvedId;
   const artistName = profile.name ?? profile.username;
-  const avatarEmoji = USER_TYPE_EMOJI[profile.user_type] ?? '👀';
+  const avatarIconName = USER_TYPE_ICON[profile.user_type] ?? 'eye';
   const isCreator = profile.user_type === 'creator';
   const isVerifiedCreator = !!(profile as any)?.verified;
   const fieldItems = (profile.field ?? '')
@@ -644,7 +645,7 @@ export default function ArtistPortfolioScreen() {
                       <Image source={{ uri: profile.avatar_url }} style={styles.heroAvatar} resizeMode="cover" />
                     ) : (
                       <View style={[styles.heroAvatarFallback, { backgroundColor: 'rgba(200,169,110,0.12)' }]}>
-                        <Text style={styles.heroAvatarEmoji}>{avatarEmoji}</Text>
+                        <Icon name={avatarIconName} size={22} color="#C8A96E" />
                       </View>
                     )}
                   </View>
@@ -697,7 +698,7 @@ export default function ArtistPortfolioScreen() {
                                     setActiveTab('works');
                                   }}
                                 >
-                                  <Text style={styles.heroFieldEmoji}>{FIELD_ICON_MAP[field] ?? '🎯'}</Text>
+                                  <Icon name={FIELD_ICON_MAP[field] ?? 'crosshair'} size={9} color="#C8A96E" />
                                   <Text style={[styles.heroFieldChipText, { color: C.gold }]}>{field}</Text>
                                 </Pressable>
                               );
@@ -716,7 +717,7 @@ export default function ArtistPortfolioScreen() {
                                     setActiveTab('works');
                                   }}
                                 >
-                                  <Text style={styles.heroFieldEmoji}>📌</Text>
+                                  <Icon name="push-pin" size={9} color="#C8A96E" />
                                   <Text style={[styles.heroFieldChipText, { color: C.gold }]}>기타</Text>
                                 </Pressable>
                               );
@@ -724,7 +725,7 @@ export default function ArtistPortfolioScreen() {
                           </>
                         ) : (
                           <View style={[styles.heroFieldChip, { borderColor: C.border }]}>
-                            <Text style={styles.heroFieldEmoji}>{USER_TYPE_EMOJI[profile.user_type] ?? '👀'}</Text>
+                            <Icon name={USER_TYPE_ICON[profile.user_type] ?? 'eye'} size={9} color={C.muted} />
                             <Text style={[styles.heroFieldChipText, { color: C.muted }]}>
                               {USER_TYPE_LABELS[profile.user_type] ?? profile.user_type}
                             </Text>
@@ -833,13 +834,18 @@ export default function ArtistPortfolioScreen() {
                           setChatModalVisible(true);
                         }}
                       >
-                        <Text style={[styles.followBtnText, {
-                          color: chatStatus === 'pending' ? C.gold : C.bg,
-                        }]}>
-                          {chatStatus === 'pending' ? '수락 대기중'
-                            : chatStatus === 'accepted' ? '💬 채팅'
-                            : '채팅걸기'}
-                        </Text>
+                        {chatStatus === 'accepted' ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <Icon name="chat-circle" size={10} color={C.bg} />
+                            <Text style={[styles.followBtnText, { color: C.bg }]}>채팅</Text>
+                          </View>
+                        ) : (
+                          <Text style={[styles.followBtnText, {
+                            color: chatStatus === 'pending' ? C.gold : C.bg,
+                          }]}>
+                            {chatStatus === 'pending' ? '수락 대기중' : '채팅걸기'}
+                          </Text>
+                        )}
                       </Pressable>
                     </View>
                   )}
@@ -952,7 +958,7 @@ export default function ArtistPortfolioScreen() {
                           <Image source={{ uri: col.cover_image_url }} style={styles.colFilterCircleInner} resizeMode="cover" />
                         ) : (
                           <View style={[styles.colFilterCircleInner, { backgroundColor: C.card, justifyContent: 'center', alignItems: 'center' }]}>
-                            <Text style={{ fontSize: 20 }}>📂</Text>
+                            <Icon name="notebook" size={20} color="#C8A96E" />
                           </View>
                         )}
                       </View>
@@ -1034,7 +1040,10 @@ export default function ArtistPortfolioScreen() {
                       setSelectedCollectionId(col.id);
                       setActiveTab('works');
                     }}>
-                      <Text style={[styles.colTitle, { color: C.gold }]}>{col.title} 📎</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={[styles.colTitle, { color: C.gold }]}>{col.title}</Text>
+                        <Icon name="link" size={14} color="#C8A96E" />
+                      </View>
                       {col.description ? (
                         <Text style={[styles.colDesc, { color: C.muted }]} numberOfLines={2}>{col.description}</Text>
                       ) : null}
@@ -1080,7 +1089,7 @@ export default function ArtistPortfolioScreen() {
                       size={18}
                     />
                     <Pressable onPress={() => openColComments(col.id)} style={styles.colSocialBtn}>
-                      <Text style={{ fontSize: 16 }}>💬</Text>
+                      <Icon name="chat-circle" size={16} color={C.muted} />
                       {(colCommentCounts[col.id] ?? 0) > 0 && (
                         <Text style={[styles.colSocialCount, { color: C.muted }]}>{colCommentCounts[col.id]}</Text>
                       )}
@@ -1164,9 +1173,11 @@ export default function ArtistPortfolioScreen() {
                         />
                       ) : (
                         <View style={[styles.exCardPosterEmpty, { backgroundColor: C.bg }]}>
-                          <Text style={{ fontSize: 28 }}>
-                            {ex.room_type === 'small' ? '🏠' : ex.room_type === 'large' ? '🏰' : '🏛️'}
-                          </Text>
+                          <Icon
+                            name={ex.room_type === 'small' ? 'house' : ex.room_type === 'large' ? 'castle-turret' : 'bank'}
+                            size={28}
+                            color="#C8A96E"
+                          />
                         </View>
                       )}
                       <View style={styles.exCardInfo}>
@@ -1191,7 +1202,7 @@ export default function ArtistPortfolioScreen() {
                         size={18}
                       />
                       <Pressable onPress={() => openExComments(ex.id)} style={styles.colSocialBtn}>
-                        <Text style={{ fontSize: 16 }}>💬</Text>
+                        <Icon name="chat-circle" size={16} color={C.muted} />
                         {(exCommentCounts[ex.id] ?? 0) > 0 && (
                           <Text style={[styles.colSocialCount, { color: C.muted }]}>{exCommentCounts[ex.id]}</Text>
                         )}

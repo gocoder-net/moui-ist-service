@@ -12,6 +12,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
 import { r2Upload } from '@/lib/r2';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Icon } from '@/components/ui/Icon';
 import { parseRegion } from '@/constants/regions';
 import { TARGET_OPTIONS, FIELD_OPTIONS } from '@/constants/moui';
 import { formatRegionLabel, formatMeetingDate, formatRecruitPeriod } from '@/lib/utils';
@@ -278,7 +279,7 @@ export default function MouiChatScreen() {
       <Image source={{ uri: profile.avatar_url }} style={styles.msgAvatar} contentFit="cover" />
     ) : (
       <View style={[styles.msgAvatar, styles.msgAvatarFallback, { backgroundColor: C.goldDim }]}>
-        <Text style={{ fontSize: 14 }}>{profile?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+        <Icon name={profile?.user_type === 'creator' ? 'palette' : 'pencil-simple'} size={14} color={C.gold} />
       </View>
     );
   };
@@ -318,7 +319,7 @@ export default function MouiChatScreen() {
                     {pt.profiles?.avatar_url ? (
                       <Image source={{ uri: pt.profiles.avatar_url }} style={styles.participantAvatarImg} contentFit="cover" />
                     ) : (
-                      <Text style={{ fontSize: 10 }}>{pt.profiles?.user_type === 'creator' ? '🎨' : '✏️'}</Text>
+                      <Icon name={pt.profiles?.user_type === 'creator' ? 'palette' : 'pencil-simple'} size={14} color={C.gold} />
                     )}
                   </View>
                   <Text style={[styles.participantName, { color: C.fg }]} numberOfLines={1}>

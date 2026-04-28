@@ -14,6 +14,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import type { Database } from '@/types/database';
+import { Icon } from '@/components/ui/Icon';
 import { showAlert } from '@/lib/utils';
 
 type Artwork = Database['public']['Tables']['artworks']['Row'];
@@ -228,7 +229,7 @@ export default function CreateCollectionScreen() {
                 <Image source={{ uri: coverUri }} style={styles.coverPreview} contentFit="cover" />
               ) : (
                 <View style={styles.coverPlaceholder}>
-                  <Text style={styles.coverPlaceholderIcon}>🎨</Text>
+                  <Icon name="palette" size={36} color={C.muted} />
                   <Text style={[styles.coverPlaceholderText, { color: C.muted }]}>탭하여 커버 이미지 선택</Text>
                 </View>
               )}
@@ -388,9 +389,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: 8,
-  },
-  coverPlaceholderIcon: {
-    fontSize: 36,
   },
   coverPlaceholderText: {
     fontSize: 13,

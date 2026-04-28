@@ -174,14 +174,14 @@ export function getParentField(subField: string): string | null {
 
 /** 분야 카테고리 & 세부분야 (signup.tsx와 동일) */
 export const FIELD_CATEGORIES = [
-  { key: '글', icon: '✍️' },
-  { key: '그림', icon: '🎨' },
-  { key: '영상', icon: '🎬' },
-  { key: '소리', icon: '🎵' },
-  { key: '사진', icon: '📷' },
-  { key: '입체/공간', icon: '🗿' },
-  { key: '디지털/인터랙티브', icon: '💻' },
-  { key: '공연', icon: '🎭' },
+  { key: '글', icon: 'pencil-line' },
+  { key: '그림', icon: 'palette' },
+  { key: '영상', icon: 'film-strip' },
+  { key: '소리', icon: 'music-notes' },
+  { key: '사진', icon: 'camera' },
+  { key: '입체/공간', icon: 'cube' },
+  { key: '디지털/인터랙티브', icon: 'desktop' },
+  { key: '공연', icon: 'mask-happy' },
 ] as const;
 
 export const SUB_FIELDS: Record<string, string[]> = {
