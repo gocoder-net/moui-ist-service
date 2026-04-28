@@ -571,7 +571,12 @@ export default function ExploreScreen() {
         </View>
         {/* 태그 필터 */}
         {trendingTags.length > 0 && activeTab === 'all' && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tagScroll}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tagScrollWrap}
+            contentContainerStyle={styles.tagScroll}
+          >
             {selectedTags.size > 0 && (
               <Pressable
                 style={[styles.tagChip, { backgroundColor: C.danger + '20', borderColor: C.danger }]}
@@ -876,12 +881,15 @@ const styles = StyleSheet.create({
 
   searchWrap: {
     paddingHorizontal: 20,
-    marginBottom: 10,
+    marginBottom: 14,
+  },
+  tagScrollWrap: {
+    marginTop: 10,
   },
   tagScroll: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 2,
     gap: 6,
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
   tagChip: {
     paddingHorizontal: 10,
