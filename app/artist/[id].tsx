@@ -51,7 +51,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { spendPoints } from '@/lib/points';
 import { sendNotification } from '@/lib/notifications';
 import type { Database } from '@/types/database';
-import { getFormType, META_KEY_LABEL, FORM_META_FIELDS, SUB_FIELDS } from '@/constants/artwork-form';
+import { getFormType, META_KEY_LABEL, FORM_META_FIELDS, SUB_FIELDS, getParentField } from '@/constants/artwork-form';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Artwork = Database['public']['Tables']['artworks']['Row'];
@@ -756,6 +756,7 @@ export default function ArtistPortfolioScreen() {
                               setActiveTab('works');
                             }}
                           >
+                            <Icon name={FIELD_ICON_MAP[getParentField(cat) ?? cat] ?? 'sparkle'} size={11} color={isActive ? C.gold : C.muted} />
                             <Text style={[styles.heroFieldChipText, { color: isActive ? C.gold : C.muted }]}>{cat}</Text>
                           </Pressable>
                         );
@@ -772,7 +773,7 @@ export default function ArtistPortfolioScreen() {
                             style={[styles.heroSnsChip, { borderColor: 'rgba(200,169,110,0.28)' }]}
                             onPress={() => Linking.openURL(url)}
                           >
-                            <Text style={{ fontSize: 10 }}>{detected.icon}</Text>
+                            <Icon name={detected.icon} type={detected.iconType} size={10} color={C.gold} />
                             <Text style={[styles.heroSnsLabel, { color: C.gold }]}>{detected.label}</Text>
                           </Pressable>
                         );

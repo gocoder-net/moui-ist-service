@@ -27,6 +27,7 @@
 import React from 'react';
 import { type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { useThemeMode } from '@/contexts/theme-context';
 
 import {
   PHOSPHOR_ICONS,
@@ -84,6 +85,8 @@ export function Icon({
   brandColor = false,
   style,
 }: IconProps) {
+  const { colors: themeColors } = useThemeMode();
+  const defaultColor = color ?? themeColors.fg;
   const resolved = resolveType(name, type);
 
   // ── Phosphor (UI) ──
@@ -101,7 +104,7 @@ export function Icon({
       <PhosphorComponent
         size={size ?? 24}
         weight={weight}
-        color={color ?? 'currentColor'}
+        color={defaultColor}
         style={style}
       />
     );
@@ -118,7 +121,7 @@ export function Icon({
   }
 
   const iconSize = size ?? 20;
-  const iconColor = brandColor ? `#${brand.hex}` : (color ?? 'currentColor');
+  const iconColor = brandColor ? `#${brand.hex}` : defaultColor;
 
   return (
     <Svg
