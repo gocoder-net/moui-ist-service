@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   StyleSheet, View, Text, TextInput, Pressable, ScrollView,
-  Alert, Platform, Modal,
+  Modal,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import { spendPoints } from '@/lib/points';
+import { Icon } from '@/components/ui/Icon';
 import { parseRegion, REGIONS, PROVINCE_LIST } from '@/constants/regions';
 import { MOUI_CATEGORIES, MOUI_POST_COST, FIELD_OPTIONS, TARGET_TOP, TARGET_CREATOR_SUB } from '@/constants/moui';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -499,9 +500,12 @@ export default function CreateMouiScreen() {
                       { backgroundColor: active ? C.gold : C.card, borderColor: active ? C.gold : C.border },
                     ]}
                   >
-                    <Text style={[styles.chipText, { color: active ? C.bg : C.muted }]}>
-                      {cat.icon} {cat.label}
-                    </Text>
+                    <View style={styles.chipContent}>
+                      <Icon name={cat.icon} size={14} color={active ? C.bg : C.muted} />
+                      <Text style={[styles.chipText, { color: active ? C.bg : C.muted }]}>
+                        {cat.label}
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -530,7 +534,7 @@ export default function CreateMouiScreen() {
                       { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.gold + '1F' : C.card },
                     ]}
                   >
-                    <Text style={{ fontSize: 14 }}>{f.icon}</Text>
+                    <Icon name={f.icon} size={14} color={active ? C.gold : C.muted} />
                     <Text style={[styles.fieldChipText, { color: active ? C.gold : C.muted }]}>{f.key}</Text>
                   </Pressable>
                 );
@@ -546,7 +550,7 @@ export default function CreateMouiScreen() {
                   { borderColor: formFieldAll ? C.gold : C.border, backgroundColor: formFieldAll ? C.gold + '1F' : C.card },
                 ]}
               >
-                <Text style={{ fontSize: 14 }}>🌐</Text>
+                <Icon name="globe" size={14} color={formFieldAll ? C.gold : C.muted} />
                 <Text style={[styles.fieldChipText, { color: formFieldAll ? C.gold : C.muted }]}>전체</Text>
               </Pressable>
             </View>
@@ -582,9 +586,12 @@ export default function CreateMouiScreen() {
                       { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.gold + '1F' : C.card },
                     ]}
                   >
-                    <Text style={[styles.chipText, { color: active ? C.gold : C.muted }]}>
-                      {t.icon} {t.label}
-                    </Text>
+                    <View style={styles.chipContent}>
+                      <Icon name={t.icon} size={14} color={active ? C.gold : C.muted} />
+                      <Text style={[styles.chipText, { color: active ? C.gold : C.muted }]}>
+                        {t.label}
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -604,9 +611,12 @@ export default function CreateMouiScreen() {
                         { borderColor: active ? C.gold : C.border, backgroundColor: active ? C.gold + '1F' : C.card },
                       ]}
                     >
-                      <Text style={[styles.chipText, { color: active ? C.gold : C.muted }]}>
-                        {s.icon} {s.label}
-                      </Text>
+                      <View style={styles.chipContent}>
+                        <Icon name={s.icon} size={14} color={active ? C.gold : C.muted} />
+                        <Text style={[styles.chipText, { color: active ? C.gold : C.muted }]}>
+                          {s.label}
+                        </Text>
+                      </View>
                     </Pressable>
                   );
                 })}
@@ -911,6 +921,11 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     borderRadius: 12,
     borderWidth: 1,
+  },
+  chipContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   chipText: {
     fontSize: 12,

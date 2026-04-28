@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import {
-  StyleSheet, View, Text, Pressable, FlatList, Image, Platform,
+  StyleSheet, View, Text, Pressable, FlatList, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -8,7 +8,8 @@ import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
+import { Icon } from '@/components/ui/Icon';
 
 type Notification = {
   id: string;
@@ -22,13 +23,13 @@ type Notification = {
   from_user?: { username: string; name: string | null; avatar_url: string | null } | null;
 };
 
-const TYPE_EMOJI: Record<string, string> = {
-  like: '◆',
-  comment: '💬',
-  follow: '🔗',
-  chat_request: '✉️',
-  chat_accepted: '💬',
-  moui_join: '🤝',
+const TYPE_ICON: Record<string, Parameters<typeof Icon>[0]['name']> = {
+  like: 'heart',
+  comment: 'chat-circle',
+  follow: 'user',
+  chat_request: 'envelope-simple',
+  chat_accepted: 'chat-circle',
+  moui_join: 'handshake',
 };
 
 export default function NotificationsScreen() {
@@ -98,7 +99,9 @@ export default function NotificationsScreen() {
 
         {notifications.length === 0 && !loading ? (
           <View style={styles.emptyWrap}>
-            <Text style={{ fontSize: 32 }}>🔔</Text>
+            <View style={[styles.emptyIconWrap, { backgroundColor: C.card, borderColor: C.border }]}>
+              <Icon name="bell" size={28} color={C.muted} />
+            </View>
             <Text style={[styles.emptyText, { color: C.muted }]}>아직 알림이 없습니다</Text>
           </View>
         ) : (
@@ -114,7 +117,7 @@ export default function NotificationsScreen() {
                       <Image source={{ uri: item.from_user.avatar_url }} style={styles.notifAvatar} resizeMode="cover" />
                     ) : (
                       <View style={[styles.notifAvatar, { backgroundColor: C.card, justifyContent: 'center', alignItems: 'center' }]}>
-                        <Text style={{ fontSize: 16 }}>{TYPE_EMOJI[item.type] ?? '🔔'}</Text>
+                        <Icon name={TYPE_ICON[item.type] ?? 'bell'} size={18} color={C.muted} />
                       </View>
                     )}
                   </Pressable>
@@ -123,7 +126,7 @@ export default function NotificationsScreen() {
                     {item.body && <Text style={[styles.notifBody, { color: C.muted }]} numberOfLines={2}>{item.body}</Text>}
                     <Text style={[styles.notifTime, { color: C.mutedLight }]}>{timeAgo(item.created_at)}</Text>
                   </Pressable>
-                  <Text style={{ fontSize: 14 }}>{TYPE_EMOJI[item.type] ?? '🔔'}</Text>
+                  <Icon name={TYPE_ICON[item.type] ?? 'bell'} size={16} color={C.muted} />
                 </View>
               </Animated.View>
             )}
@@ -142,6 +145,14 @@ const styles = StyleSheet.create({
   backText: { fontSize: 20, fontWeight: '300' },
   headerTitle: { fontSize: 16, fontWeight: '800', letterSpacing: 1 },
   emptyWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 12 },
+  emptyIconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   emptyText: { fontSize: 14 },
   list: { paddingBottom: 90 },
   notifItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 0.5 },
