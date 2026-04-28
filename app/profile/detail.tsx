@@ -64,7 +64,6 @@ export default function ProfileDetailScreen() {
   const { colors: C } = useThemeMode();
   const scrollRef = useRef<ScrollView>(null);
   const regionYRef = useRef(0);
-  const [regionHighlight, setRegionHighlight] = useState(false);
 
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -80,26 +79,16 @@ export default function ProfileDetailScreen() {
   const [fieldInput, setFieldInput] = useState('');
   const [fieldMessage, setFieldMessage] = useState('');
   const [selectedSubFields, setSelectedSubFields] = useState<string[]>([]);
-  // 지역
-  const [regionProvince, setRegionProvince] = useState('');
-  const [regionDistrict, setRegionDistrict] = useState('');
-  const [showProvincePicker, setShowProvincePicker] = useState(false);
-  const [showDistrictPicker, setShowDistrictPicker] = useState(false);
   // 링크: 동적 배열
   const [links, setLinks] = useState<string[]>([]);
   const [linkInput, setLinkInput] = useState('');
 
-  // focus=region이면 자동 편집 모드 진입 + 지역 강조
-  useEffect(() => {
-    if (params.focus === 'region' && !editing) {
-      handleStartEdit();
-      setRegionHighlight(true);
-      setTimeout(() => {
-        scrollRef.current?.scrollTo({ y: regionYRef.current, animated: true });
-      }, 500);
-      setTimeout(() => setRegionHighlight(false), 3000);
-    }
-  }, [params.focus]);
+  // 지역 (유형 변경 아래 독립 카드)
+  const [regionProvince, setRegionProvince] = useState('');
+  const [regionDistrict, setRegionDistrict] = useState('');
+  const [showProvincePicker, setShowProvincePicker] = useState(false);
+  const [showDistrictPicker, setShowDistrictPicker] = useState(false);
+  const [savingRegion, setSavingRegion] = useState(false);
 
   const userType = profile?.user_type ?? 'audience';
   const userTypeIcon = USER_TYPE_ICON[userType];
@@ -109,6 +98,74 @@ export default function ProfileDetailScreen() {
 
   const [fieldLimitMsg, setFieldLimitMsg] = useState('');
   const [subFieldLimitMsg, setSubFieldLimitMsg] = useState('');
+
+  /* 지역 상태 동기화 */
+  useEffect(() => {
+    const parsed = parseRegion((profile as any)?.region);
+    setRegionProvince(parsed?.province ?? '');
+    setRegionDistrict(parsed?.district ?? '');
+  }, [profile]);
+
+  /* focus=region이면 자동 스크롤 */
+  useEffect(() => {
+    if (params.focus === 'region') {
+      setTimeout(() => {
+        scrollRef.current?.scrollTo({ y: regionYRef.current, animated: true });
+      }, 500);
+    }
+  }, [params.focus]);
+
+  const saveRegion = async (province: string, district: string) => {
+    if (!user || !profile) return;
+    const isReset = !province || !district;
+    const currentRegion = (profile as any)?.region;
+
+    // 초기화(리셋)가 아니고, 기존 지역이 있을 때만 100 MOUI 차감
+    if (!isReset && currentRegion) {
+      const points = profile.points ?? 0;
+      const COST = 100;
+      if (points < COST) {
+        const msg = `활동 지역 변경에는 ${COST} MOUI가 필요합니다.\n현재 보유: ${points} MOUI`;
+        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('포인트 부족', msg);
+        // 원래 값으로 복원
+        const parsed = parseRegion(currentRegion);
+        setRegionProvince(parsed?.province ?? '');
+        setRegionDistrict(parsed?.district ?? '');
+        return;
+      }
+      const confirmed = Platform.OS === 'web'
+        ? window.confirm(`활동 지역을 "${province} ${district}"(으)로 변경합니다.\n${COST} MOUI가 차감됩니다.\n계속하시겠습니까?`)
+        : await new Promise<boolean>((resolve) => {
+            Alert.alert(
+              '활동 지역 변경',
+              `활동 지역을 "${province} ${district}"(으)로 변경합니다.\n${COST} MOUI가 차감됩니다.`,
+              [{ text: '취소', style: 'cancel', onPress: () => resolve(false) }, { text: '변경', onPress: () => resolve(true) }],
+            );
+          });
+      if (!confirmed) {
+        const parsed = parseRegion(currentRegion);
+        setRegionProvince(parsed?.province ?? '');
+        setRegionDistrict(parsed?.district ?? '');
+        return;
+      }
+      setSavingRegion(true);
+      const { error } = await spendPoints(user.id, COST, '활동 지역 변경');
+      if (error) {
+        const parsed = parseRegion(currentRegion);
+        setRegionProvince(parsed?.province ?? '');
+        setRegionDistrict(parsed?.district ?? '');
+        setSavingRegion(false);
+        return;
+      }
+    } else {
+      setSavingRegion(true);
+    }
+
+    const regionValue = province && district ? `${province} ${district}` : null;
+    await supabase.from('profiles').update({ region: regionValue }).eq('id', user.id);
+    await refreshProfile();
+    setSavingRegion(false);
+  };
 
   /* 분야 카테고리 토글 (최대 2개) — 해제해도 세부분야 유지 */
   const toggleField = (key: string) => {
@@ -348,13 +405,11 @@ export default function ProfileDetailScreen() {
       return false;
     });
     const subFieldValue = validSubs.length > 0 ? validSubs.join(', ') : null;
-    const regionValue = regionProvince && regionDistrict ? `${regionProvince} ${regionDistrict}` : null;
     const updatePayload: Record<string, any> = {
       name: name || null,
       bio: bio || null,
       field: fieldValue,
       sub_field: subFieldValue,
-      region: regionValue,
       sns_links: snsLinks,
     };
     if (!realNameLocked) {
@@ -378,12 +433,6 @@ export default function ProfileDetailScreen() {
     setFieldMessage('');
     const existingSubField = (profile as any)?.sub_field ?? '';
     setSelectedSubFields(existingSubField.split(',').map((s: string) => s.trim()).filter(Boolean));
-    // 지역 파싱
-    const regionParsed = parseRegion((profile as any)?.region);
-    setRegionProvince(regionParsed?.province ?? '');
-    setRegionDistrict(regionParsed?.district ?? '');
-    setShowProvincePicker(false);
-    setShowDistrictPicker(false);
     setLinks(parseLinksFromProfile());
     setLinkInput('');
     setEditing(true);
@@ -598,9 +647,96 @@ export default function ProfileDetailScreen() {
               </View>
             </Animated.View>
 
+            {/* 활동 지역 */}
+            <Animated.View
+              entering={FadeInDown.delay(200).duration(400).springify()}
+              style={[styles.card, { backgroundColor: C.card }]}
+              onLayout={(e) => { regionYRef.current = e.nativeEvent.layout.y; }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                <Icon name="map-pin" size={14} color={C.muted} />
+                <Text style={[styles.sectionTitle, { color: C.muted, marginBottom: 0 }]}>활동 지역</Text>
+              </View>
+              {(profile as any)?.region && (
+                <Text style={[styles.typeChangeHint, { color: C.mutedLight, marginBottom: 8 }]}>
+                  변경 시 100 MOUI가 차감됩니다
+                </Text>
+              )}
+
+              {regionProvince && regionDistrict ? (
+                <View style={styles.regionPreview}>
+                  <Text style={[styles.regionPreviewText, { color: C.gold }]}>{regionProvince} {regionDistrict}</Text>
+                  <Pressable onPress={() => { setRegionProvince(''); setRegionDistrict(''); saveRegion('', ''); }}>
+                    <Text style={{ color: C.mutedLight, fontSize: 12 }}>초기화</Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
+              {/* 시/도 선택 */}
+              <Pressable
+                onPress={() => { setShowProvincePicker(!showProvincePicker); setShowDistrictPicker(false); }}
+                style={[styles.pickerBtn, { backgroundColor: C.bg, borderColor: showProvincePicker ? C.gold : C.border }]}
+              >
+                <Text style={{ color: regionProvince ? C.fg : C.mutedLight, fontSize: 14 }}>
+                  {regionProvince || '시/도 선택'}
+                </Text>
+                <Text style={{ color: C.mutedLight, fontSize: 12 }}>{showProvincePicker ? '▲' : '▼'}</Text>
+              </Pressable>
+              {showProvincePicker && (
+                <ScrollView style={[styles.pickerList, { backgroundColor: C.bg, borderColor: C.border }]} nestedScrollEnabled>
+                  {PROVINCE_LIST.map(p => (
+                    <Pressable
+                      key={p}
+                      onPress={() => {
+                        setRegionProvince(p);
+                        setRegionDistrict('');
+                        setShowProvincePicker(false);
+                        setShowDistrictPicker(true);
+                      }}
+                      style={({ pressed }) => [styles.pickerItem, regionProvince === p && { backgroundColor: C.gold + '22' }, pressed && { opacity: 0.7 }]}
+                    >
+                      <Text style={[styles.pickerItemText, { color: regionProvince === p ? C.gold : C.fg }]}>{p}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+
+              {/* 구/군/시 선택 */}
+              {regionProvince !== '' && (
+                <>
+                  <Pressable
+                    onPress={() => { setShowDistrictPicker(!showDistrictPicker); setShowProvincePicker(false); }}
+                    style={[styles.pickerBtn, { backgroundColor: C.bg, borderColor: showDistrictPicker ? C.gold : C.border, marginTop: 8 }]}
+                  >
+                    <Text style={{ color: regionDistrict ? C.fg : C.mutedLight, fontSize: 14 }}>
+                      {regionDistrict || '구/군/시 선택'}
+                    </Text>
+                    <Text style={{ color: C.mutedLight, fontSize: 12 }}>{showDistrictPicker ? '▲' : '▼'}</Text>
+                  </Pressable>
+                  {showDistrictPicker && (
+                    <ScrollView style={[styles.pickerList, { backgroundColor: C.bg, borderColor: C.border }]} nestedScrollEnabled>
+                      {(REGIONS[regionProvince] ?? []).map(d => (
+                        <Pressable
+                          key={d}
+                          onPress={() => {
+                            setRegionDistrict(d);
+                            setShowDistrictPicker(false);
+                            saveRegion(regionProvince, d);
+                          }}
+                          style={({ pressed }) => [styles.pickerItem, regionDistrict === d && { backgroundColor: C.gold + '22' }, pressed && { opacity: 0.7 }]}
+                        >
+                          <Text style={[styles.pickerItemText, { color: regionDistrict === d ? C.gold : C.fg }]}>{d}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  )}
+                </>
+              )}
+            </Animated.View>
+
             {/* 소개 */}
             {profile?.bio && (
-              <Animated.View entering={FadeInDown.delay(200).duration(400).springify()} style={[styles.card, { backgroundColor: C.card }]}>
+              <Animated.View entering={FadeInDown.delay(250).duration(400).springify()} style={[styles.card, { backgroundColor: C.card }]}>
                 <Text style={[styles.sectionTitle, { color: C.muted }]}>소개</Text>
                 <Text style={[styles.bioText, { color: C.fg }]}>{profile.bio}</Text>
               </Animated.View>
@@ -781,84 +917,6 @@ export default function ProfileDetailScreen() {
               {fieldMessage !== '' && (
                 <Text style={[styles.fieldDetectMsg, { color: C.gold }]}>{fieldMessage}</Text>
               )}
-
-              <View
-                onLayout={(e) => { regionYRef.current = e.nativeEvent.layout.y + 200; }}
-                style={regionHighlight ? [styles.regionHighlight, { borderColor: C.gold }] : undefined}
-              >
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6, marginTop: 12 }}>
-                <Icon name="map-pin" size={12} color={regionHighlight ? C.gold : C.muted} />
-                <Text style={[styles.fieldLabel, { color: regionHighlight ? C.gold : C.muted, fontWeight: regionHighlight ? '900' : '700', marginBottom: 0, marginTop: 0 }]}>활동 지역</Text>
-              </View>
-              {/* 시/도 선택 */}
-              <Pressable
-                onPress={() => { setShowProvincePicker(!showProvincePicker); setShowDistrictPicker(false); }}
-                style={[styles.input, styles.pickerBtn, { backgroundColor: C.bg, borderColor: showProvincePicker ? C.gold : C.border }]}
-              >
-                <Text style={{ color: regionProvince ? C.fg : C.mutedLight, fontSize: 15 }}>
-                  {regionProvince || '시/도 선택'}
-                </Text>
-                <Text style={{ color: C.mutedLight, fontSize: 12 }}>{showProvincePicker ? '▲' : '▼'}</Text>
-              </Pressable>
-              {showProvincePicker && (
-                <ScrollView style={[styles.pickerList, { backgroundColor: C.bg, borderColor: C.border }]} nestedScrollEnabled>
-                  {PROVINCE_LIST.map(p => (
-                    <Pressable
-                      key={p}
-                      onPress={() => {
-                        setRegionProvince(p);
-                        setRegionDistrict('');
-                        setShowProvincePicker(false);
-                        setShowDistrictPicker(true);
-                      }}
-                      style={({ pressed }) => [styles.pickerItem, regionProvince === p && { backgroundColor: C.gold + '22' }, pressed && { opacity: 0.7 }]}
-                    >
-                      <Text style={[styles.pickerItemText, { color: regionProvince === p ? C.gold : C.fg }]}>{p}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              )}
-
-              {/* 구/군/시 선택 */}
-              {regionProvince !== '' && (
-                <>
-                  <Pressable
-                    onPress={() => { setShowDistrictPicker(!showDistrictPicker); setShowProvincePicker(false); }}
-                    style={[styles.input, styles.pickerBtn, { backgroundColor: C.bg, borderColor: showDistrictPicker ? C.gold : C.border, marginTop: 8 }]}
-                  >
-                    <Text style={{ color: regionDistrict ? C.fg : C.mutedLight, fontSize: 15 }}>
-                      {regionDistrict || '구/군/시 선택'}
-                    </Text>
-                    <Text style={{ color: C.mutedLight, fontSize: 12 }}>{showDistrictPicker ? '▲' : '▼'}</Text>
-                  </Pressable>
-                  {showDistrictPicker && (
-                    <ScrollView style={[styles.pickerList, { backgroundColor: C.bg, borderColor: C.border }]} nestedScrollEnabled>
-                      {(REGIONS[regionProvince] ?? []).map(d => (
-                        <Pressable
-                          key={d}
-                          onPress={() => { setRegionDistrict(d); setShowDistrictPicker(false); }}
-                          style={({ pressed }) => [styles.pickerItem, regionDistrict === d && { backgroundColor: C.gold + '22' }, pressed && { opacity: 0.7 }]}
-                        >
-                          <Text style={[styles.pickerItemText, { color: regionDistrict === d ? C.gold : C.fg }]}>{d}</Text>
-                        </Pressable>
-                      ))}
-                    </ScrollView>
-                  )}
-                </>
-              )}
-
-              {regionProvince && regionDistrict ? (
-                <View style={styles.regionPreview}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Icon name="map-pin" size={13} color={C.gold} />
-                    <Text style={[styles.regionPreviewText, { color: C.gold }]}>{regionProvince} {regionDistrict}</Text>
-                  </View>
-                  <Pressable onPress={() => { setRegionProvince(''); setRegionDistrict(''); }}>
-                    <Text style={{ color: C.mutedLight, fontSize: 12 }}>초기화</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-              </View>
 
               <Text style={[styles.fieldLabel, { color: C.muted }]}>소개</Text>
               <TextInput
@@ -1380,12 +1438,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 8,
   },
   pickerList: {
     maxHeight: 200,
     borderWidth: 1,
-    borderRadius: 12,
-    marginTop: 4,
+    borderRadius: 10,
+    marginTop: 6,
   },
   pickerItem: {
     paddingHorizontal: 14,
@@ -1398,17 +1461,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    marginBottom: 4,
   },
   regionPreviewText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
-  },
-  regionHighlight: {
-    borderWidth: 1.5,
-    borderRadius: 12,
-    padding: 12,
-    marginTop: 4,
-    marginBottom: 4,
   },
 });

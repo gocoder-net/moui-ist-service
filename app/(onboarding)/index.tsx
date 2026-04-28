@@ -35,6 +35,7 @@ import Animated, {
 import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
 import { FloatingShape } from '@/components/ui/FloatingShape';
 import { Icon } from '@/components/ui/Icon';
+import { REGIONS, PROVINCE_LIST } from '@/constants/regions';
 
 const C = {
   bg: '#000000',
@@ -164,6 +165,10 @@ export default function OnboardingScreen() {
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [regionProvince, setRegionProvince] = useState('');
+  const [regionDistrict, setRegionDistrict] = useState('');
+  const [showProvincePicker, setShowProvincePicker] = useState(false);
+  const [showDistrictPicker, setShowDistrictPicker] = useState(false);
   const realNameRef = useRef<TextInput>(null);
   const phoneRef = useRef<TextInput>(null);
 
@@ -208,6 +213,7 @@ export default function OnboardingScreen() {
     : !!displayName.trim()
       && !!realName.trim()
       && normalizedPhoneNumber.length >= 9
+      && !!regionProvince && !!regionDistrict
       && (!needsFieldSelection || (selectedFields.length > 0 && selectedSubFields.length > 0));
 
   const btnGlowStyle = useAnimatedStyle(() => ({
@@ -336,6 +342,7 @@ export default function OnboardingScreen() {
       });
     }
 
+    const regionValue = regionProvince && regionDistrict ? `${regionProvince} ${regionDistrict}` : null;
     await supabase.from('profiles').update({
       user_type: selected,
       name: displayName.trim(),
@@ -343,6 +350,7 @@ export default function OnboardingScreen() {
       phone_number: normalizedPhoneNumber,
       field: needsFieldSelection ? selectedFields.join(', ') : null,
       sub_field: selectedSubFields.length > 0 ? selectedSubFields.join(', ') : null,
+      region: regionValue,
       ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
       ...(bonusPoints !== undefined ? { points: bonusPoints } : {}),
     } as any).eq('id', user.id);
@@ -513,6 +521,76 @@ export default function OnboardingScreen() {
                 maxLength={11}
               />
               <Text style={styles.inputHint}>하이픈 없이 입력해 주세요. 외부에는 공개되지 않아요</Text>
+            </View>
+
+            {/* 활동 지역 */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.inputLabel}>활동 지역 <Text style={styles.inputRequired}>(필수)</Text></Text>
+              <Pressable
+                onPress={() => { setShowProvincePicker(!showProvincePicker); setShowDistrictPicker(false); }}
+                style={[styles.textInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }, showProvincePicker && { borderColor: C.gold }]}
+              >
+                <Text style={{ color: regionProvince ? C.fg : C.mutedLight, fontSize: 16 }}>
+                  {regionProvince || '시/도 선택'}
+                </Text>
+                <Text style={{ color: C.mutedLight, fontSize: 12 }}>{showProvincePicker ? '▲' : '▼'}</Text>
+              </Pressable>
+              {showProvincePicker && (
+                <ScrollView style={styles.regionPickerList} nestedScrollEnabled>
+                  {PROVINCE_LIST.map(p => (
+                    <Pressable
+                      key={p}
+                      onPress={() => {
+                        setRegionProvince(p);
+                        setRegionDistrict('');
+                        setShowProvincePicker(false);
+                        setShowDistrictPicker(true);
+                      }}
+                      style={[styles.regionPickerItem, regionProvince === p && { backgroundColor: C.gold + '22' }]}
+                    >
+                      <Text style={{ fontSize: 14, color: regionProvince === p ? C.gold : C.fg }}>{p}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              )}
+              {regionProvince !== '' && (
+                <>
+                  <Pressable
+                    onPress={() => { setShowDistrictPicker(!showDistrictPicker); setShowProvincePicker(false); }}
+                    style={[styles.textInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }, showDistrictPicker && { borderColor: C.gold }]}
+                  >
+                    <Text style={{ color: regionDistrict ? C.fg : C.mutedLight, fontSize: 16 }}>
+                      {regionDistrict || '구/군/시 선택'}
+                    </Text>
+                    <Text style={{ color: C.mutedLight, fontSize: 12 }}>{showDistrictPicker ? '▲' : '▼'}</Text>
+                  </Pressable>
+                  {showDistrictPicker && (
+                    <ScrollView style={styles.regionPickerList} nestedScrollEnabled>
+                      {(REGIONS[regionProvince] ?? []).map(d => (
+                        <Pressable
+                          key={d}
+                          onPress={() => { setRegionDistrict(d); setShowDistrictPicker(false); }}
+                          style={[styles.regionPickerItem, regionDistrict === d && { backgroundColor: C.gold + '22' }]}
+                        >
+                          <Text style={{ fontSize: 14, color: regionDistrict === d ? C.gold : C.fg }}>{d}</Text>
+                        </Pressable>
+                      ))}
+                    </ScrollView>
+                  )}
+                </>
+              )}
+              {regionProvince && regionDistrict ? (
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                  <Text style={[styles.inputHint, { color: C.gold, fontWeight: '700' }]}>
+                    {regionProvince} {regionDistrict}
+                  </Text>
+                  <Pressable onPress={() => { setRegionProvince(''); setRegionDistrict(''); }}>
+                    <Text style={{ color: C.muted, fontSize: 11 }}>초기화</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Text style={styles.inputHint}>주요 활동 지역을 선택해주세요</Text>
+              )}
             </View>
 
             {needsFieldSelection && (
@@ -944,6 +1022,19 @@ const styles = StyleSheet.create({
   },
   chipTextSelected: {
     color: C.gold,
+  },
+
+  regionPickerList: {
+    maxHeight: 200,
+    borderWidth: 1.5,
+    borderColor: C.border,
+    borderRadius: 14,
+    backgroundColor: C.inputBg,
+    marginTop: 6,
+  },
+  regionPickerItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
   },
 
   backBtn: {
