@@ -2,7 +2,7 @@ import { View, Text, Pressable, Platform, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BlurView } from 'expo-blur';
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Icon } from '@/components/ui/Icon';
 import { APP_TAB_ITEMS } from '@/constants/tab-navigation';
 import { useThemeMode } from '@/contexts/theme-context';
 
@@ -20,7 +20,7 @@ export function BottomTabBar() {
           onPress={() => router.replace(tab.path as any)}
           style={({ pressed }) => [tabStyles.tab, pressed && { opacity: 0.6 }]}
         >
-          <IconSymbol size={22} name={tab.icon} color={C.mutedLight} />
+          <Icon size={22} name={tab.icon} color={C.mutedLight} />
           <Text style={[tabStyles.tabLabel, { color: C.mutedLight }]}>{tab.label}</Text>
         </Pressable>
       ))}

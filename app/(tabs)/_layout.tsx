@@ -5,7 +5,7 @@ import { BlurView } from 'expo-blur';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { Icon } from '@/components/ui/Icon';
 import { APP_TAB_ITEMS } from '@/constants/tab-navigation';
 import { useThemeMode } from '@/contexts/theme-context';
 
@@ -79,7 +79,14 @@ export default function TabLayout() {
           name={tab.tabName}
           options={{
             title: tab.label,
-            tabBarIcon: ({ color }) => <IconSymbol size={22} name={tab.icon} color={color} />,
+            tabBarIcon: ({ color, focused, size }) => (
+              <Icon
+                size={size}
+                name={tab.icon}
+                color={color}
+                weight={focused ? 'fill' : 'regular'}
+              />
+            ),
           }}
         />
       ))}
