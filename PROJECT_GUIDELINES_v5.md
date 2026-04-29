@@ -3,8 +3,8 @@
 ## 프로젝트 개요
 - **앱 이름**: MOUI-IST (모의스트)
 - **슬로건**: 창작을 모의하는 자들
-- **웹사이트**: https://mouiist.com (아티스트 그룹 소개 — 다크 테마)
-- **앱 배포 URL**: https://moui-ist-service.vercel.app (커뮤니티 앱 — 라이트 테마)
+- **웹사이트**: https://crew.mouiist.com (아티스트 그룹 소개 — 다크 테마)
+- **앱 배포 URL**: https://www.mouiist.com (커뮤니티 앱 — 라이트 테마)
 - **SNS**: Instagram @the.moui.ist, YouTube @Moui-ist
 - **개발 방식**: 1인 개발 (바이브 코딩)
 
@@ -15,7 +15,7 @@
 
 ### 🎨 디자인 방향 — 아티스트 그룹 vs 앱
 
-| 구분 | 아티스트 그룹 (mouiist.com) | 앱 (moui-ist-service.vercel.app) |
+| 구분 | 아티스트 그룹 (crew.mouiist.com) | 앱 (www.mouiist.com) |
 |------|---------------------------|----------------------------------|
 | 성격 | 9인 작가 집단, 단체전 | 작가·지망생·감상자 커뮤니티 |
 | 테마 | **다크** (배경 #060606, 텍스트 #F0ECE4) | **라이트** (배경 #FFFFFF, 텍스트 #0A0A0A) |
@@ -136,10 +136,10 @@ Brand.border    = '#E8E5DF'    // 구분선
   - **Android Keystore**: EAS에서 자동 생성 및 관리
   - **iOS 빌드**: Apple Developer Program ($99/년) 가입 후 가능
 - **웹 호스팅**: Vercel (GitHub main 브랜치 push 시 자동 배포)
-  - 배포 URL: https://moui-ist-service.vercel.app
+  - 배포 URL: https://www.mouiist.com
   - 설정 파일: `vercel.json` (빌드 명령어, 출력 디렉토리 지정)
 - **푸시 알림**: Expo Push Notifications (2단계부터)
-- **도메인**: mouiist.com (기 보유)
+- **도메인**: mouiist.com (기 보유) — www.mouiist.com(앱), crew.mouiist.com(아티스트 그룹)
 
 ## 🔑 계정 정보 (가입 완료)
 
