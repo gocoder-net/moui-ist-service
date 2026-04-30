@@ -1,27 +1,16 @@
-import { useState, useCallback } from 'react';
 import {
   StyleSheet, View, Text, Pressable, FlatList, Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import { timeAgo } from '@/lib/utils';
+import { useSupabaseQuery } from '@/hooks/use-supabase-query';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Icon } from '@/components/ui/Icon';
-
-type Notification = {
-  id: string;
-  type: string;
-  title: string;
-  body: string | null;
-  from_user_id: string | null;
-  target_id: string | null;
-  is_read: boolean;
-  created_at: string;
-  from_user?: { username: string; name: string | null; avatar_url: string | null } | null;
-};
+import type { Notification } from '@/types/models';
 
 const TYPE_ICON: Record<string, Parameters<typeof Icon>[0]['name']> = {
   like: 'heart',
@@ -37,30 +26,25 @@ export default function NotificationsScreen() {
   const router = useRouter();
   const { user } = useAuth();
   const { colors: C } = useThemeMode();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const loadNotifications = useCallback(async () => {
-    if (!user) return;
-    setLoading(true);
-    const { data } = await supabase
-      .from('notifications')
-      .select('*, profiles!notifications_from_user_id_fkey(username, name, avatar_url)')
-      .eq('user_id', user.id)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (data) {
-      setNotifications(data.map((n: any) => ({
-        ...n,
-        from_user: n.profiles ?? null,
-      })));
-      // Mark all as read
-      await supabase.from('notifications').update({ is_read: true }).eq('user_id', user.id).eq('is_read', false);
-    }
-    setLoading(false);
-  }, [user]);
-
-  useFocusEffect(useCallback(() => { loadNotifications(); }, [loadNotifications]));
+  const { data: notifications, loading } = useSupabaseQuery<Notification[]>(
+    async () => {
+      const { data } = await supabase
+        .from('notifications')
+        .select('*, profiles!notifications_from_user_id_fkey(username, name, avatar_url)')
+        .eq('user_id', user!.id)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (data) {
+        // Mark all as read
+        await supabase.from('notifications').update({ is_read: true }).eq('user_id', user!.id).eq('is_read', false);
+        return data.map((n: any) => ({ ...n, from_user: n.profiles ?? null }));
+      }
+      return [];
+    },
+    [],
+    [user?.id],
+  );
 
   const goToUser = (n: Notification) => {
     if (n.from_user?.username) router.push(`/artist/${n.from_user.username}` as any);

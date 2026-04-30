@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
 import { useThemeMode } from '@/contexts/theme-context';
-import { timeAgo, detectSnsType } from '@/lib/utils';
+import { timeAgo, detectSnsType, showConfirm } from '@/lib/utils';
 import { USER_TYPE_LABELS, USER_TYPE_ICON, FIELD_ICON_MAP } from '@/constants/user';
 import { Icon } from '@/components/ui/Icon';
 import { SpinningDiamond } from '@/components/ui/SpinningDiamond';
@@ -791,14 +791,7 @@ export default function ArtistPortfolioScreen() {
                         ]}
                         onPress={() => {
                           if (!user?.id) {
-                            if (Platform.OS === 'web') {
-                              if (window.confirm('모의스트 가입이 필요합니다.\n가입하시겠습니까?')) router.push('/signup' as any);
-                            } else {
-                              Alert.alert('가��� 필요', '모의스트 가입이 필요합니다.', [
-                                { text: '취소', style: 'cancel' },
-                                { text: '가입하기', onPress: () => router.push('/signup' as any) },
-                              ]);
-                            }
+                            showConfirm('가입 필요', '모의스트 가입이 필요합니다.\n가입하시겠습니까?', () => router.push('/signup' as any), { confirmLabel: '가입하기', confirmStyle: 'default' });
                             return;
                           }
                           toggleFollow();
@@ -818,14 +811,7 @@ export default function ArtistPortfolioScreen() {
                         onPress={() => {
                           if (chatStatus === 'pending') return;
                           if (!user?.id) {
-                            if (Platform.OS === 'web') {
-                              if (window.confirm('모의스트 가입이 필요합니다.\n가입하시겠습니까?')) router.push('/signup' as any);
-                            } else {
-                              Alert.alert('가입 필요', '모의스트 가입이 필요합니다.', [
-                                { text: '취소', style: 'cancel' },
-                                { text: '가입하기', onPress: () => router.push('/signup' as any) },
-                              ]);
-                            }
+                            showConfirm('가입 필요', '모의스트 가입이 필요합니다.\n가입하시겠습니까?', () => router.push('/signup' as any), { confirmLabel: '가입하기', confirmStyle: 'default' });
                             return;
                           }
                           if (chatStatus === 'accepted') {

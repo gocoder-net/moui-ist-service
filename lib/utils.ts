@@ -20,16 +20,28 @@ export function showAlert(title: string, message: string) {
   else Alert.alert(title, message);
 }
 
-/** 크로스 플랫폼 confirm (web → window.confirm, native → Alert with 취소/삭제) */
-export function showConfirm(title: string, message: string, onConfirm: () => void) {
+/** 크로스 플랫폼 confirm (web → window.confirm, native → Alert with 취소/확인) */
+export function showConfirm(
+  title: string,
+  message: string,
+  onConfirm: () => void,
+  options?: { confirmLabel?: string; confirmStyle?: 'destructive' | 'default' },
+) {
+  const { confirmLabel = '삭제', confirmStyle = 'destructive' } = options ?? {};
   if (Platform.OS === 'web') {
     if (window.confirm(`${title}\n${message}`)) onConfirm();
   } else {
     Alert.alert(title, message, [
       { text: '취소', style: 'cancel' },
-      { text: '삭제', style: 'destructive', onPress: onConfirm },
+      { text: confirmLabel, style: confirmStyle, onPress: onConfirm },
     ]);
   }
+}
+
+/** 콤마 구분 문자열을 배열로 파싱 */
+export function parseCommaSeparated(value: string | null | undefined): string[] {
+  if (!value) return [];
+  return value.split(',').map(s => s.trim()).filter(Boolean);
 }
 
 /** 지역 라벨 축약 (예: "서울특별시 강남구" → "서울시 강남구") */

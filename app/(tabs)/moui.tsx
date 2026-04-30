@@ -1,59 +1,23 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   StyleSheet, View, Text, Pressable, SectionList, ActivityIndicator,
-  Platform, Alert, Linking, TextInput, Modal,
+  Linking, TextInput, Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuth } from '@/contexts/auth-context';
 import { useThemeMode } from '@/contexts/theme-context';
 import { supabase } from '@/lib/supabase';
 import { parseRegion } from '@/constants/regions';
 import { MOUI_CATEGORIES, TARGET_OPTIONS, FIELD_OPTIONS } from '@/constants/moui';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
-import { showAlert, formatRegionLabel, formatRecruitPeriod, formatMeetingDate } from '@/lib/utils';
+import { showAlert, showConfirm, formatRegionLabel, formatRecruitPeriod, formatMeetingDate, parseCommaSeparated } from '@/lib/utils';
+import { useSupabaseQuery } from '@/hooks/use-supabase-query';
 import { Icon } from '@/components/ui/Icon';
-
-type MouiParticipant = {
-  user_id: string;
-  profiles: {
-    name: string | null;
-    username: string;
-    avatar_url: string | null;
-    user_type: string;
-  };
-};
-
-type MouiPost = {
-  id: string;
-  user_id: string;
-  title: string;
-  description: string;
-  fields: string | null;
-  category: string | null;
-  region: string | null;
-  target_types: string | null;
-  map_url: string | null;
-  address: string | null;
-  meeting_date: string | null;
-  frequency: string | null;
-  recruit_start: string | null;
-  recruit_deadline: string | null;
-  status: 'open' | 'closed';
-  created_at: string;
-  profiles?: {
-    name: string | null;
-    username: string;
-    avatar_url: string | null;
-    field: string | null;
-    user_type: 'creator' | 'aspiring' | 'audience';
-    verified: boolean;
-  };
-  moui_participants?: MouiParticipant[];
-};
+import type { MouiParticipant, MouiPost } from '@/types/models';
 
 export default function MouiScreen() {
   const insets = useSafeAreaInsets();
@@ -63,8 +27,6 @@ export default function MouiScreen() {
   const { colors: C } = useThemeMode();
   const activityRegion = formatRegionLabel(profile?.region);
 
-  const [posts, setPosts] = useState<MouiPost[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [searchQuery, setSearchQuery] = useState(userParam ?? '');
   const [showSearchBar, setShowSearchBar] = useState(!!(userParam));
@@ -79,18 +41,17 @@ export default function MouiScreen() {
   const myProvince = myRegion?.province;
   const myDistrict = myRegion?.district;
 
-  const fetchPosts = async () => {
-    setLoading(true);
-    const query = (supabase as any)
-      .from('moui_posts')
-      .select('*, profiles(name, username, avatar_url, field, user_type, verified), moui_participants(user_id, profiles(name, username, avatar_url, user_type))')
-      .order('created_at', { ascending: false });
-    const { data } = await query;
-    if (data) setPosts(data);
-    setLoading(false);
-  };
-
-  useFocusEffect(useCallback(() => { fetchPosts(); }, []));
+  const { data: posts, loading, refetch: fetchPosts } = useSupabaseQuery<MouiPost[]>(
+    async () => {
+      const { data } = await (supabase as any)
+        .from('moui_posts')
+        .select('*, profiles(name, username, avatar_url, field, user_type, verified), moui_participants(user_id, profiles(name, username, avatar_url, user_type))')
+        .order('created_at', { ascending: false });
+      return data ?? [];
+    },
+    [],
+    [true], // always fetch — no deps to wait for
+  );
 
   const MAX_PARTICIPANTS = 30;
 
@@ -119,16 +80,7 @@ export default function MouiScreen() {
   };
 
   const promptSignup = () => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('모의스트 가입이 필요합니다.\n가입하시겠습니까?')) {
-        router.push('/signup' as any);
-      }
-    } else {
-      Alert.alert('가입 필요', '모의스트 가입이 필요합니다.', [
-        { text: '취소', style: 'cancel' },
-        { text: '가입하기', onPress: () => router.push('/signup' as any) },
-      ]);
-    }
+    showConfirm('가입 필요', '모의스트 가입이 필요합니다.', () => router.push('/signup' as any), { confirmLabel: '가입하기', confirmStyle: 'default' });
   };
 
   const handleJoin = (postId: string) => {
@@ -139,15 +91,7 @@ export default function MouiScreen() {
       return;
     }
     const msg = `${JOIN_COST} 모의(MOUI)를 사용합니다.`;
-    if (Platform.OS === 'web') {
-      if (!window.confirm(msg)) return;
-      doJoin(postId);
-    } else {
-      Alert.alert('모임 참석', msg, [
-        { text: '취소', style: 'cancel' },
-        { text: '참석', onPress: () => doJoin(postId) },
-      ]);
-    }
+    showConfirm('모임 참석', msg, () => doJoin(postId), { confirmLabel: '참석', confirmStyle: 'default' });
   };
 
   const handleLeave = async (postId: string) => {
@@ -238,14 +182,14 @@ export default function MouiScreen() {
 
     if (selectedField) {
       filtered = filtered.filter(p => {
-        const fields = p.fields?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
+        const fields = parseCommaSeparated(p.fields);
         return p.fields?.trim() === '전체' || fields.includes(selectedField);
       });
     }
 
     if (selectedTarget) {
       filtered = filtered.filter(p => {
-        const targets = p.target_types?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
+        const targets = parseCommaSeparated(p.target_types);
         return targets.includes(selectedTarget);
       });
     }
@@ -322,7 +266,7 @@ export default function MouiScreen() {
     const isFull = participants.length >= MAX_PARTICIPANTS;
     const showJoinBtn = !isOwner && !isClosed && !isJoined && !isFull;
 
-    const targetKeys = item.target_types?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
+    const targetKeys = parseCommaSeparated(item.target_types);
 
     const remainingDays = item.recruit_deadline
       ? Math.max(0, Math.ceil((new Date(item.recruit_deadline).getTime() - Date.now()) / 86400000))
@@ -465,12 +409,12 @@ export default function MouiScreen() {
                       <Text style={[styles.postTagText, { color: C.gold }]}>전체 분야</Text>
                     </View>
                   ) : (
-                    item.fields.split(',').map(f => {
-                      const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
+                    parseCommaSeparated(item.fields).map(f => {
+                      const fo = FIELD_OPTIONS.find(o => o.key === f);
                       return (
-                        <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                        <View key={f} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
                           {fo && <Icon name={fo.icon} size={14} color={C.gold} />}
-                          <Text style={[styles.postTagText, { color: C.gold }]}>{f.trim()}</Text>
+                          <Text style={[styles.postTagText, { color: C.gold }]}>{f}</Text>
                         </View>
                       );
                     })
@@ -592,15 +536,7 @@ export default function MouiScreen() {
                     if (error) { showAlert('오류', '삭제 실패: ' + error.message); }
                     else { fetchPosts(); }
                   };
-                  if (Platform.OS === 'web') {
-                    if (!window.confirm(msg)) return;
-                    doDelete();
-                  } else {
-                    Alert.alert('삭제 확인', msg, [
-                      { text: '취소', style: 'cancel' },
-                      { text: '삭제', style: 'destructive', onPress: doDelete },
-                    ]);
-                  }
+                  showConfirm('삭제 확인', msg, doDelete, { confirmLabel: '삭제', confirmStyle: 'destructive' });
                 }}
                 style={({ pressed }) => [styles.closeBtn, { borderColor: C.danger + '55' }, pressed && { opacity: 0.6 }]}
               >
@@ -612,18 +548,10 @@ export default function MouiScreen() {
                     const msg = remainingDays !== null
                       ? `모집기간이 ${remainingDays}일 남았는데 마감하시겠습니까?`
                       : '모집을 마감하시겠습니까?';
-                    if (Platform.OS === 'web') {
-                      if (!window.confirm(msg)) return;
-                      (supabase as any).from('moui_posts').update({ status: 'closed' }).eq('id', item.id).then(() => fetchPosts());
-                    } else {
-                      Alert.alert('마감 확인', msg, [
-                        { text: '취소', style: 'cancel' },
-                        { text: '마감', style: 'destructive', onPress: async () => {
-                          await (supabase as any).from('moui_posts').update({ status: 'closed' }).eq('id', item.id);
-                          fetchPosts();
-                        }},
-                      ]);
-                    }
+                    showConfirm('마감 확인', msg, async () => {
+                      await (supabase as any).from('moui_posts').update({ status: 'closed' }).eq('id', item.id);
+                      fetchPosts();
+                    }, { confirmLabel: '마감', confirmStyle: 'destructive' });
                   }}
                   style={({ pressed }) => [styles.closeBtn, { borderColor: C.gold + '55', backgroundColor: C.gold + '11' }, pressed && { opacity: 0.6 }]}
                 >

@@ -5,8 +5,6 @@ import {
   Text,
   Pressable,
   ScrollView,
-  Platform,
-  Alert,
   Image,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +25,7 @@ import Animated, {
   FadeIn,
   FadeInDown,
 } from 'react-native-reanimated';
-import { timeAgo, getTodayString, getYesterday } from '@/lib/utils';
+import { timeAgo, getTodayString, getYesterday, showAlert } from '@/lib/utils';
 import { FloatingShape } from '@/components/ui/FloatingShape';
 import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
 import { Icon } from '@/components/ui/Icon';
@@ -136,7 +134,7 @@ export default function HomeScreen() {
       await refreshProfile();
       setRegionRewardClaimed(true);
       const msg = `활동 지역 설정 완료! ${REWARD}모의를 받았습니다!`;
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('보상 지급', msg);
+      showAlert('보상 지급', msg);
     }
   }, [user]);
 
@@ -252,7 +250,7 @@ export default function HomeScreen() {
     setWelcomeClaimed(true);
     setClaimingWelcome(false);
     const msg = `모의스트로 임명되었습니다! ${REWARD}모의를 받았습니다!`;
-    Platform.OS === 'web' ? window.alert(msg) : Alert.alert('환영합니다!', msg);
+    showAlert('환영합니다!', msg);
   };
 
   // 출석 정보 가져오기
@@ -310,7 +308,7 @@ export default function HomeScreen() {
     });
     if (error) {
       const msg = '출석 체크에 실패했습니다.';
-      Platform.OS === 'web' ? window.alert(msg) : Alert.alert('오류', msg);
+      showAlert('오류', msg);
       setCheckingIn(false);
       return;
     }
@@ -337,7 +335,7 @@ export default function HomeScreen() {
     const msg = nextDay === 7
       ? `7일 연속 출석! ${reward}모의를 받았습니다!`
       : `${nextDay}일차 출석! ${reward}모의를 받았습니다.`;
-    Platform.OS === 'web' ? window.alert(msg) : Alert.alert('출석 완료', msg);
+    showAlert('출석 완료', msg);
   };
 
   return (

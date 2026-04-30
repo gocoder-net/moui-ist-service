@@ -13,7 +13,7 @@ import { Icon } from '@/components/ui/Icon';
 import { parseRegion, REGIONS, PROVINCE_LIST } from '@/constants/regions';
 import { MOUI_CATEGORIES, MOUI_POST_COST, FIELD_OPTIONS, TARGET_TOP, TARGET_CREATOR_SUB } from '@/constants/moui';
 import Animated, { FadeInDown } from 'react-native-reanimated';
-import { showAlert, getTodayDate } from '@/lib/utils';
+import { showAlert, getTodayDate, parseCommaSeparated } from '@/lib/utils';
 
 const MAP_DOMAINS = ['naver.me', 'map.naver.com', 'naver.com', 'map.kakao.com', 'kakao.com', 'maps.app.goo.gl', 'goo.gl', 'google.com', 'maps.google.com'];
 
@@ -349,10 +349,10 @@ export default function CreateMouiScreen() {
       const reg = parseRegion(data.region);
       if (reg) { setFormProvince(reg.province); setFormDistrict(reg.district); }
       // targets
-      if (data.target_types) setFormTargets(data.target_types.split(',').map((s: string) => s.trim()));
+      if (data.target_types) setFormTargets(parseCommaSeparated(data.target_types));
       // fields
       if (data.fields === '전체' || !data.fields) { setFormFieldAll(true); setFormFields([]); }
-      else { setFormFieldAll(false); setFormFields(data.fields.split(',').map((s: string) => s.trim())); }
+      else { setFormFieldAll(false); setFormFields(parseCommaSeparated(data.fields)); }
       // recruit dates
       if (data.recruit_deadline) {
         setRecruitEndDate(new Date(data.recruit_deadline));

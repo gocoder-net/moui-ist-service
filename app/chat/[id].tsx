@@ -20,6 +20,7 @@ import { useThemeMode } from '@/contexts/theme-context';
 import { useAuth } from '@/contexts/auth-context';
 import { supabase } from '@/lib/supabase';
 import { r2Upload, r2Delete, r2ExtractPath } from '@/lib/r2';
+import { showConfirm } from '@/lib/utils';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Icon } from '@/components/ui/Icon';
 import * as ImagePicker from 'expo-image-picker';
@@ -277,16 +278,9 @@ export default function ChatRoomScreen() {
   }, [requestId]);
 
   const endChat = useCallback(() => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('이 채팅을 종료하시겠습니까?\n모든 메시지가 삭제됩니다.')) {
-        doEndChat();
-      }
-    } else {
-      Alert.alert('채팅 종료', '이 채팅을 종료하시겠습니까?\n모든 메시지가 삭제됩니다.', [
-        { text: '취소', style: 'cancel' },
-        { text: '종료', style: 'destructive', onPress: doEndChat },
-      ]);
-    }
+    showConfirm('채팅 종료', '이 채팅을 종료하시겠습니까?\n모든 메시지가 삭제됩니다.', () => {
+      doEndChat();
+    });
   }, [doEndChat]);
 
   const doExtendChat = useCallback(async () => {
@@ -312,16 +306,9 @@ export default function ChatRoomScreen() {
   }, [requestId]);
 
   const extendChat = useCallback(() => {
-    if (Platform.OS === 'web') {
-      if (window.confirm('100 MOUI를 사용하여 채팅을 7일 연장하시겠습니까?')) {
-        doExtendChat();
-      }
-    } else {
-      Alert.alert('기간 연장', '100 MOUI를 사용하여 채팅을 7일 연장하시겠습니까?', [
-        { text: '취소', style: 'cancel' },
-        { text: '연장', onPress: doExtendChat },
-      ]);
-    }
+    showConfirm('채팅 연장', '100 MOUI를 사용하여 채팅을 7일 연장하시겠습니까?', () => {
+      doExtendChat();
+    }, { confirmLabel: '연장', confirmStyle: 'default' });
   }, [doExtendChat]);
 
   const otherName = otherUser?.name ?? otherUser?.username ?? '...';

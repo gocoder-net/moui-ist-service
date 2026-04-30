@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,7 +6,6 @@ import {
   Pressable,
   Image,
   Alert,
-  Platform,
   SectionList,
   ActivityIndicator,
 } from 'react-native';
@@ -18,59 +17,9 @@ import { supabase } from '@/lib/supabase';
 import { r2Delete, r2ExtractPath } from '@/lib/r2';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { getCreatorVerificationStatusText } from '@/constants/creator-verification';
+import { timeAgo, showConfirm, parseCommaSeparated } from '@/lib/utils';
 import { Icon } from '@/components/ui/Icon';
-
-type ChatProfile = {
-  id: string;
-  name: string | null;
-  username: string;
-  avatar_url: string | null;
-  user_type: 'creator' | 'aspiring' | 'audience';
-  verified: boolean;
-  field: string | null;
-  region: string | null;
-};
-
-type MouiChatItem = {
-  id: string;
-  title: string;
-  category: string | null;
-  last_message: string | null;
-  last_message_at: string | null;
-  participant_count: number;
-  meeting_date: string | null;
-  expires_at: string | null;
-};
-
-type ChatRequestRow = {
-  id: string;
-  sender_id: string;
-  receiver_id: string;
-  message: string;
-  status: 'pending' | 'accepted' | 'rejected';
-  created_at: string;
-  expires_at: string | null;
-  extended: boolean;
-  sender_last_read_at: string | null;
-  receiver_last_read_at: string | null;
-  sender?: ChatProfile;
-  receiver?: ChatProfile;
-  last_message?: string | null;
-  last_message_at?: string | null;
-  last_message_sender_id?: string | null;
-};
-
-function getRelativeTime(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return '방금';
-  if (minutes < 60) return `${minutes}분 전`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}시간 전`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}일 전`;
-  return `${Math.floor(days / 7)}주 전`;
-}
+import type { ChatProfile, ChatRequestRow, MouiChatItem } from '@/types/models';
 
 export default function ChatScreen() {
   const insets = useSafeAreaInsets();
@@ -227,7 +176,6 @@ export default function ChatScreen() {
     setLoading(false);
   }, [user?.id]);
 
-  useEffect(() => { loadData(); }, [loadData]);
   useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
 
   const handleAccept = async (requestId: string, senderId: string) => {
@@ -299,7 +247,7 @@ export default function ChatScreen() {
   const ProfileMeta = ({ profile }: { profile?: ChatProfile | null }) => {
     if (!profile) return null;
     if (!profile.field) return null;
-    const fields = profile.field.split(',').map(f => f.trim()).filter(Boolean);
+    const fields = parseCommaSeparated(profile.field);
     if (fields.length === 0) return null;
     return (
       <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
@@ -371,7 +319,7 @@ export default function ChatScreen() {
 
             if (sec.type === 'moui') {
               const mouiItem = item as MouiChatItem;
-              const mouiTimeAgo = mouiItem.last_message_at ? getRelativeTime(mouiItem.last_message_at) : null;
+              const mouiTimeAgo = mouiItem.last_message_at ? timeAgo(mouiItem.last_message_at) : null;
               const mouiExpiryLabel = mouiItem.expires_at
                 ? `${new Date(mouiItem.expires_at).getMonth() + 1}/${new Date(mouiItem.expires_at).getDate()} 만료`
                 : null;
@@ -447,7 +395,7 @@ export default function ChatScreen() {
               const expiryLabel = item.expires_at
                 ? `${new Date(item.expires_at).getMonth() + 1}/${new Date(item.expires_at).getDate()} 만료`
                 : null;
-              const timeAgo = item.last_message_at ? getRelativeTime(item.last_message_at) : null;
+              const lastTimeAgo = item.last_message_at ? timeAgo(item.last_message_at) : null;
               const myLastRead = item.sender_id === user?.id
                 ? item.sender_last_read_at
                 : item.receiver_last_read_at;
@@ -480,8 +428,8 @@ export default function ChatScreen() {
                           </View>
                         )}
                         <View style={{ flex: 1 }} />
-                        {timeAgo && (
-                          <Text style={[styles.timeAgoText, { color: C.muted }]}>{timeAgo}</Text>
+                        {lastTimeAgo && (
+                          <Text style={[styles.timeAgoText, { color: C.muted }]}>{lastTimeAgo}</Text>
                         )}
                       </View>
                       {expiryLabel && (
@@ -520,18 +468,10 @@ export default function ChatScreen() {
                     <Pressable
                       style={({ pressed }) => [styles.cancelBtn, { borderColor: C.danger }, pressed && { opacity: 0.6 }]}
                       onPress={() => {
-                        const doCancel = async () => {
+                        showConfirm('요청 취소', '채팅 요청을 취소하시겠습니까?', async () => {
                           await supabase.from('chat_requests').delete().eq('id', item.id);
                           loadData();
-                        };
-                        if (Platform.OS === 'web') {
-                          if (window.confirm('채팅 요청을 취소하시겠습니까?')) doCancel();
-                        } else {
-                          Alert.alert('요청 취소', '채팅 요청을 취소하시겠습니까?', [
-                            { text: '아니오', style: 'cancel' },
-                            { text: '취소하기', style: 'destructive', onPress: doCancel },
-                          ]);
-                        }
+                        }, { confirmLabel: '취소하기' });
                       }}
                     >
                       <Text style={[styles.cancelBtnText, { color: C.danger }]}>취소</Text>

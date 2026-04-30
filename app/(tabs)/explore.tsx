@@ -8,7 +8,6 @@ import {
   Image,
   FlatList,
   ScrollView,
-  Platform,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,6 +30,7 @@ import Animated, {
 import { supabase } from '@/lib/supabase';
 import { r2ThumbUrl } from '@/lib/r2';
 import { USER_TYPE_LABELS } from '@/constants/user';
+import { showConfirm } from '@/lib/utils';
 import { Icon } from '@/components/ui/Icon';
 import { SpinningDiamond } from '@/components/ui/SpinningDiamond';
 import { PlayfulDiamond } from '@/components/ui/PlayfulDiamond';
@@ -395,15 +395,7 @@ export default function ExploreScreen() {
           ]}
           onPress={() => {
             if (!user?.id) {
-              if (Platform.OS === 'web') {
-                if (window.confirm('회원가입 후 작가 프로필을 볼 수 있습니다.\n가입하시겠습니까?')) router.push('/signup' as any);
-              } else {
-                const { Alert } = require('react-native');
-                Alert.alert('회원가입 필요', '회원가입 후 작가 프로필을 볼 수 있습니다.', [
-                  { text: '취소', style: 'cancel' },
-                  { text: '가입하기', onPress: () => router.push('/signup' as any) },
-                ]);
-              }
+              showConfirm('회원가입 필요', '회원가입 후 작가 프로필을 볼 수 있습니다.', () => router.push('/signup' as any), { confirmLabel: '가입하기', confirmStyle: 'default' });
               return;
             }
             router.push(`/artist/${item.username}`);
@@ -795,15 +787,7 @@ export default function ExploreScreen() {
         style={({ pressed }) => [styles.fab, { backgroundColor: C.gold }, pressed && { opacity: 0.8, transform: [{ scale: 0.95 }] }]}
         onPress={() => {
           if (!user?.id) {
-            if (Platform.OS === 'web') {
-              if (window.confirm('회원가입 후 작품을 올릴 수 있습니다.\n가입하시겠습니까?')) router.push('/signup' as any);
-            } else {
-              const { Alert } = require('react-native');
-              Alert.alert('회원가입 필요', '회원가입 후 작품을 올릴 수 있습니다.', [
-                { text: '취소', style: 'cancel' },
-                { text: '가입하기', onPress: () => router.push('/signup' as any) },
-              ]);
-            }
+            showConfirm('회원가입 필요', '회원가입 후 작품을 올릴 수 있습니다.', () => router.push('/signup' as any), { confirmLabel: '가입하기', confirmStyle: 'default' });
             return;
           }
           router.push('/artwork/create');

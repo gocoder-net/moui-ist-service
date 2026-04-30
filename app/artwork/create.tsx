@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   StyleSheet, View, Text, TextInput, Pressable, ScrollView,
-  ActivityIndicator, Alert, Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -25,7 +25,7 @@ import {
   SUB_FIELDS,
 } from '@/constants/artwork-form';
 import { Icon } from '@/components/ui/Icon';
-import { showAlert } from '@/lib/utils';
+import { showAlert, parseCommaSeparated, showConfirm } from '@/lib/utils';
 
 export default function CreateArtworkScreen() {
   const insets = useSafeAreaInsets();
@@ -49,7 +49,7 @@ export default function CreateArtworkScreen() {
   // 유저의 세부 분야 파싱
   const userSubFields = useMemo(() => {
     if (!profile?.sub_field) return [];
-    return profile.sub_field.split(',').map(s => s.trim()).filter(Boolean);
+    return parseCommaSeparated(profile.sub_field);
   }, [profile?.sub_field]);
 
   // 상위분야별 세부분야 개수 계산
@@ -85,20 +85,7 @@ export default function CreateArtworkScreen() {
         setMetadata({});
         setSelectedCategory(newCategory);
       };
-      if (Platform.OS === 'web') {
-        if (window.confirm('분야를 변경하면 입력한 세부 정보가 초기화됩니다.\n변경하시겠습니까?')) {
-          doChange();
-        }
-      } else {
-        Alert.alert(
-          '분야 변경',
-          '분야를 변경하면 입력한 세부 정보가 초기화됩니다.\n변경하시겠습니까?',
-          [
-            { text: '취소', style: 'cancel' },
-            { text: '변경', style: 'destructive', onPress: doChange },
-          ],
-        );
-      }
+      showConfirm('분야 변경', '분야를 변경하면 입력한 세부 정보가 초기화됩니다.\n변경하시겠습니까?', doChange, { confirmLabel: '변경', confirmStyle: 'default' });
     } else {
       setSelectedCategory(newCategory);
     }
@@ -158,7 +145,7 @@ export default function CreateArtworkScreen() {
         // 기존 작품 (category 없음): visual 컬럼에서 역파싱
         if (!cat) {
           if (data.medium) {
-            const parts = data.medium.split(',').map((s: string) => s.trim());
+            const parts = parseCommaSeparated(data.medium);
             if (parts.length >= 2) {
               loaded.medium = parts.slice(0, -1).join(', ');
               loaded.technique = parts[parts.length - 1];
@@ -205,9 +192,7 @@ export default function CreateArtworkScreen() {
 
     // 진입 시 분야가 없었던 유저만 프로필에 저장
     if (!hadSubFieldOnEntry.current && user) {
-      const currentSubs = profile?.sub_field
-        ? profile.sub_field.split(',').map(s => s.trim()).filter(Boolean)
-        : [];
+      const currentSubs = parseCommaSeparated(profile?.sub_field);
 
       // 이미 포함된 분야면 스킵
       if (currentSubs.includes(subField)) return;
@@ -218,9 +203,7 @@ export default function CreateArtworkScreen() {
       if (siblingCount >= 2) return;
 
       const newSubs = [...currentSubs, subField].join(', ');
-      const currentParents = profile?.field
-        ? profile.field.split(',').map(s => s.trim()).filter(Boolean)
-        : [];
+      const currentParents = parseCommaSeparated(profile?.field);
       const newField = currentParents.includes(parentField)
         ? currentParents.join(', ')
         : [...currentParents, parentField].join(', ');

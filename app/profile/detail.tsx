@@ -16,7 +16,7 @@ import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { getCreatorVerificationStatusText, getCreatorVerificationResetLabel } from '@/constants/creator-verification';
 import { REGIONS, PROVINCE_LIST, parseRegion } from '@/constants/regions';
 import { spendPoints } from '@/lib/points';
-import { detectSnsType } from '@/lib/utils';
+import { detectSnsType, parseCommaSeparated, showConfirm } from '@/lib/utils';
 import { USER_TYPE_LABELS, USER_TYPE_ICON } from '@/constants/user';
 import { Icon } from '@/components/ui/Icon';
 
@@ -133,30 +133,28 @@ export default function ProfileDetailScreen() {
         setRegionDistrict(parsed?.district ?? '');
         return;
       }
-      const confirmed = Platform.OS === 'web'
-        ? window.confirm(`활동 지역을 "${province} ${district}"(으)로 변경합니다.\n${COST} MOUI가 차감됩니다.\n계속하시겠습니까?`)
-        : await new Promise<boolean>((resolve) => {
-            Alert.alert(
-              '활동 지역 변경',
-              `활동 지역을 "${province} ${district}"(으)로 변경합니다.\n${COST} MOUI가 차감됩니다.`,
-              [{ text: '취소', style: 'cancel', onPress: () => resolve(false) }, { text: '변경', onPress: () => resolve(true) }],
-            );
-          });
-      if (!confirmed) {
-        const parsed = parseRegion(currentRegion);
-        setRegionProvince(parsed?.province ?? '');
-        setRegionDistrict(parsed?.district ?? '');
-        return;
-      }
-      setSavingRegion(true);
-      const { error } = await spendPoints(user.id, COST, '활동 지역 변경');
-      if (error) {
-        const parsed = parseRegion(currentRegion);
-        setRegionProvince(parsed?.province ?? '');
-        setRegionDistrict(parsed?.district ?? '');
+      const doRegionChange = async () => {
+        setSavingRegion(true);
+        const { error } = await spendPoints(user!.id, COST, '활동 지역 변경');
+        if (error) {
+          const parsed = parseRegion(currentRegion);
+          setRegionProvince(parsed?.province ?? '');
+          setRegionDistrict(parsed?.district ?? '');
+          setSavingRegion(false);
+          return;
+        }
+        const regionValue = province && district ? `${province} ${district}` : null;
+        await supabase.from('profiles').update({ region: regionValue }).eq('id', user!.id);
+        await refreshProfile();
         setSavingRegion(false);
-        return;
-      }
+      };
+      showConfirm(
+        '활동 지역 변경',
+        `활동 지역을 "${province} ${district}"(으)로 변경합니다.\n${COST} MOUI가 차감됩니다.`,
+        doRegionChange,
+        { confirmLabel: '변경', confirmStyle: 'default' },
+      );
+      return;
     } else {
       setSavingRegion(true);
     }
@@ -282,26 +280,24 @@ export default function ProfileDetailScreen() {
         Platform.OS === 'web' ? window.alert(msg) : Alert.alert('포인트 부족', msg);
         return;
       }
-      const confirmed = Platform.OS === 'web'
-        ? window.confirm(`링크 추가에 ${COST} MOUI가 차감됩니다.\n계속하시겠습니까?`)
-        : await new Promise<boolean>((resolve) => {
-            Alert.alert(
-              '링크 추가',
-              `3번째 링크부터는 ${COST} MOUI가 차감됩니다.`,
-              [{ text: '취소', style: 'cancel', onPress: () => resolve(false) }, { text: '추가', onPress: () => resolve(true) }],
-            );
-          });
-      if (!confirmed) return;
-
-      // 포인트 차감 + 내역 기록
-      if (user) {
-        const { error } = await spendPoints(user.id, COST, '링크 추가');
-        if (error) {
-          Platform.OS === 'web' ? window.alert(error) : Alert.alert('오류', error);
-          return;
-        }
-        await refreshProfile();
-      }
+      showConfirm(
+        '링크 추가',
+        `링크 추가에 ${COST} MOUI가 차감됩니다.`,
+        async () => {
+          if (user) {
+            const { error } = await spendPoints(user.id, COST, '링크 추가');
+            if (error) {
+              Platform.OS === 'web' ? window.alert(error) : Alert.alert('오류', error);
+              return;
+            }
+            await refreshProfile();
+          }
+          setLinks(prev => [...prev, url]);
+          setLinkInput('');
+        },
+        { confirmLabel: '추가', confirmStyle: 'default' },
+      );
+      return;
     }
 
     setLinks(prev => [...prev, url]);
@@ -325,65 +321,60 @@ export default function ProfileDetailScreen() {
 
     // 인증 작가가 다른 유형으로 바꿀 경우 경고
     const isVerified = !!(profile as any)?.verified;
-    if (userType === 'creator' && isVerified && newType !== 'creator') {
-      const confirmed = Platform.OS === 'web'
-        ? window.confirm(`유형을 변경하면 인증 작가 상태가 ${getCreatorVerificationResetLabel()} 상태로 초기화됩니다.\n${COST} MOUI가 차감됩니다.\n계속하시겠습니까?`)
-        : await new Promise<boolean>((resolve) => {
-            Alert.alert(
-              '인증 초기화 경고',
-              `유형을 변경하면 인증 작가 상태가 ${getCreatorVerificationResetLabel()} 상태로 초기화됩니다.\n${COST} MOUI가 차감됩니다.`,
-              [{ text: '취소', style: 'cancel', onPress: () => resolve(false) }, { text: '변경', style: 'destructive', onPress: () => resolve(true) }],
-            );
-          });
-      if (!confirmed) return;
-    } else {
-      const confirmed = Platform.OS === 'web'
-        ? window.confirm(`유형을 "${USER_TYPE_LABELS[newType]}"(으)로 변경합니다.\n${COST} MOUI가 차감됩니다.\n계속하시겠습니까?`)
-        : await new Promise<boolean>((resolve) => {
-            Alert.alert(
-              '유형 변경',
-              `유형을 "${USER_TYPE_LABELS[newType]}"(으)로 변경합니다.\n${COST} MOUI가 차감됩니다.`,
-              [{ text: '취소', style: 'cancel', onPress: () => resolve(false) }, { text: '변경', onPress: () => resolve(true) }],
-            );
-          });
-      if (!confirmed) return;
-    }
 
-    setChangingType(true);
-    try {
-      const updatePayload: Record<string, any> = {
-        user_type: newType,
-        points: points - COST,
-      };
-      // 작가→다른 유형: 인증 초기화
-      if (userType === 'creator' && isVerified && newType !== 'creator') {
-        updatePayload.verified = false;
-      }
-
-      const { error } = await supabase.from('profiles').update(updatePayload).eq('id', user.id);
-      if (error) {
-        const msg = '유형 변경에 실패했습니다: ' + error.message;
-        Platform.OS === 'web' ? window.alert(msg) : Alert.alert('오류', msg);
-        setChangingType(false);
-        return;
-      }
-
-      await refreshProfile();
-      setChangingType(false);
-
-      // 관람자→작가/지망생: 분야 선택 필요
-      if (userType === 'audience' && (newType === 'creator' || newType === 'aspiring')) {
-        const msg = '분야를 선택해주세요. 작가정보 수정 페이지로 이동합니다.';
-        if (Platform.OS === 'web') {
-          window.alert(msg);
-        } else {
-          Alert.alert('분야 선택 필요', msg);
+    const doChangeType = async () => {
+      setChangingType(true);
+      try {
+        const updatePayload: Record<string, any> = {
+          user_type: newType,
+          points: points - COST,
+        };
+        // 작가→다른 유형: 인증 초기화
+        if (userType === 'creator' && isVerified && newType !== 'creator') {
+          updatePayload.verified = false;
         }
-        handleStartEdit();
+
+        const { error } = await supabase.from('profiles').update(updatePayload).eq('id', user!.id);
+        if (error) {
+          const msg = '유형 변경에 실패했습니다: ' + error.message;
+          Platform.OS === 'web' ? window.alert(msg) : Alert.alert('오류', msg);
+          setChangingType(false);
+          return;
+        }
+
+        await refreshProfile();
+        setChangingType(false);
+
+        // 관람자→작가/지망생: 분야 선택 필요
+        if (userType === 'audience' && (newType === 'creator' || newType === 'aspiring')) {
+          const msg = '분야를 선택해주세요. 작가정보 수정 페이지로 이동합니다.';
+          if (Platform.OS === 'web') {
+            window.alert(msg);
+          } else {
+            Alert.alert('분야 선택 필요', msg);
+          }
+          handleStartEdit();
+        }
+      } catch (err) {
+        console.error('유형 변경 오류:', err);
+        setChangingType(false);
       }
-    } catch (err) {
-      console.error('유형 변경 오류:', err);
-      setChangingType(false);
+    };
+
+    if (userType === 'creator' && isVerified && newType !== 'creator') {
+      showConfirm(
+        '인증 초기화 경고',
+        `유형을 변경하면 인증 작가 상태가 ${getCreatorVerificationResetLabel()} 상태로 초기화됩니다.\n${COST} MOUI가 차감됩니다.`,
+        doChangeType,
+        { confirmLabel: '변경', confirmStyle: 'destructive' },
+      );
+    } else {
+      showConfirm(
+        '유형 변경',
+        `유형을 "${USER_TYPE_LABELS[newType]}"(으)로 변경합니다.\n${COST} MOUI가 차감됩니다.`,
+        doChangeType,
+        { confirmLabel: '변경', confirmStyle: 'default' },
+      );
     }
   };
 
@@ -427,12 +418,12 @@ export default function ProfileDetailScreen() {
     setBio(profile?.bio ?? '');
     // 기존 field를 카테고리 배열로 파싱
     const existingField = profile?.field ?? '';
-    const parsed = existingField.split(',').map((s: string) => s.trim()).filter(Boolean);
+    const parsed = parseCommaSeparated(existingField);
     setSelectedFields(parsed);
     setFieldInput('');
     setFieldMessage('');
     const existingSubField = (profile as any)?.sub_field ?? '';
-    setSelectedSubFields(existingSubField.split(',').map((s: string) => s.trim()).filter(Boolean));
+    setSelectedSubFields(parseCommaSeparated(existingSubField));
     setLinks(parseLinksFromProfile());
     setLinkInput('');
     setEditing(true);
@@ -568,24 +559,20 @@ export default function ProfileDetailScreen() {
                   <View style={styles.infoRow}>
                     <View style={styles.infoIcon}><Icon name="crosshair" size={16} color={C.muted} /></View>
                     <View style={styles.fieldTagRow}>
-                      {profile.field.split(',').map((f: string) => {
-                        const trimmed = f.trim();
-                        const cat = FIELD_CATEGORIES.find(c => c.key === trimmed);
+                      {parseCommaSeparated(profile.field).map((f: string) => {
+                        const cat = FIELD_CATEGORIES.find(c => c.key === f);
                         return (
-                          <View key={trimmed} style={[styles.fieldTag, { backgroundColor: C.gold + '22', borderColor: C.gold }]}>
+                          <View key={f} style={[styles.fieldTag, { backgroundColor: C.gold + '22', borderColor: C.gold }]}>
                             <Icon name={cat?.icon ?? 'crosshair'} size={11} color={C.gold} />
-                            <Text style={[styles.fieldTagText, { color: C.gold }]}>{trimmed}</Text>
+                            <Text style={[styles.fieldTagText, { color: C.gold }]}>{f}</Text>
                           </View>
                         );
                       })}
-                      {(profile as any)?.sub_field && (profile as any).sub_field.split(',').map((sf: string) => {
-                        const trimmedSf = sf.trim();
-                        return (
-                          <View key={trimmedSf} style={[styles.fieldTag, { backgroundColor: C.border, borderColor: C.muted + '44' }]}>
-                            <Text style={[styles.fieldTagText, { color: C.fg }]}>{trimmedSf}</Text>
+                      {(profile as any)?.sub_field && parseCommaSeparated((profile as any).sub_field).map((sf: string) => (
+                          <View key={sf} style={[styles.fieldTag, { backgroundColor: C.border, borderColor: C.muted + '44' }]}>
+                            <Text style={[styles.fieldTagText, { color: C.fg }]}>{sf}</Text>
                           </View>
-                        );
-                      })}
+                      ))}
                     </View>
                   </View>
                 )}

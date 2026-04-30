@@ -15,46 +15,9 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Icon } from '@/components/ui/Icon';
 import { parseRegion } from '@/constants/regions';
 import { TARGET_OPTIONS, FIELD_OPTIONS } from '@/constants/moui';
-import { formatRegionLabel, formatMeetingDate, formatRecruitPeriod } from '@/lib/utils';
+import { formatRegionLabel, formatMeetingDate, formatRecruitPeriod, parseCommaSeparated } from '@/lib/utils';
 import * as ImagePicker from 'expo-image-picker';
-
-type MouiParticipant = {
-  user_id: string;
-  profiles: {
-    name: string | null;
-    username: string;
-    avatar_url: string | null;
-    user_type: string;
-  };
-};
-
-type MouiPost = {
-  id: string;
-  user_id: string;
-  title: string;
-  description: string;
-  fields: string | null;
-  category: string | null;
-  region: string | null;
-  target_types: string | null;
-  map_url: string | null;
-  address: string | null;
-  meeting_date: string | null;
-  frequency: string | null;
-  recruit_start: string | null;
-  recruit_deadline: string | null;
-  status: 'open' | 'closed';
-  created_at: string;
-  profiles?: {
-    name: string | null;
-    username: string;
-    avatar_url: string | null;
-    field: string | null;
-    user_type: 'creator' | 'aspiring' | 'audience';
-    verified: boolean;
-  };
-  moui_participants?: MouiParticipant[];
-};
+import type { MouiParticipant, MouiPost } from '@/types/models';
 
 type ChatMessage = {
   id: string;
@@ -270,7 +233,7 @@ export default function MouiChatScreen() {
   }
 
   const participants = post.moui_participants ?? [];
-  const targetKeys = post.target_types?.split(',').map(s => s.trim()).filter(Boolean) ?? [];
+  const targetKeys = parseCommaSeparated(post.target_types);
   const recruitPeriod = formatRecruitPeriod(post.recruit_start, post.recruit_deadline);
 
   const AvatarBubble = ({ senderId }: { senderId: string }) => {
@@ -399,11 +362,11 @@ export default function MouiChatScreen() {
                           <Text style={[styles.postTagText, { color: C.gold }]}>전체 분야</Text>
                         </View>
                       ) : (
-                        post.fields.split(',').map(f => {
-                          const fo = FIELD_OPTIONS.find(o => o.key === f.trim());
+                        parseCommaSeparated(post.fields).map(f => {
+                          const fo = FIELD_OPTIONS.find(o => o.key === f);
                           return (
-                            <View key={f.trim()} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
-                              <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f.trim()}` : f.trim()}</Text>
+                            <View key={f} style={[styles.postTag, { backgroundColor: C.gold + '15', borderColor: C.gold + '44' }]}>
+                              <Text style={[styles.postTagText, { color: C.gold }]}>{fo ? `${fo.icon} ${f}` : f}</Text>
                             </View>
                           );
                         })

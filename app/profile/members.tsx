@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
   StyleSheet, View, Text, Pressable, ScrollView, ActivityIndicator, TextInput,
-  Platform, Alert, Modal,
+  Modal,
 } from 'react-native';
 import { Image } from 'expo-image';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { r2List, r2Delete } from '@/lib/r2';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Icon } from '@/components/ui/Icon';
+import { showAlert, showConfirm } from '@/lib/utils';
 
 type Member = {
   id: string;
@@ -108,8 +109,7 @@ export default function MembersScreen() {
     });
     setSaving(false);
     if (error) {
-      if (Platform.OS === 'web') window.alert('수정 실패: ' + error.message);
-      else Alert.alert('오류', '수정 실패: ' + error.message);
+      showAlert('오류', '수정 실패: ' + error.message);
     } else {
       setEditMember(null);
       fetchMembers();
@@ -146,27 +146,17 @@ export default function MembersScreen() {
         const { error } = await supabase.rpc('admin_delete_member', { target_user_id: member.id });
         if (error) throw error;
 
-        if (Platform.OS === 'web') window.alert('회원이 삭제되었습니다.');
-        else Alert.alert('완료', '회원이 삭제되었습니다.');
+        showAlert('완료', '회원이 삭제되었습니다.');
         fetchMembers();
       } catch (err: any) {
         const errMsg = err?.message ?? '알 수 없는 오류';
-        if (Platform.OS === 'web') window.alert('삭제 실패: ' + errMsg);
-        else Alert.alert('오류', '삭제 실패: ' + errMsg);
+        showAlert('오류', '삭제 실패: ' + errMsg);
       } finally {
         setDeletingId(null);
       }
     };
 
-    if (Platform.OS === 'web') {
-      if (!window.confirm(msg)) return;
-      doDelete();
-    } else {
-      Alert.alert('회원 삭제', msg, [
-        { text: '취소', style: 'cancel' },
-        { text: '삭제', style: 'destructive', onPress: doDelete },
-      ]);
-    }
+    showConfirm('회원 삭제', msg, doDelete);
   };
 
   const formatDate = (d: string) => {
